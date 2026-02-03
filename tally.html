@@ -51,7 +51,7 @@
             <div class="top-bar">
                 <div class="page-title">
                     <h1>Cash Tally & Denomination 🧮</h1>
-                    <p id="tallyDateDisplay">Tuesday, Feb 03, 2026</p>
+                    <p id="tallyDateDisplay">Loading...</p>
                 </div>
             </div>
 
@@ -73,12 +73,24 @@
                     <div class="card-header"><i class="ri-pie-chart-2-line"></i> <h3>Tally Result</h3></div>
                     <div class="result-box">
                         <div class="res-item">
-                            <span>Physical Cash (Hand)</span>
-                            <h2 id="phyTotal" class="text-green">₹0</h2>
+                            <span>Opening Balance (+)</span>
+                            <h2 id="openingTotal">₹0</h2>
                         </div>
                         <div class="res-item">
+                            <span>Today's Cash Sale (+)</span>
+                            <h2 id="todayCashSale">₹0</h2>
+                        </div>
+                        <div class="res-item">
+                            <span>Today's Cash Exp (-)</span>
+                            <h2 id="todayCashExp" class="text-red">₹0</h2>
+                        </div>
+                        <div class="res-item border-top" style="padding-top: 10px; margin-top: 5px;">
                             <span>System Cash (Software)</span>
                             <h2 id="sysTotal">₹0</h2>
+                        </div>
+                        <div class="res-item">
+                            <span>Physical Cash (Hand)</span>
+                            <h2 id="phyTotal" class="text-green">₹0</h2>
                         </div>
                         <div class="res-item border-top">
                             <span>Difference</span>
