@@ -11,17 +11,21 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
     <style>
-        #invoiceTemplate { width: 600px; padding: 40px; background: white; position: absolute; left: -9999px; font-family: 'Inter', sans-serif; color: #1e293b; }
-        .inv-header { display: flex; justify-content: space-between; border-bottom: 2px solid #2563eb; padding-bottom: 20px; }
-        .inv-logo h2 { color: #2563eb; margin: 0; }
+        #invoiceTemplate {
+            width: 700px; padding: 40px; background: white; position: absolute; left: -9999px;
+            font-family: 'Inter', sans-serif; color: #1e293b;
+        }
+        .inv-header { display: flex; justify-content: space-between; border-bottom: 3px solid #2563eb; padding-bottom: 20px; }
+        .inv-logo h1 { color: #2563eb; margin: 0; font-size: 2.2rem; font-weight: 800; }
         .inv-table { width: 100%; border-collapse: collapse; margin-top: 30px; }
-        .inv-table th { background: #f8fafc; text-align: left; padding: 12px; border-bottom: 1px solid #e2e8f0; }
-        .inv-table td { padding: 12px; border-bottom: 1px solid #f1f5f9; }
+        .inv-table th { background: #f8fafc; text-align: left; padding: 12px; border-bottom: 2px solid #e2e8f0; font-size: 0.9rem; }
+        .inv-table td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 0.95rem; }
         .inv-footer { margin-top: 50px; display: flex; justify-content: space-between; align-items: flex-end; }
-        .sig-font { font-family: 'Brush Script MT', cursive; font-size: 1.8rem; color: #2563eb; margin-bottom: 5px; }
-        .stamp { padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; }
+        .sig-font { font-family: 'Brush Script MT', cursive; font-size: 2.2rem; color: #2563eb; margin-bottom: 5px; }
+        .stamp { padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 800; display: inline-block; }
         .stamp-paid { background: #d1fae5; color: #059669; border: 1px solid #059669; }
         .stamp-partial { background: #fef3c7; color: #d97706; border: 1px solid #d97706; }
+        .bill-row-serial { font-weight: 700; color: var(--text-light); margin-right: 10px; }
     </style>
 </head>
 <body>
@@ -103,8 +107,8 @@
                         </div>
                         <div class="form-row">
                             <div class="input-box flex-1">
-                                <label id="labelBillNo">Bill Number</label>
-                                <input type="text" id="entryBillNo" placeholder="e.g. BILL-101">
+                                <label id="labelBillNo">Bill Number (Numeric)</label>
+                                <input type="number" id="entryBillNo" placeholder="e.g. 101">
                                 <select id="selectBillNo" style="display:none;"></select>
                             </div>
                             <div class="input-box flex-1">
@@ -121,7 +125,7 @@
                 </div>
 
                 <div class="glass-card">
-                    <div class="card-header"><i class="ri-history-line"></i> <h3>Bill-wise History</h3></div>
+                    <div class="card-header"><i class="ri-history-line"></i> <h3>Bill-wise History (Serial)</h3></div>
                     <div class="history-container">
                         <ul id="ledgerList" class="modern-list"></ul>
                     </div>
@@ -134,22 +138,23 @@
     <div id="invoiceTemplate">
         <div class="inv-header">
             <div class="inv-logo">
-                <h2>RestroManager</h2>
+                <h1>RestroManager</h1>
                 <p>Daily Accounts Statement</p>
             </div>
             <div class="inv-vendor" style="text-align: right;">
-                <h3 id="invVendorName">Vendor Name</h3>
-                <p id="invDate">Date: 03/02/2026</p>
+                <h2 id="invVendorName" style="margin:0; color:#1e293b;">Vendor Name</h2>
+                <p id="invDate" style="margin:5px 0; font-weight:600; color:#64748b;">Date: 03/02/2026</p>
             </div>
         </div>
         <table class="inv-table">
             <thead>
                 <tr>
+                    <th>Sl.</th>
                     <th>Date</th>
                     <th>Bill No</th>
-                    <th>Total</th>
-                    <th>Paid</th>
-                    <th>Due</th>
+                    <th>Total Bill</th>
+                    <th>Paid Amt</th>
+                    <th>Due Amt</th>
                     <th>Status</th>
                 </tr>
             </thead>
@@ -157,12 +162,12 @@
         </table>
         <div class="inv-footer">
             <div>
-                <p><strong>Total Outstanding Due:</strong></p>
-                <h2 id="invTotalDue" style="color: #ef4444; margin: 5px 0;">₹0</h2>
+                <p style="color:#64748b; font-weight:700; margin-bottom:5px;">TOTAL OUTSTANDING DUE</p>
+                <h1 id="invTotalDue" style="color: #ef4444; margin: 0; font-size: 2.5rem;">₹0</h1>
             </div>
             <div style="text-align: center;">
                 <div class="sig-font">Keshab Sarkar</div>
-                <p style="margin: 0; font-weight: 700;">Authorized Signature</p>
+                <p style="margin:0; font-weight:800; border-top:1px solid #e2e8f0; padding-top:5px;">Authorized Signature</p>
             </div>
         </div>
     </div>

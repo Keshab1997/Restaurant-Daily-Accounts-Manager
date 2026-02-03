@@ -25,10 +25,12 @@ window.onload = async () => {
     await fetchVendors();
     await loadData();
     
+    // Auto-fill category and next bill number when vendor is selected
     document.getElementById('expDesc').addEventListener('input', async function() {
         const name = this.value.trim();
         if (name.length < 2) return;
 
+        // 1. Auto-fill category from last expense
         const { data } = await _supabase.from('expenses')
             .select('description')
             .eq('user_id', currentUser.id)
@@ -40,6 +42,25 @@ window.onload = async () => {
             const match = data[0].description.match(/\(([^)]+)\)/);
             if (match) {
                 document.getElementById('expItem').value = match[1];
+            }
+        }
+
+        // 2. Auto-generate next bill number
+        const vendor = vendorsList.find(v => v.name.toLowerCase() === name.toLowerCase());
+        if (vendor) {
+            const { data: lastBillData } = await _supabase.from('vendor_ledger')
+                .select('bill_no')
+                .eq('vendor_id', vendor.id)
+                .eq('t_type', 'BILL')
+                .not('bill_no', 'is', null)
+                .order('bill_no', { ascending: false })
+                .limit(1);
+
+            if (lastBillData && lastBillData.length > 0) {
+                const lastNo = parseInt(lastBillData[0].bill_no) || 0;
+                document.getElementById('expBillNo').value = lastNo + 1;
+            } else {
+                document.getElementById('expBillNo').value = 1;
             }
         }
     });
@@ -75,7 +96,7 @@ async function loadData() {
         });
     }
 
-    const { data: expenses } = await _supabase.from('expenses').select('*').eq('user_id', currentUser.id).eq('report_date', date);
+    const { data: expenses } = await _supabase.from('expenses').select('*').eq('user_id', currentUser.id).eq('report_date', date).order('created_at', { ascending: false });
     currentDayExpenses = expenses || [];
     
     const list = document.getElementById('expenseList');
@@ -89,10 +110,12 @@ async function loadData() {
             else if(e.payment_source === 'OWNER') { sourceText = "Paid by Owner (Dhar)"; color = "#f59e0b"; }
             else { sourceText = "Added to Baki"; }
 
+            const billDisplay = e.bill_no ? `<span style="color:var(--primary); font-weight:700;">#${e.bill_no}</span>` : '';
+
             list.innerHTML += `
                 <li class="expense-li">
                     <div class="li-info">
-                        <strong>${e.description}</strong>
+                        <strong>${billDisplay} ${e.description}</strong>
                         <small>${sourceText}</small>
                     </div>
                     <b style="color: ${color}">₹${e.amount.toLocaleString('en-IN')}</b>
@@ -128,6 +151,7 @@ function updateCalculations() {
 async function handleAddExpense() {
     const vendorName = document.getElementById('expDesc').value;
     const itemName = document.getElementById('expItem').value;
+    const billNo = document.getElementById('expBillNo').value;
     const totalAmount = parseFloat(document.getElementById('expAmount').value);
     const status = document.getElementById('expStatus').value;
     const partialPaid = parseFloat(document.getElementById('partialPaid').value) || 0;
@@ -139,50 +163,51 @@ async function handleAddExpense() {
     const vendor = vendorsList.find(v => v.name.toLowerCase() === vendorName.toLowerCase());
 
     if(status === 'PAID') {
-        await saveExpenseRecord(fullDesc, totalAmount, 'CASH', date);
+        await saveExpenseRecord(fullDesc, totalAmount, 'CASH', date, billNo);
         if(vendor) {
-            await updateVendorLedger(vendor.id, date, 'BILL', totalAmount, `Bill for ${itemName || vendorName}`);
-            await updateVendorLedger(vendor.id, date, 'PAYMENT', totalAmount, `Cash Paid for ${itemName || vendorName}`);
+            await updateVendorLedger(vendor.id, date, 'BILL', totalAmount, `Bill for ${itemName || vendorName}`, billNo);
+            await updateVendorLedger(vendor.id, date, 'PAYMENT', totalAmount, `Cash Paid for ${itemName || vendorName}`, billNo);
         }
     } 
     else if(status === 'OWNER') {
-        await saveExpenseRecord(`${fullDesc} (Owner Paid)`, totalAmount, 'OWNER', date);
+        await saveExpenseRecord(`${fullDesc} (Owner Paid)`, totalAmount, 'OWNER', date, billNo);
         await updateOwnerLedger(date, 'LOAN_TAKEN', totalAmount, `Paid for ${fullDesc}`);
         if(vendor) {
-            await updateVendorLedger(vendor.id, date, 'BILL', totalAmount, `Bill for ${itemName || vendorName}`);
-            await updateVendorLedger(vendor.id, date, 'PAYMENT', totalAmount, `Paid by Owner for ${itemName || vendorName}`);
+            await updateVendorLedger(vendor.id, date, 'BILL', totalAmount, `Bill for ${itemName || vendorName}`, billNo);
+            await updateVendorLedger(vendor.id, date, 'PAYMENT', totalAmount, `Paid by Owner for ${itemName || vendorName}`, billNo);
         }
     }
     else if(status === 'DUE') {
-        await saveExpenseRecord(fullDesc, totalAmount, 'DUE', date);
-        if(vendor) await updateVendorLedger(vendor.id, date, 'BILL', totalAmount, `Baki for ${itemName || vendorName}`);
+        await saveExpenseRecord(fullDesc, totalAmount, 'DUE', date, billNo);
+        if(vendor) await updateVendorLedger(vendor.id, date, 'BILL', totalAmount, `Baki for ${itemName || vendorName}`, billNo);
     } 
     else if(status === 'PARTIAL') {
         if(partialPaid >= totalAmount) return alert("Partial paid must be less than total");
-        await saveExpenseRecord(`${fullDesc} (Partial Paid)`, partialPaid, 'CASH', date);
-        await saveExpenseRecord(`${fullDesc} (Baki)`, totalAmount - partialPaid, 'DUE', date);
+        await saveExpenseRecord(`${fullDesc} (Partial Paid)`, partialPaid, 'CASH', date, billNo);
+        await saveExpenseRecord(`${fullDesc} (Baki)`, totalAmount - partialPaid, 'DUE', date, billNo);
         if(vendor) {
-            await updateVendorLedger(vendor.id, date, 'BILL', totalAmount, `Bill for ${itemName || vendorName}`);
-            await updateVendorLedger(vendor.id, date, 'PAYMENT', partialPaid, `Partial Cash Paid for ${itemName || vendorName}`);
+            await updateVendorLedger(vendor.id, date, 'BILL', totalAmount, `Bill for ${itemName || vendorName}`, billNo);
+            await updateVendorLedger(vendor.id, date, 'PAYMENT', partialPaid, `Partial Cash Paid for ${itemName || vendorName}`, billNo);
         }
     }
 
     document.getElementById('expDesc').value = '';
     document.getElementById('expItem').value = '';
+    document.getElementById('expBillNo').value = '';
     document.getElementById('expAmount').value = '';
     document.getElementById('partialPaid').value = '';
     loadData();
 }
 
-async function saveExpenseRecord(desc, amount, source, date) {
+async function saveExpenseRecord(desc, amount, source, date, billNo) {
     await _supabase.from('expenses').insert({
-        user_id: currentUser.id, report_date: date, description: desc, amount: amount, payment_source: source
+        user_id: currentUser.id, report_date: date, description: desc, amount: amount, payment_source: source, bill_no: billNo
     });
 }
 
-async function updateVendorLedger(vId, date, type, amount, note) {
+async function updateVendorLedger(vId, date, type, amount, note, billNo) {
     await _supabase.from('vendor_ledger').insert({
-        user_id: currentUser.id, vendor_id: vId, t_date: date, t_type: type, amount: amount, description: note
+        user_id: currentUser.id, vendor_id: vId, t_date: date, t_type: type, amount: amount, description: note, bill_no: billNo
     });
 }
 

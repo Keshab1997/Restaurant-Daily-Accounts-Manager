@@ -24,16 +24,20 @@ function toggleBillSelect() {
         select.style.display = 'block';
         label.innerText = "Select Bill No";
         
-        select.innerHTML = '<option value="GENERAL">General Payment (No Bill)</option>';
-        Object.keys(allBills).forEach(bNo => {
-            if(allBills[bNo].due > 0) {
-                select.innerHTML += `<option value="${bNo}">${bNo} (Due: ₹${allBills[bNo].due})</option>`;
+        select.innerHTML = '<option value="0">General Payment (No Bill)</option>';
+        
+        // Sort bill numbers numerically
+        const sortedKeys = Object.keys(allBills).sort((a, b) => parseInt(a) - parseInt(b));
+        
+        sortedKeys.forEach(bNo => {
+            if(bNo !== "0" && allBills[bNo].due > 0) {
+                select.innerHTML += `<option value="${bNo}">Bill #${bNo} (Due: ₹${allBills[bNo].due})</option>`;
             }
         });
     } else {
         input.style.display = 'block';
         select.style.display = 'none';
-        label.innerText = "Bill Number";
+        label.innerText = "Bill Number (Numeric)";
     }
 }
 
@@ -51,19 +55,20 @@ async function loadDetails() {
     let totalBillAmt = vendor.opening_due || 0;
     let totalPaidAmt = 0;
 
+    // Handle Opening Due as Bill #0
     if(vendor.opening_due > 0) {
-        allBills['OPENING'] = { date: 'Initial', total: vendor.opening_due, paid: 0, due: vendor.opening_due };
+        allBills["0"] = { date: 'Initial', total: vendor.opening_due, paid: 0, due: vendor.opening_due };
     }
 
     if(ledger) {
         ledger.forEach(l => {
-            const bNo = l.bill_no || 'GENERAL';
+            const bNo = l.bill_no || "0";
+            if(!allBills[bNo]) allBills[bNo] = { date: l.t_date, total: 0, paid: 0, due: 0 };
+            
             if(l.t_type === 'BILL') {
-                if(!allBills[bNo]) allBills[bNo] = { date: l.t_date, total: 0, paid: 0, due: 0 };
                 allBills[bNo].total += l.amount;
                 totalBillAmt += l.amount;
             } else {
-                if(!allBills[bNo]) allBills[bNo] = { date: l.t_date, total: 0, paid: 0, due: 0 };
                 allBills[bNo].paid += l.amount;
                 totalPaidAmt += l.amount;
             }
@@ -75,23 +80,27 @@ async function loadDetails() {
     list.innerHTML = '';
     invBody.innerHTML = '';
 
-    Object.keys(allBills).forEach(bNo => {
+    // Sort Bill Numbers Numerically
+    const sortedBillNos = Object.keys(allBills).sort((a, b) => parseInt(a) - parseInt(b));
+
+    sortedBillNos.forEach((bNo, index) => {
         const b = allBills[bNo];
         b.due = b.total - b.paid;
         const isPaid = b.due <= 0;
-        const statusLabel = isPaid ? 'Full Paid' : (b.paid > 0 ? 'Partial' : 'Unpaid');
+        const statusLabel = isPaid ? 'FULL PAID' : (b.paid > 0 ? 'PARTIAL' : 'UNPAID');
         const badgeClass = isPaid ? 'badge-payment' : 'badge-bill';
         const stampClass = isPaid ? 'stamp-paid' : 'stamp-partial';
+        const displayBillNo = bNo === "0" ? "OPENING" : bNo;
 
         list.innerHTML += `
             <li class="ledger-item">
                 <div class="li-left">
-                    <span>Bill: ${bNo}</span>
-                    <small>Total: ₹${b.total} | Paid: ₹${b.paid}</small>
+                    <span><span class="bill-row-serial">#${index + 1}</span> Bill: ${displayBillNo}</span>
+                    <small>Total: ₹${b.total.toLocaleString('en-IN')} | Paid: ₹${b.paid.toLocaleString('en-IN')}</small>
                     <small><i class="ri-calendar-line"></i> ${b.date}</small>
                 </div>
                 <div class="li-right">
-                    <b style="color: ${isPaid ? 'var(--success)' : 'var(--danger)'}">Due: ₹${b.due}</b>
+                    <b style="color: ${isPaid ? 'var(--success)' : 'var(--danger)'}">Due: ₹${b.due.toLocaleString('en-IN')}</b>
                     <small class="${badgeClass}">${statusLabel}</small>
                 </div>
             </li>
@@ -99,11 +108,12 @@ async function loadDetails() {
 
         invBody.innerHTML += `
             <tr>
+                <td>${index + 1}</td>
                 <td>${b.date}</td>
-                <td>${bNo}</td>
-                <td>₹${b.total}</td>
-                <td>₹${b.paid}</td>
-                <td>₹${b.due}</td>
+                <td>${displayBillNo}</td>
+                <td>₹${b.total.toLocaleString('en-IN')}</td>
+                <td>₹${b.paid.toLocaleString('en-IN')}</td>
+                <td><strong style="color:${isPaid ? '#059669' : '#ef4444'}">₹${b.due.toLocaleString('en-IN')}</strong></td>
                 <td><span class="stamp ${stampClass}">${statusLabel}</span></td>
             </tr>
         `;
@@ -129,7 +139,7 @@ async function addEntry() {
         billNo = document.getElementById('selectBillNo').value;
     }
 
-    if(!amount || !billNo) return alert("Enter amount and Bill Number");
+    if(!amount || billNo === "") return alert("Please enter amount and numeric Bill Number");
 
     await _supabase.from('vendor_ledger').insert({
         user_id: currentUser.id,
@@ -138,7 +148,7 @@ async function addEntry() {
         t_type: type,
         description: desc,
         amount: amount,
-        bill_no: billNo
+        bill_no: billNo.toString()
     });
 
     document.getElementById('entryAmount').value = '';
@@ -154,21 +164,26 @@ async function logout() {
 
 async function generateInvoiceImage() {
     const element = document.getElementById('invoiceTemplate');
-    document.getElementById('invDate').innerText = "Date: " + new Date().toLocaleDateString();
+    document.getElementById('invDate').innerText = "Date: " + new Date().toLocaleDateString('en-GB');
     
-    html2canvas(element, { scale: 2 }).then(canvas => {
+    html2canvas(element, { 
+        scale: 2,
+        useCORS: true,
+        logging: false
+    }).then(canvas => {
         const link = document.createElement('a');
-        link.download = `Bill_${document.getElementById('vNameTitle').innerText}.png`;
+        const vendorName = document.getElementById('vNameTitle').innerText.replace(/\s+/g, '_');
+        link.download = `Statement_${vendorName}_${new Date().getTime()}.png`;
         link.href = canvas.toDataURL("image/png");
         link.click();
         
         if (navigator.share) {
             canvas.toBlob(blob => {
-                const file = new File([blob], "bill.png", { type: "image/png" });
+                const file = new File([blob], "statement.png", { type: "image/png" });
                 navigator.share({
                     files: [file],
                     title: 'Vendor Statement',
-                    text: 'Check out the latest statement from RestroManager'
+                    text: `Statement for ${document.getElementById('vNameTitle').innerText}`
                 }).catch(console.error);
             });
         }
