@@ -1,6 +1,6 @@
 /**
  * RestroManager Keyboard Shortcuts (Windows & Mac Compatible)
- * Includes a built-in Shortcut Guide Modal.
+ * Self-contained Modal and Logic.
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -31,16 +31,15 @@ document.addEventListener('keydown', function(e) {
     }
 
     if (e.altKey) {
-        switch (e.key) {
-            case '1': window.location.href = 'dashboard.html'; break;
-            case '2': window.location.href = 'tally.html'; break;
-            case '3': window.location.href = 'vendors.html'; break;
-            case '4': window.location.href = 'vendor-history.html'; break;
-            case '5': window.location.href = 'owner.html'; break;
-            case '6': window.location.href = 'salary.html'; break;
-            case '7': window.location.href = 'pl.html'; break;
-            case 'h': case 'H': showShortcutGuide(); break;
-        }
+        const code = e.code;
+        if (code === 'Digit1') { e.preventDefault(); window.location.href = 'dashboard.html'; }
+        else if (code === 'Digit2') { e.preventDefault(); window.location.href = 'tally.html'; }
+        else if (code === 'Digit3') { e.preventDefault(); window.location.href = 'vendors.html'; }
+        else if (code === 'Digit4') { e.preventDefault(); window.location.href = 'vendor-history.html'; }
+        else if (code === 'Digit5') { e.preventDefault(); window.location.href = 'owner.html'; }
+        else if (code === 'Digit6') { e.preventDefault(); window.location.href = 'salary.html'; }
+        else if (code === 'Digit7') { e.preventDefault(); window.location.href = 'pl.html'; }
+        else if (e.key.toLowerCase() === 'h') { e.preventDefault(); showShortcutGuide(); }
     }
 
     const key = e.key.toLowerCase();
@@ -57,47 +56,77 @@ document.addEventListener('keydown', function(e) {
 });
 
 function injectShortcutModal() {
+    if (document.getElementById('shortcutModal')) return;
+
+    const style = `
+        <style>
+            .sc-overlay {
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(5px);
+                display: flex; align-items: center; justify-content: center;
+                z-index: 99999; opacity: 0; pointer-events: none; transition: 0.3s;
+            }
+            .sc-overlay.show { opacity: 1; pointer-events: auto; }
+            .sc-card {
+                background: white; width: 90%; max-width: 450px; border-radius: 24px;
+                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+                padding: 30px; transform: translateY(20px); transition: 0.3s;
+            }
+            .sc-overlay.show .sc-card { transform: translateY(0); }
+            .sc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #f1f5f9; padding-bottom: 15px; }
+            .sc-header h3 { margin: 0; font-size: 1.25rem; color: #1e293b; display: flex; align-items: center; gap: 10px; }
+            .sc-close { background: #f1f5f9; border: none; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; color: #64748b; font-size: 1.2rem; display: flex; align-items: center; justify-content: center; }
+            .sc-close:hover { background: #e2e8f0; }
+            .sc-grid { display: grid; grid-template-columns: 1fr 1.5fr; gap: 12px; font-size: 0.95rem; }
+            .sc-key { color: #2563eb; font-weight: 800; background: #eff6ff; padding: 4px 10px; border-radius: 6px; border: 1px solid #dbeafe; text-align: center; }
+            .sc-desc { color: #475569; font-weight: 500; }
+            .sc-footer { margin-top: 25px; padding-top: 15px; border-top: 1px solid #f1f5f9; font-size: 0.8rem; color: #94a3b8; text-align: center; }
+        </style>
+    `;
+
     const modalHTML = `
-        <div id="shortcutModal" class="modal-overlay hidden" style="z-index: 9999;">
-            <div class="modal-card" style="max-width: 500px;">
-                <div class="modal-header">
+        <div id="shortcutModal" class="sc-overlay">
+            <div class="sc-card">
+                <div class="sc-header">
                     <h3><i class="ri-keyboard-line"></i> Keyboard Shortcuts</h3>
-                    <button onclick="closeShortcutGuide()" style="background:none; border:none; font-size:1.5rem; cursor:pointer; color:#94a3b8;"><i class="ri-close-line"></i></button>
+                    <button onclick="closeShortcutGuide()" class="sc-close"><i class="ri-close-line"></i></button>
                 </div>
-                <div class="modal-body" style="padding: 20px;">
-                    <div style="display:grid; grid-template-columns: 1fr 1.5fr; gap: 10px; font-size: 0.9rem;">
-                        <b style="color:#2563eb">Alt + 1</b> <span>Home / Dashboard</span>
-                        <b style="color:#2563eb">Alt + 2</b> <span>Cash Tally</span>
-                        <b style="color:#2563eb">Alt + 3</b> <span>Vendors List</span>
-                        <b style="color:#2563eb">Alt + 4</b> <span>Vendor History</span>
-                        <b style="color:#2563eb">Alt + 5</b> <span>Owner Ledger</span>
-                        <b style="color:#2563eb">Alt + 6</b> <span>Salary Sheet</span>
-                        <b style="color:#2563eb">Alt + 7</b> <span>Profit & Loss</span>
-                        <hr style="grid-column: span 2; margin: 10px 0; opacity: 0.2;">
-                        <b style="color:#10b981">Shift + S</b> <span>Save Current Page Data</span>
-                        <b style="color:#10b981">Shift + N</b> <span>Add New Entry / Staff</span>
-                        <b style="color:#ef4444">M</b> <span>Toggle Sidebar Menu</span>
-                        <b style="color:#ef4444">Enter</b> <span>Next Field (Tally Page)</span>
-                        <b style="color:#ef4444">Esc</b> <span>Close Any Popup / Menu</span>
-                    </div>
+                <div class="sc-grid">
+                    <span class="sc-key">Alt + 1</span> <span class="sc-desc">Home / Dashboard</span>
+                    <span class="sc-key">Alt + 2</span> <span class="sc-desc">Cash Tally</span>
+                    <span class="sc-key">Alt + 3</span> <span class="sc-desc">Vendors List</span>
+                    <span class="sc-key">Alt + 4</span> <span class="sc-desc">Vendor History</span>
+                    <span class="sc-key">Alt + 5</span> <span class="sc-desc">Owner Ledger</span>
+                    <span class="sc-key">Alt + 6</span> <span class="sc-desc">Salary Sheet</span>
+                    <span class="sc-key">Alt + 7</span> <span class="sc-desc">Profit & Loss</span>
+                    <hr style="grid-column: span 2; margin: 5px 0; opacity: 0.1;">
+                    <span class="sc-key">Shift + S</span> <span class="sc-desc">Save Data</span>
+                    <span class="sc-key">Shift + N</span> <span class="sc-desc">Add New Entry</span>
+                    <span class="sc-key">M</span> <span class="sc-desc">Toggle Menu</span>
+                    <span class="sc-key">Enter</span> <span class="sc-desc">Next Field (Tally)</span>
+                    <span class="sc-key">Esc</span> <span class="sc-desc">Close Popup</span>
                 </div>
-                <div style="padding: 15px 20px; border-top: 1px solid #f1f5f9;">
-                    <p style="font-size: 0.75rem; color: #64748b; margin: 0;">* On Mac, use <b>Option</b> instead of <b>Alt</b></p>
+                <div class="sc-footer">
+                    On Mac, use <b>Option (⌥)</b> instead of <b>Alt</b>
                 </div>
             </div>
         </div>
     `;
-    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    document.body.insertAdjacentHTML('beforeend', style + modalHTML);
+
+    document.getElementById('shortcutModal').addEventListener('click', function(e) {
+        if (e.target === this) closeShortcutGuide();
+    });
 }
 
 function showShortcutGuide() {
     const modal = document.getElementById('shortcutModal');
-    if (modal) modal.classList.remove('hidden');
+    if (modal) modal.classList.add('show');
 }
 
 function closeShortcutGuide() {
     const modal = document.getElementById('shortcutModal');
-    if (modal) modal.classList.add('hidden');
+    if (modal) modal.classList.remove('show');
 }
 
 function triggerSaveAction() {
