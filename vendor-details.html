@@ -8,9 +8,21 @@
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/vendor-details.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
+    <style>
+        #invoiceTemplate { width: 600px; padding: 40px; background: white; position: absolute; left: -9999px; font-family: 'Inter', sans-serif; color: #1e293b; }
+        .inv-header { display: flex; justify-content: space-between; border-bottom: 2px solid #2563eb; padding-bottom: 20px; }
+        .inv-logo h2 { color: #2563eb; margin: 0; }
+        .inv-table { width: 100%; border-collapse: collapse; margin-top: 30px; }
+        .inv-table th { background: #f8fafc; text-align: left; padding: 12px; border-bottom: 1px solid #e2e8f0; }
+        .inv-table td { padding: 12px; border-bottom: 1px solid #f1f5f9; }
+        .inv-footer { margin-top: 50px; display: flex; justify-content: space-between; align-items: flex-end; }
+        .sig-font { font-family: 'Brush Script MT', cursive; font-size: 1.8rem; color: #2563eb; margin-bottom: 5px; }
+        .stamp { padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; }
+        .stamp-paid { background: #d1fae5; color: #059669; border: 1px solid #059669; }
+        .stamp-partial { background: #fef3c7; color: #d97706; border: 1px solid #d97706; }
+    </style>
 </head>
 <body>
     <div class="full-wrapper">
@@ -39,12 +51,12 @@
                         <a href="vendors.html" class="back-circle"><i class="ri-arrow-left-line"></i></a>
                         <div>
                             <h1 id="vNameTitle">Loading...</h1>
-                            <p>Vendor Ledger & Statements</p>
+                            <p>Bill-wise Ledger Management</p>
                         </div>
                     </div>
                 </div>
-                <button class="btn-share-pdf" onclick="generatePDF()">
-                    <i class="ri-file-pdf-line"></i> Share PDF Statement
+                <button class="btn-share-pdf" onclick="generateInvoiceImage()" style="background: #2563eb;">
+                    <i class="ri-image-line"></i> Share Bill Image
                 </button>
             </div>
 
@@ -79,8 +91,8 @@
                         <div class="form-row">
                             <div class="input-box flex-1">
                                 <label>Entry Type</label>
-                                <select id="entryType">
-                                    <option value="BILL">🧾 Bill (Purchase)</option>
+                                <select id="entryType" onchange="toggleBillSelect()">
+                                    <option value="BILL">🧾 New Bill (Purchase)</option>
                                     <option value="PAYMENT">💸 Payment (Cash Out)</option>
                                 </select>
                             </div>
@@ -89,26 +101,70 @@
                                 <input type="date" id="entryDate">
                             </div>
                         </div>
+                        <div class="form-row">
+                            <div class="input-box flex-1">
+                                <label id="labelBillNo">Bill Number</label>
+                                <input type="text" id="entryBillNo" placeholder="e.g. BILL-101">
+                                <select id="selectBillNo" style="display:none;"></select>
+                            </div>
+                            <div class="input-box flex-1">
+                                <label>Amount</label>
+                                <input type="number" id="entryAmount" placeholder="₹ 0">
+                            </div>
+                        </div>
                         <div class="input-box">
                             <label>Description</label>
                             <input type="text" id="entryDesc" placeholder="e.g. 10kg Chicken / Weekly Payment">
-                        </div>
-                        <div class="input-box">
-                            <label>Amount</label>
-                            <input type="number" id="entryAmount" placeholder="₹ 0">
                         </div>
                         <button class="btn-primary" onclick="addEntry()">Add to Ledger</button>
                     </div>
                 </div>
 
                 <div class="glass-card">
-                    <div class="card-header"><i class="ri-history-line"></i> <h3>Transaction History</h3></div>
+                    <div class="card-header"><i class="ri-history-line"></i> <h3>Bill-wise History</h3></div>
                     <div class="history-container">
                         <ul id="ledgerList" class="modern-list"></ul>
                     </div>
                 </div>
             </div>
         </main>
+    </div>
+
+    <!-- Hidden Invoice Template for Image Generation -->
+    <div id="invoiceTemplate">
+        <div class="inv-header">
+            <div class="inv-logo">
+                <h2>RestroManager</h2>
+                <p>Daily Accounts Statement</p>
+            </div>
+            <div class="inv-vendor" style="text-align: right;">
+                <h3 id="invVendorName">Vendor Name</h3>
+                <p id="invDate">Date: 03/02/2026</p>
+            </div>
+        </div>
+        <table class="inv-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Bill No</th>
+                    <th>Total</th>
+                    <th>Paid</th>
+                    <th>Due</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody id="invBody"></tbody>
+        </table>
+        <div class="inv-footer">
+            <div>
+                <p><strong>Total Outstanding Due:</strong></p>
+                <h2 id="invTotalDue" style="color: #ef4444; margin: 5px 0;">₹0</h2>
+            </div>
+            <div style="text-align: center;">
+                <div class="sig-font">Keshab Sarkar</div>
+                <p style="margin: 0; font-weight: 700;">Authorized Signature</p>
+            </div>
+        </div>
     </div>
 
     <script src="js/config.js"></script>

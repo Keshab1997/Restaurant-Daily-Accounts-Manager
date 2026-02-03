@@ -4,6 +4,13 @@ let allVendorData = [];
 window.onload = async () => {
     const session = await checkAuth(true);
     currentUser = session.user;
+
+    // Set default dates (1st of current month to today)
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    const firstDay = today.substring(0, 8) + "01";
+    document.getElementById('fromDate').value = firstDay;
+    document.getElementById('toDate').value = today;
+
     loadVendorHistory();
 };
 
@@ -12,49 +19,36 @@ async function loadVendorHistory() {
     tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:40px;">Calculating History...</td></tr>';
 
     const { data: vendors } = await _supabase.from('vendors').select('*').eq('user_id', currentUser.id);
-    
     if(!vendors) return;
 
-    let historyList = [];
+    // Fetch all ledger entries at once for performance
+    const { data: allLedger } = await _supabase.from('vendor_ledger').select('*').eq('user_id', currentUser.id).order('t_date', { ascending: false });
 
-    for (const v of vendors) {
-        const { data: ledger } = await _supabase.from('vendor_ledger').select('*').eq('vendor_id', v.id).order('t_date', { ascending: false });
+    allVendorData = vendors.map(v => {
+        const vendorLedger = allLedger ? allLedger.filter(l => l.vendor_id === v.id) : [];
         
-        let totalBill = v.opening_due || 0;
-        let paidCash = 0;
-        let paidOwner = 0;
         let lastCategory = "N/A";
         let lastDate = v.created_at ? v.created_at.split('T')[0] : "N/A";
-
-        if(ledger && ledger.length > 0) {
-            lastDate = ledger[0].t_date;
-            ledger.forEach(l => {
-                if(l.t_type === 'BILL') {
-                    totalBill += l.amount;
-                    if(l.description && l.description.includes('for ')) {
-                        lastCategory = l.description.split('for ')[1];
-                    }
-                } else {
-                    if(l.description && l.description.includes('Owner')) paidOwner += l.amount;
-                    else paidCash += l.amount;
-                }
-            });
+        
+        if(vendorLedger.length > 0) {
+            lastDate = vendorLedger[0].t_date;
+            const lastBill = vendorLedger.find(l => l.t_type === 'BILL');
+            if(lastBill && lastBill.description && lastBill.description.includes('for ')) {
+                lastCategory = lastBill.description.split('for ')[1];
+            }
         }
 
-        historyList.push({
+        return {
             id: v.id,
             name: v.name,
+            opening_due: v.opening_due || 0,
             category: lastCategory,
             lastDate: lastDate,
-            bill: totalBill,
-            paidCash: paidCash,
-            paidOwner: paidOwner,
-            due: totalBill - (paidCash + paidOwner)
-        });
-    }
+            ledger: vendorLedger
+        };
+    });
 
-    allVendorData = historyList;
-    renderTable(allVendorData);
+    applyFilters();
 }
 
 function renderTable(data) {
@@ -62,7 +56,7 @@ function renderTable(data) {
     tbody.innerHTML = '';
 
     if(data.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:40px; color:#94a3b8;">No vendors found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:40px; color:#94a3b8;">No records found for this period</td></tr>';
         return;
     }
 
@@ -72,10 +66,10 @@ function renderTable(data) {
                 <td class="text-bold">${v.name}</td>
                 <td><span style="background:#f1f5f9; color:#475569; padding:4px 10px; border-radius:6px; font-size:0.85rem;">${v.category}</span></td>
                 <td style="font-size:0.85rem; color:#64748b;">${v.lastDate}</td>
-                <td>₹${v.bill.toLocaleString('en-IN')}</td>
-                <td class="paid-amount">₹${v.paidCash.toLocaleString('en-IN')}</td>
-                <td style="color:var(--warning)">₹${v.paidOwner.toLocaleString('en-IN')}</td>
-                <td class="due-amount">₹${v.due.toLocaleString('en-IN')}</td>
+                <td>₹${v.displayBill.toLocaleString('en-IN')}</td>
+                <td class="paid-amount">₹${v.displayPaidCash.toLocaleString('en-IN')}</td>
+                <td style="color:var(--warning)">₹${v.displayPaidOwner.toLocaleString('en-IN')}</td>
+                <td class="due-amount">₹${v.currentDue.toLocaleString('en-IN')}</td>
                 <td>
                     <button class="btn-view" onclick="location.href='vendor-details.html?id=${v.id}'">Details</button>
                 </td>
@@ -87,22 +81,90 @@ function renderTable(data) {
 function applyFilters() {
     const search = document.getElementById('searchVendor').value.toLowerCase();
     const status = document.getElementById('statusFilter').value;
+    const fromDate = document.getElementById('fromDate').value;
+    const toDate = document.getElementById('toDate').value;
 
-    const filtered = allVendorData.filter(v => {
+    const filteredData = allVendorData.map(v => {
+        // Filter ledger by date range
+        const filteredLedger = v.ledger.filter(l => {
+            if (!fromDate || !toDate) return true;
+            return l.t_date >= fromDate && l.t_date <= toDate;
+        });
+
+        // Calculate for selected period
+        let periodBill = 0;
+        let periodPaidCash = 0;
+        let periodPaidOwner = 0;
+
+        filteredLedger.forEach(l => {
+            if (l.t_type === 'BILL') {
+                periodBill += l.amount;
+            } else if (l.t_type === 'PAYMENT') {
+                if (l.description && (l.description.includes('Owner') || l.description.includes('Owner Paid'))) {
+                    periodPaidOwner += l.amount;
+                } else {
+                    periodPaidCash += l.amount;
+                }
+            }
+        });
+
+        // Calculate total current due (all time)
+        let totalBill = v.opening_due;
+        let totalPaid = 0;
+        v.ledger.forEach(l => {
+            if (l.t_type === 'BILL') totalBill += l.amount;
+            else if (l.t_type === 'PAYMENT') totalPaid += l.amount;
+        });
+
+        return {
+            ...v,
+            displayBill: periodBill,
+            displayPaidCash: periodPaidCash,
+            displayPaidOwner: periodPaidOwner,
+            currentDue: totalBill - totalPaid
+        };
+    }).filter(v => {
         const matchesSearch = v.name.toLowerCase().includes(search) || v.category.toLowerCase().includes(search);
         const matchesStatus = (status === 'ALL') || 
-                             (status === 'DUE' && v.due > 0) || 
-                             (status === 'PAID' && v.due <= 0);
-        return matchesSearch && matchesStatus;
+                             (status === 'DUE' && v.currentDue > 0) || 
+                             (status === 'PAID' && v.currentDue <= 0);
+        
+        const hasActivity = v.displayBill > 0 || v.displayPaidCash > 0 || v.displayPaidOwner > 0;
+        
+        return matchesSearch && matchesStatus && (search !== "" || hasActivity || status !== 'ALL');
     });
 
-    renderTable(filtered);
+    renderTable(filteredData);
 }
 
 function exportToExcel() {
-    let csv = "Vendor Name,Category,Last Date,Total Bill,Paid (Cash),Paid (Owner),Current Due\n";
+    const fromDate = document.getElementById('fromDate').value;
+    const toDate = document.getElementById('toDate').value;
+    let csv = `Vendor History Report (${fromDate} to ${toDate})\n`;
+    csv += "Vendor Name,Category,Last Date,Period Bill,Paid (Cash),Paid (Owner),Current Due\n";
+    
     allVendorData.forEach(v => {
-        csv += `${v.name},${v.category},${v.lastDate},${v.bill},${v.paidCash},${v.paidOwner},${v.due}\n`;
+        const filteredLedger = v.ledger.filter(l => {
+            if (!fromDate || !toDate) return true;
+            return l.t_date >= fromDate && l.t_date <= toDate;
+        });
+
+        let periodBill = 0, periodPaidCash = 0, periodPaidOwner = 0;
+        filteredLedger.forEach(l => {
+            if (l.t_type === 'BILL') periodBill += l.amount;
+            else if (l.t_type === 'PAYMENT') {
+                if (l.description && l.description.includes('Owner')) periodPaidOwner += l.amount;
+                else periodPaidCash += l.amount;
+            }
+        });
+
+        let totalBill = v.opening_due, totalPaid = 0;
+        v.ledger.forEach(l => {
+            if (l.t_type === 'BILL') totalBill += l.amount;
+            else if (l.t_type === 'PAYMENT') totalPaid += l.amount;
+        });
+
+        csv += `${v.name},${v.category},${v.lastDate},${periodBill},${periodPaidCash},${periodPaidOwner},${totalBill - totalPaid}\n`;
     });
 
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -110,7 +172,7 @@ function exportToExcel() {
     const a = document.createElement('a');
     a.setAttribute('hidden', '');
     a.setAttribute('href', url);
-    a.setAttribute('download', 'Vendor_History.csv');
+    a.setAttribute('download', `Vendor_Report_${fromDate}_to_${toDate}.csv`);
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

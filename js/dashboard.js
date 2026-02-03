@@ -1,5 +1,6 @@
 let currentUser = null;
 let vendorsList = [];
+let currentDayExpenses = []; // To store fetched expenses for calculation
 
 window.onload = async () => {
     const session = await checkAuth(true);
@@ -75,11 +76,13 @@ async function loadData() {
     }
 
     const { data: expenses } = await _supabase.from('expenses').select('*').eq('user_id', currentUser.id).eq('report_date', date);
+    currentDayExpenses = expenses || [];
+    
     const list = document.getElementById('expenseList');
     list.innerHTML = '';
     
-    if(expenses && expenses.length > 0) {
-        expenses.forEach(e => {
+    if(currentDayExpenses.length > 0) {
+        currentDayExpenses.forEach(e => {
             let sourceText = "";
             let color = "#64748b";
             if(e.payment_source === 'CASH') { sourceText = "Paid from Cash"; color = "#ef4444"; }
@@ -109,12 +112,11 @@ function updateCalculations() {
 
     document.getElementById('totalSale').innerText = `₹${(cashSale + cardSale + swiggy + zomato).toLocaleString('en-IN')}`;
 
-    const listItems = document.querySelectorAll('.expense-li');
+    // Calculate cash expenses from the data array instead of DOM
     let cashExpenseTotal = 0;
-    listItems.forEach(li => {
-        if(li.querySelector('small').innerText.includes('from Cash')) {
-            const amt = parseFloat(li.querySelector('b').innerText.replace('₹', '').replace(/,/g, ''));
-            cashExpenseTotal += amt;
+    currentDayExpenses.forEach(exp => {
+        if(exp.payment_source === 'CASH') {
+            cashExpenseTotal += exp.amount;
         }
     });
 

@@ -1,5 +1,6 @@
 let currentUser = null;
 let vendorId = null;
+let allBills = {}; // Store bill-wise calculations
 
 window.onload = async () => {
     const session = await checkAuth(true);
@@ -12,49 +13,109 @@ window.onload = async () => {
     loadDetails();
 };
 
+function toggleBillSelect() {
+    const type = document.getElementById('entryType').value;
+    const input = document.getElementById('entryBillNo');
+    const select = document.getElementById('selectBillNo');
+    const label = document.getElementById('labelBillNo');
+
+    if(type === 'PAYMENT') {
+        input.style.display = 'none';
+        select.style.display = 'block';
+        label.innerText = "Select Bill No";
+        
+        select.innerHTML = '<option value="GENERAL">General Payment (No Bill)</option>';
+        Object.keys(allBills).forEach(bNo => {
+            if(allBills[bNo].due > 0) {
+                select.innerHTML += `<option value="${bNo}">${bNo} (Due: ₹${allBills[bNo].due})</option>`;
+            }
+        });
+    } else {
+        input.style.display = 'block';
+        select.style.display = 'none';
+        label.innerText = "Bill Number";
+    }
+}
+
 async function loadDetails() {
     const { data: vendor } = await _supabase.from('vendors').select('*').eq('id', vendorId).single();
     document.getElementById('vNameTitle').innerText = vendor.name;
+    document.getElementById('invVendorName').innerText = vendor.name;
 
     const { data: ledger } = await _supabase.from('vendor_ledger')
         .select('*')
         .eq('vendor_id', vendorId)
-        .order('t_date', { ascending: false });
+        .order('t_date', { ascending: true });
 
-    let bill = vendor.opening_due || 0;
-    let paid = 0;
-    const list = document.getElementById('ledgerList');
-    list.innerHTML = '';
+    allBills = {};
+    let totalBillAmt = vendor.opening_due || 0;
+    let totalPaidAmt = 0;
 
-    if(ledger && ledger.length > 0) {
-        ledger.forEach(l => {
-            if(l.t_type === 'BILL') bill += l.amount;
-            else paid += l.amount;
-
-            const color = l.t_type === 'BILL' ? 'var(--danger)' : 'var(--success)';
-            const badgeClass = l.t_type === 'BILL' ? 'badge-bill' : 'badge-payment';
-            const typeLabel = l.t_type === 'BILL' ? 'Bill' : 'Payment';
-            
-            list.innerHTML += `
-                <li class="ledger-item">
-                    <div class="li-left">
-                        <span>${l.description || typeLabel}</span>
-                        <small><i class="ri-calendar-line"></i> ${l.t_date}</small>
-                    </div>
-                    <div class="li-right">
-                        <b style="color: ${color}">₹${l.amount.toLocaleString('en-IN')}</b>
-                        <small class="${badgeClass}">${typeLabel}</small>
-                    </div>
-                </li>
-            `;
-        });
-    } else {
-        list.innerHTML = '<p style="text-align:center; color:#94a3b8; padding:20px;">No transactions yet</p>';
+    if(vendor.opening_due > 0) {
+        allBills['OPENING'] = { date: 'Initial', total: vendor.opening_due, paid: 0, due: vendor.opening_due };
     }
 
-    document.getElementById('totBill').innerText = `₹${bill.toLocaleString('en-IN')}`;
-    document.getElementById('totPaid').innerText = `₹${paid.toLocaleString('en-IN')}`;
-    document.getElementById('currDue').innerText = `₹${(bill - paid).toLocaleString('en-IN')}`;
+    if(ledger) {
+        ledger.forEach(l => {
+            const bNo = l.bill_no || 'GENERAL';
+            if(l.t_type === 'BILL') {
+                if(!allBills[bNo]) allBills[bNo] = { date: l.t_date, total: 0, paid: 0, due: 0 };
+                allBills[bNo].total += l.amount;
+                totalBillAmt += l.amount;
+            } else {
+                if(!allBills[bNo]) allBills[bNo] = { date: l.t_date, total: 0, paid: 0, due: 0 };
+                allBills[bNo].paid += l.amount;
+                totalPaidAmt += l.amount;
+            }
+        });
+    }
+
+    const list = document.getElementById('ledgerList');
+    const invBody = document.getElementById('invBody');
+    list.innerHTML = '';
+    invBody.innerHTML = '';
+
+    Object.keys(allBills).forEach(bNo => {
+        const b = allBills[bNo];
+        b.due = b.total - b.paid;
+        const isPaid = b.due <= 0;
+        const statusLabel = isPaid ? 'Full Paid' : (b.paid > 0 ? 'Partial' : 'Unpaid');
+        const badgeClass = isPaid ? 'badge-payment' : 'badge-bill';
+        const stampClass = isPaid ? 'stamp-paid' : 'stamp-partial';
+
+        list.innerHTML += `
+            <li class="ledger-item">
+                <div class="li-left">
+                    <span>Bill: ${bNo}</span>
+                    <small>Total: ₹${b.total} | Paid: ₹${b.paid}</small>
+                    <small><i class="ri-calendar-line"></i> ${b.date}</small>
+                </div>
+                <div class="li-right">
+                    <b style="color: ${isPaid ? 'var(--success)' : 'var(--danger)'}">Due: ₹${b.due}</b>
+                    <small class="${badgeClass}">${statusLabel}</small>
+                </div>
+            </li>
+        `;
+
+        invBody.innerHTML += `
+            <tr>
+                <td>${b.date}</td>
+                <td>${bNo}</td>
+                <td>₹${b.total}</td>
+                <td>₹${b.paid}</td>
+                <td>₹${b.due}</td>
+                <td><span class="stamp ${stampClass}">${statusLabel}</span></td>
+            </tr>
+        `;
+    });
+
+    document.getElementById('totBill').innerText = `₹${totalBillAmt.toLocaleString('en-IN')}`;
+    document.getElementById('totPaid').innerText = `₹${totalPaidAmt.toLocaleString('en-IN')}`;
+    const netDue = totalBillAmt - totalPaidAmt;
+    document.getElementById('currDue').innerText = `₹${netDue.toLocaleString('en-IN')}`;
+    document.getElementById('invTotalDue').innerText = `₹${netDue.toLocaleString('en-IN')}`;
+    
+    toggleBillSelect();
 }
 
 async function addEntry() {
@@ -62,8 +123,13 @@ async function addEntry() {
     const date = document.getElementById('entryDate').value;
     const desc = document.getElementById('entryDesc').value;
     const amount = parseFloat(document.getElementById('entryAmount').value);
+    let billNo = document.getElementById('entryBillNo').value;
 
-    if(!amount) return alert("Enter amount");
+    if(type === 'PAYMENT') {
+        billNo = document.getElementById('selectBillNo').value;
+    }
+
+    if(!amount || !billNo) return alert("Enter amount and Bill Number");
 
     await _supabase.from('vendor_ledger').insert({
         user_id: currentUser.id,
@@ -71,11 +137,13 @@ async function addEntry() {
         t_date: date,
         t_type: type,
         description: desc,
-        amount: amount
+        amount: amount,
+        bill_no: billNo
     });
 
     document.getElementById('entryAmount').value = '';
     document.getElementById('entryDesc').value = '';
+    document.getElementById('entryBillNo').value = '';
     loadDetails();
 }
 
@@ -84,49 +152,25 @@ async function logout() {
     window.location.href = 'index.html';
 }
 
-async function generatePDF() {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
+async function generateInvoiceImage() {
+    const element = document.getElementById('invoiceTemplate');
+    document.getElementById('invDate').innerText = "Date: " + new Date().toLocaleDateString();
     
-    const vName = document.getElementById('vNameTitle').innerText;
-    const totalBill = document.getElementById('totBill').innerText;
-    const totalPaid = document.getElementById('totPaid').innerText;
-    const currentDue = document.getElementById('currDue').innerText;
-
-    doc.setFontSize(18);
-    doc.text(`Vendor Statement: ${vName}`, 14, 20);
-    
-    doc.setFontSize(11);
-    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 30);
-    doc.text(`Total Bill: ${totalBill} | Total Paid: ${totalPaid} | Due: ${currentDue}`, 14, 38);
-
-    const { data: ledger } = await _supabase.from('vendor_ledger')
-        .select('*')
-        .eq('vendor_id', vendorId)
-        .order('t_date', { ascending: true });
-
-    const tableRows = ledger.map(l => [
-        l.t_date,
-        l.t_type === 'BILL' ? 'Bill / Purchase' : 'Payment',
-        l.description || '-',
-        l.t_type === 'BILL' ? l.amount : '-',
-        l.t_type === 'PAYMENT' ? l.amount : '-'
-    ]);
-
-    doc.autoTable({
-        head: [['Date', 'Type', 'Description', 'Bill Amount', 'Paid Amount']],
-        body: tableRows,
-        startY: 45,
-        theme: 'grid',
-        headStyles: { fillColor: [37, 99, 235] },
-        columnStyles: {
-            3: { textColor: [220, 38, 69], fontStyle: 'bold' },
-            4: { textColor: [5, 150, 105], fontStyle: 'bold' }
+    html2canvas(element, { scale: 2 }).then(canvas => {
+        const link = document.createElement('a');
+        link.download = `Bill_${document.getElementById('vNameTitle').innerText}.png`;
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+        
+        if (navigator.share) {
+            canvas.toBlob(blob => {
+                const file = new File([blob], "bill.png", { type: "image/png" });
+                navigator.share({
+                    files: [file],
+                    title: 'Vendor Statement',
+                    text: 'Check out the latest statement from RestroManager'
+                }).catch(console.error);
+            });
         }
     });
-
-    doc.save(`${vName}_Statement.pdf`);
-    
-    const msg = `Hello ${vName}, here is your statement.\nTotal Due: ${currentDue}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
 }

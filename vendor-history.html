@@ -9,6 +9,11 @@
     <link rel="stylesheet" href="css/vendor-history.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
+    <style>
+        .date-filter-group { display: flex; align-items: center; gap: 10px; background: #fff; padding: 5px 15px; border-radius: 12px; border: 1px solid var(--border); }
+        .date-filter-group input { border: none; outline: none; font-size: 0.9rem; color: var(--primary); font-weight: 600; cursor: pointer; }
+        .date-filter-group label { font-size: 0.75rem; color: var(--text-light); font-weight: 700; text-transform: uppercase; }
+    </style>
 </head>
 <body>
     <div class="full-wrapper">
@@ -45,12 +50,20 @@
             </div>
 
             <div class="glass-card filter-section">
-                <div class="filter-grid">
-                    <div class="search-box">
+                <div class="filter-grid" style="display: flex; flex-wrap: wrap; gap: 15px;">
+                    <div class="search-box" style="flex: 1; min-width: 200px;">
                         <i class="ri-search-line"></i>
                         <input type="text" id="searchVendor" placeholder="Search Vendor or Category..." oninput="applyFilters()">
                     </div>
-                    <select id="statusFilter" onchange="applyFilters()">
+                    
+                    <div class="date-filter-group">
+                        <label>From</label>
+                        <input type="date" id="fromDate" onchange="applyFilters()">
+                        <label>To</label>
+                        <input type="date" id="toDate" onchange="applyFilters()">
+                    </div>
+
+                    <select id="statusFilter" onchange="applyFilters()" style="padding: 10px; border-radius: 12px; border: 1px solid var(--border);">
                         <option value="ALL">All Status</option>
                         <option value="DUE">Only Due</option>
                         <option value="PAID">Fully Paid</option>
@@ -64,6 +77,7 @@
                         <tr>
                             <th>Vendor Name</th>
                             <th>Main Category</th>
+                            <th>Last Date</th>
                             <th>Total Bill</th>
                             <th>Paid (Cash)</th>
                             <th>Paid (Owner)</th>
