@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vendors - RestroManager</title>
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/navbar.css">
+    <link rel="stylesheet" href="css/vendors.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
+</head>
+<body>
+    <div class="full-wrapper">
+        <nav class="side-nav">
+            <div class="nav-logo"><i class="ri-restaurant-2-line"></i> <span>RestroManager</span></div>
+            <div class="nav-links">
+                <a href="dashboard.html"><i class="ri-home-4-line"></i> <span>Home</span></a>
+                <a href="tally.html"><i class="ri-money-dollar-box-line"></i> <span>Cash Tally</span></a>
+                <a href="vendors.html" class="active"><i class="ri-store-2-line"></i> <span>Vendors</span></a>
+                <a href="vendor-history.html"><i class="ri-file-list-3-line"></i> <span>Vendor History</span></a>
+                <a href="owner.html"><i class="ri-user-star-line"></i> <span>Owner</span></a>
+            </div>
+            <div class="nav-footer"><a onclick="logout()"><i class="ri-logout-box-r-line"></i> <span>Logout</span></a></div>
+        </nav>
+
+        <nav class="bottom-nav">
+            <a href="dashboard.html"><i class="ri-home-4-line"></i></a>
+            <a href="vendors.html" class="active"><i class="ri-store-2-line"></i></a>
+            <a href="vendor-history.html"><i class="ri-file-list-3-line"></i></a>
+            <a href="owner.html"><i class="ri-user-star-line"></i></a>
+        </nav>
+
+        <main class="main-content">
+            <div class="top-bar">
+                <div class="page-title">
+                    <h1>Vendor Management 🚚</h1>
+                    <p>Manage your suppliers and their dues</p>
+                </div>
+                <button class="btn-add-new" onclick="showAddVendorModal()">
+                    <i class="ri-add-line"></i> Add New Vendor
+                </button>
+            </div>
+
+            <div id="vendorList" class="vendor-grid"></div>
+        </main>
+    </div>
+
+    <div id="vendorModal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3><i class="ri-user-add-line"></i> Add New Vendor</h3>
+                <button class="btn-close" onclick="closeModal()"><i class="ri-close-line"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group">
+                    <label>Vendor Name</label>
+                    <div class="input-wrapper">
+                        <i class="ri-store-2-line"></i>
+                        <input type="text" id="vName" placeholder="e.g. Rahim Chicken Center">
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>Phone Number</label>
+                    <div class="input-wrapper">
+                        <i class="ri-phone-line"></i>
+                        <input type="text" id="vPhone" placeholder="e.g. 9876543210">
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>Opening Due Amount (Baki)</label>
+                    <div class="input-wrapper">
+                        <i class="ri-money-dollar-circle-line"></i>
+                        <input type="number" id="vOpen" placeholder="₹ 0.00">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+                <button class="btn-save" onclick="addVendor()">Save Vendor</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/vendors.js"></script>
+</body>
+</html>

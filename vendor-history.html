@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vendor History - RestroManager</title>
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/navbar.css">
+    <link rel="stylesheet" href="css/vendor-history.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
+</head>
+<body>
+    <div class="full-wrapper">
+        <nav class="side-nav">
+            <div class="nav-logo"><i class="ri-restaurant-2-line"></i> <span>RestroManager</span></div>
+            <div class="nav-links">
+                <a href="dashboard.html"><i class="ri-home-4-line"></i> <span>Home</span></a>
+                <a href="tally.html"><i class="ri-money-dollar-box-line"></i> <span>Cash Tally</span></a>
+                <a href="vendors.html"><i class="ri-store-2-line"></i> <span>Vendors</span></a>
+                <a href="vendor-history.html" class="active"><i class="ri-file-list-3-line"></i> <span>Vendor History</span></a>
+                <a href="owner.html"><i class="ri-user-star-line"></i> <span>Owner</span></a>
+            </div>
+            <div class="nav-footer"><a onclick="logout()"><i class="ri-logout-box-r-line"></i> <span>Logout</span></a></div>
+        </nav>
+
+        <nav class="bottom-nav">
+            <a href="dashboard.html"><i class="ri-home-4-line"></i></a>
+            <a href="vendors.html"><i class="ri-store-2-line"></i></a>
+            <a href="vendor-history.html" class="active"><i class="ri-file-list-3-line"></i></a>
+            <a href="owner.html"><i class="ri-user-star-line"></i></a>
+        </nav>
+
+        <main class="main-content">
+            <div class="top-bar">
+                <div class="page-title">
+                    <h1>All Vendor History 📊</h1>
+                    <p>Detailed report of all purchases and payments</p>
+                </div>
+                <div class="action-btns">
+                    <button class="btn-export" onclick="exportToExcel()">
+                        <i class="ri-file-excel-2-line"></i> Export Excel
+                    </button>
+                </div>
+            </div>
+
+            <div class="glass-card filter-section">
+                <div class="filter-grid">
+                    <div class="search-box">
+                        <i class="ri-search-line"></i>
+                        <input type="text" id="searchVendor" placeholder="Search Vendor or Category..." oninput="applyFilters()">
+                    </div>
+                    <select id="statusFilter" onchange="applyFilters()">
+                        <option value="ALL">All Status</option>
+                        <option value="DUE">Only Due</option>
+                        <option value="PAID">Fully Paid</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="glass-card table-container">
+                <table class="excel-table">
+                    <thead>
+                        <tr>
+                            <th>Vendor Name</th>
+                            <th>Main Category</th>
+                            <th>Total Bill</th>
+                            <th>Paid (Cash)</th>
+                            <th>Paid (Owner)</th>
+                            <th>Current Due</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="vendorHistoryBody">
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/vendor-history.js"></script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+/* FILE: css/tally.css */
+.top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+.page-title h1 { font-size: 1.8rem; color: var(--text-dark); font-weight: 800; margin: 0; }
+.page-title p { color: var(--text-light); margin-top: 5px; }
+
+.dashboard-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 30px; }
+
+.tally-grid { display: flex; flex-direction: column; gap: 12px; }
+.note-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 20px; background: #f8fafc; border-radius: 12px;
+}
+.note-row span { font-weight: 600; color: var(--text-light); width: 80px; }
+.note-row input { width: 100px; padding: 8px; border-radius: 8px; border: 1px solid var(--border); text-align: center; margin: 0 15px; outline: none; }
+.note-row input:focus { border-color: var(--primary); }
+.note-row b { width: 100px; text-align: right; font-family: monospace; font-size: 1.1rem; color: var(--primary); }
+
+.result-box { display: flex; flex-direction: column; gap: 20px; }
+.res-item { display: flex; justify-content: space-between; align-items: center; }
+.res-item span { color: var(--text-light); font-weight: 600; }
+.res-item h2 { font-size: 1.5rem; font-weight: 800; margin: 0; }
+.border-top { border-top: 2px dashed var(--border); padding-top: 20px; }
+
+@media (max-width: 768px) {
+    .dashboard-grid { grid-template-columns: 1fr; }
+}

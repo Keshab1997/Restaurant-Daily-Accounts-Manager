@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vendor Details - RestroManager</title>
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/navbar.css">
+    <link rel="stylesheet" href="css/vendor-details.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
+</head>
+<body>
+    <div class="full-wrapper">
+        <nav class="side-nav">
+            <div class="nav-logo"><i class="ri-restaurant-2-line"></i> <span>RestroManager</span></div>
+            <div class="nav-links">
+                <a href="dashboard.html"><i class="ri-home-4-line"></i> <span>Home</span></a>
+                <a href="tally.html"><i class="ri-money-dollar-box-line"></i> <span>Cash Tally</span></a>
+                <a href="vendors.html" class="active"><i class="ri-store-2-line"></i> <span>Vendors</span></a>
+                <a href="owner.html"><i class="ri-user-star-line"></i> <span>Owner</span></a>
+            </div>
+            <div class="nav-footer"><a onclick="logout()"><i class="ri-logout-box-r-line"></i> <span>Logout</span></a></div>
+        </nav>
+
+        <nav class="bottom-nav">
+            <a href="dashboard.html"><i class="ri-home-4-line"></i></a>
+            <a href="tally.html"><i class="ri-money-dollar-box-line"></i></a>
+            <a href="vendors.html" class="active"><i class="ri-store-2-line"></i></a>
+            <a href="owner.html"><i class="ri-user-star-line"></i></a>
+        </nav>
+
+        <main class="main-content">
+            <div class="top-bar">
+                <div class="page-title">
+                    <div style="display:flex; align-items:center; gap:15px;">
+                        <a href="vendors.html" class="back-circle"><i class="ri-arrow-left-line"></i></a>
+                        <div>
+                            <h1 id="vNameTitle">Loading...</h1>
+                            <p>Vendor Ledger & Statements</p>
+                        </div>
+                    </div>
+                </div>
+                <button class="btn-share-pdf" onclick="generatePDF()">
+                    <i class="ri-file-pdf-line"></i> Share PDF Statement
+                </button>
+            </div>
+
+            <div class="summary-grid">
+                <div class="sum-card-mini">
+                    <div class="icon-circle blue"><i class="ri-bill-line"></i></div>
+                    <div class="sum-info">
+                        <small>Total Bill</small>
+                        <h2 id="totBill">₹0</h2>
+                    </div>
+                </div>
+                <div class="sum-card-mini">
+                    <div class="icon-circle green"><i class="ri-checkbox-circle-line"></i></div>
+                    <div class="sum-info">
+                        <small>Total Paid</small>
+                        <h2 id="totPaid">₹0</h2>
+                    </div>
+                </div>
+                <div class="sum-card-mini">
+                    <div class="icon-circle red"><i class="ri-error-warning-line"></i></div>
+                    <div class="sum-info">
+                        <small>Current Due</small>
+                        <h2 id="currDue">₹0</h2>
+                    </div>
+                </div>
+            </div>
+
+            <div class="details-grid">
+                <div class="glass-card">
+                    <div class="card-header"><i class="ri-add-box-line"></i> <h3>New Entry</h3></div>
+                    <div class="entry-form">
+                        <div class="form-row">
+                            <div class="input-box flex-1">
+                                <label>Entry Type</label>
+                                <select id="entryType">
+                                    <option value="BILL">🧾 Bill (Purchase)</option>
+                                    <option value="PAYMENT">💸 Payment (Cash Out)</option>
+                                </select>
+                            </div>
+                            <div class="input-box flex-1">
+                                <label>Date</label>
+                                <input type="date" id="entryDate">
+                            </div>
+                        </div>
+                        <div class="input-box">
+                            <label>Description</label>
+                            <input type="text" id="entryDesc" placeholder="e.g. 10kg Chicken / Weekly Payment">
+                        </div>
+                        <div class="input-box">
+                            <label>Amount</label>
+                            <input type="number" id="entryAmount" placeholder="₹ 0">
+                        </div>
+                        <button class="btn-primary" onclick="addEntry()">Add to Ledger</button>
+                    </div>
+                </div>
+
+                <div class="glass-card">
+                    <div class="card-header"><i class="ri-history-line"></i> <h3>Transaction History</h3></div>
+                    <div class="history-container">
+                        <ul id="ledgerList" class="modern-list"></ul>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/vendor-details.js"></script>
+</body>
+</html>

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Owner Ledger - RestroManager</title>
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/navbar.css">
+    <link rel="stylesheet" href="css/owner.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
+</head>
+<body>
+    <div class="full-wrapper">
+        <nav class="side-nav">
+            <div class="nav-logo"><i class="ri-restaurant-2-line"></i> <span>RestroManager</span></div>
+            <div class="nav-links">
+                <a href="dashboard.html"><i class="ri-home-4-line"></i> <span>Home</span></a>
+                <a href="tally.html"><i class="ri-money-dollar-box-line"></i> <span>Cash Tally</span></a>
+                <a href="vendors.html"><i class="ri-store-2-line"></i> <span>Vendors</span></a>
+                <a href="owner.html" class="active"><i class="ri-user-star-line"></i> <span>Owner</span></a>
+            </div>
+            <div class="nav-footer"><a onclick="logout()"><i class="ri-logout-box-r-line"></i> <span>Logout</span></a></div>
+        </nav>
+
+        <nav class="bottom-nav">
+            <a href="dashboard.html"><i class="ri-home-4-line"></i></a>
+            <a href="tally.html"><i class="ri-money-dollar-box-line"></i></a>
+            <a href="vendors.html"><i class="ri-store-2-line"></i></a>
+            <a href="owner.html" class="active"><i class="ri-user-star-line"></i></a>
+        </nav>
+
+        <main class="main-content">
+            <div class="top-bar">
+                <div class="page-title">
+                    <h1>Owner Ledger 🏦</h1>
+                    <p>Manage loans and cash handovers with the owner</p>
+                </div>
+            </div>
+
+            <div class="summary-grid">
+                <div class="sum-card-mini">
+                    <div class="icon-circle red"><i class="ri-arrow-left-down-line"></i></div>
+                    <div class="sum-info">
+                        <small>Total Loan Taken</small>
+                        <h2 id="loanTotal">₹0</h2>
+                    </div>
+                </div>
+                <div class="sum-card-mini">
+                    <div class="icon-circle green"><i class="ri-arrow-right-up-line"></i></div>
+                    <div class="sum-info">
+                        <small>Total Cash Handover</small>
+                        <h2 id="handoverTotal">₹0</h2>
+                    </div>
+                </div>
+                <div class="sum-card-mini">
+                    <div class="icon-circle blue"><i class="ri-exchange-funds-line"></i></div>
+                    <div class="sum-info">
+                        <small>Net Payable to Owner</small>
+                        <h2 id="netPayable">₹0</h2>
+                    </div>
+                </div>
+            </div>
+
+            <div class="owner-grid">
+                <div class="glass-card">
+                    <div class="card-header"><i class="ri-add-circle-line"></i> <h3>New Transaction</h3></div>
+                    <div class="transaction-form">
+                        <div class="type-selector">
+                            <button id="btnLoan" class="type-btn loan active" onclick="setTransType('LOAN_TAKEN')">
+                                <i class="ri-download-2-line"></i> Loan Taken
+                            </button>
+                            <button id="btnHandover" class="type-btn handover" onclick="setTransType('CASH_HANDOVER')">
+                                <i class="ri-upload-2-line"></i> Cash Handover
+                            </button>
+                        </div>
+                        
+                        <div class="input-box">
+                            <label>Amount</label>
+                            <input type="number" id="amount" placeholder="₹ Enter Amount">
+                        </div>
+                        
+                        <div class="input-box">
+                            <label>Note / Description</label>
+                            <input type="text" id="desc" placeholder="e.g. For market purchase / Night cash">
+                        </div>
+
+                        <button class="btn-primary" id="submitBtn" onclick="addOwnerTrans()">
+                            Confirm Transaction
+                        </button>
+                    </div>
+                </div>
+
+                <div class="glass-card">
+                    <div class="card-header"><i class="ri-history-line"></i> <h3>Recent History</h3></div>
+                    <div class="history-container">
+                        <ul id="ownerList" class="modern-list"></ul>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/owner.js"></script>
+</body>
+</html>

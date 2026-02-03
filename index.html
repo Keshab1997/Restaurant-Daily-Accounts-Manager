@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Restaurant Manager</title>
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/login.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <div class="login-container">
+        <h2>Restaurant Manager 👨🍳</h2>
+        <input type="email" id="email" placeholder="Email">
+        <input type="password" id="password" placeholder="Password">
+        <button onclick="login()">Login</button>
+        <button onclick="signup()" class="btn-secondary">Sign Up</button>
+    </div>
+    <script src="js/config.js"></script>
+    <script>
+        async function login() {
+            const email = document.getElementById('email').value;
+            const pass = document.getElementById('password').value;
+            const { error } = await _supabase.auth.signInWithPassword({ email, password: pass });
+            if (error) alert(error.message);
+            else window.location.href = 'dashboard.html';
+        }
+        async function signup() {
+            const email = document.getElementById('email').value;
+            const pass = document.getElementById('password').value;
+            const { error } = await _supabase.auth.signUp({ email, password: pass });
+            if (error) alert(error.message);
+            else alert("Check email for confirmation!");
+        }
+        checkAuth(false);
+    </script>
+</body>
+</html>

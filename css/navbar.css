@@ -1,0 +1,43 @@
+/* FILE: css/navbar.css */
+/* Desktop Sidebar */
+.side-nav {
+    width: var(--sidebar-width); background: #1e293b; color: white;
+    display: flex; flex-direction: column; padding: 30px 20px;
+    position: sticky; top: 0; height: 100vh; flex-shrink: 0;
+}
+
+.nav-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 40px; }
+.nav-logo i { font-size: 2rem; color: var(--success); }
+.nav-logo span { font-size: 1.4rem; font-weight: 800; letter-spacing: -0.5px; }
+
+.nav-links { display: flex; flex-direction: column; gap: 8px; flex-grow: 1; }
+.nav-links a {
+    display: flex; align-items: center; gap: 15px; padding: 14px 18px;
+    color: #94a3b8; text-decoration: none; border-radius: 12px; transition: 0.3s;
+}
+.nav-links a:hover, .nav-links a.active { background: rgba(255,255,255,0.1); color: white; }
+.nav-links a i { font-size: 1.3rem; }
+
+.nav-footer a { color: #f87171; text-decoration: none; display: flex; align-items: center; gap: 15px; padding: 15px; cursor: pointer; }
+
+/* Mobile Bottom Nav (Hidden on Desktop) */
+.bottom-nav { display: none; }
+
+@media (max-width: 1024px) {
+    .side-nav { width: 85px; padding: 20px 10px; }
+    .nav-logo span, .nav-links span, .nav-footer span { display: none; }
+}
+
+@media (max-width: 600px) {
+    .side-nav { display: none; }
+    .bottom-nav {
+        display: flex; position: fixed; bottom: 0; left: 0; width: 100%;
+        background: #1e293b; justify-content: space-around; padding: 12px 0;
+        z-index: 1000; border-top: 1px solid rgba(255,255,255,0.1);
+    }
+    .bottom-nav a {
+        color: #94a3b8; text-decoration: none; font-size: 1.5rem;
+        display: flex; flex-direction: column; align-items: center;
+    }
+    .bottom-nav a.active { color: white; }
+}

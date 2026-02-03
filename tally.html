@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cash Tally - RestroManager</title>
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/navbar.css">
+    <link rel="stylesheet" href="css/tally.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
+</head>
+<body>
+    <div class="full-wrapper">
+        <nav class="side-nav">
+            <div class="nav-logo"><i class="ri-restaurant-2-line"></i> <span>RestroManager</span></div>
+            <div class="nav-links">
+                <a href="dashboard.html"><i class="ri-home-4-line"></i> <span>Home</span></a>
+                <a href="tally.html" class="active"><i class="ri-money-dollar-box-line"></i> <span>Cash Tally</span></a>
+                <a href="vendors.html"><i class="ri-store-2-line"></i> <span>Vendors</span></a>
+                <a href="owner.html"><i class="ri-user-star-line"></i> <span>Owner</span></a>
+            </div>
+            <div class="nav-footer"><a onclick="logout()"><i class="ri-logout-box-r-line"></i> <span>Logout</span></a></div>
+        </nav>
+
+        <nav class="bottom-nav">
+            <a href="dashboard.html"><i class="ri-home-4-line"></i></a>
+            <a href="tally.html" class="active"><i class="ri-money-dollar-box-line"></i></a>
+            <a href="vendors.html"><i class="ri-store-2-line"></i></a>
+            <a href="owner.html"><i class="ri-user-star-line"></i></a>
+        </nav>
+
+        <main class="main-content">
+            <div class="top-bar">
+                <div class="page-title"><h1>Cash Tally</h1><p id="tallyDate">Loading...</p></div>
+            </div>
+
+            <div class="dashboard-grid">
+                <div class="glass-card">
+                    <div class="card-header"><i class="ri-coins-line"></i> <h3>Denomination</h3></div>
+                    <div class="tally-grid">
+                        <div class="note-row"><span>₹500 x</span><input type="number" class="note-input" data-val="500"><b>0</b></div>
+                        <div class="note-row"><span>₹200 x</span><input type="number" class="note-input" data-val="200"><b>0</b></div>
+                        <div class="note-row"><span>₹100 x</span><input type="number" class="note-input" data-val="100"><b>0</b></div>
+                        <div class="note-row"><span>₹50 x</span><input type="number" class="note-input" data-val="50"><b>0</b></div>
+                        <div class="note-row"><span>₹20 x</span><input type="number" class="note-input" data-val="20"><b>0</b></div>
+                        <div class="note-row"><span>₹10 x</span><input type="number" class="note-input" data-val="10"><b>0</b></div>
+                        <div class="note-row"><span>Coins</span><input type="number" class="note-input" data-val="1"><b>0</b></div>
+                    </div>
+                </div>
+
+                <div class="glass-card">
+                    <div class="card-header"><i class="ri-pie-chart-line"></i> <h3>Final Result</h3></div>
+                    <div class="result-box">
+                        <div class="res-item"><span>Physical Cash</span><h2 id="phyTotal" class="text-green">₹0</h2></div>
+                        <div class="res-item"><span>System Cash</span><h2 id="sysTotal">₹0</h2></div>
+                        <div class="res-item border-top"><span>Difference</span><h2 id="diffTotal">₹0</h2></div>
+                    </div>
+                    <button class="btn-primary" style="margin-top:20px;" onclick="saveAndShareDayEnd()">Save & Share Day End</button>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script src="js/config.js"></script>
+    <script src="js/tally.js"></script>
+</body>
+</html>

@@ -1,0 +1,64 @@
+/* FILE: css/vendor-history.css */
+
+.action-btns { display: flex; gap: 10px; }
+
+.filter-section { padding: 15px 25px; margin-bottom: 20px; }
+.filter-grid { display: flex; gap: 20px; align-items: center; }
+
+.search-box {
+    position: relative; flex-grow: 1;
+}
+.search-box i {
+    position: absolute; left: 15px; top: 50%; transform: translateY(-50%);
+    color: var(--text-light);
+}
+.search-box input {
+    width: 100%; padding: 12px 12px 12px 45px; border-radius: 12px;
+    border: 1px solid var(--border); background: #f8fafc; outline: none;
+}
+.search-box input:focus { border-color: var(--primary); background: white; }
+
+.filter-grid select {
+    padding: 12px; border-radius: 12px; border: 1px solid var(--border);
+    background: white; min-width: 150px; outline: none;
+}
+
+.btn-export {
+    background: #10b981; color: white; border: none; padding: 12px 20px;
+    border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px;
+    transition: 0.3s;
+}
+.btn-export:hover { background: #059669; }
+
+.table-container { overflow-x: auto; padding: 0; }
+.excel-table {
+    width: 100%; border-collapse: collapse; min-width: 900px;
+}
+.excel-table th {
+    background: #f1f5f9; text-align: left; padding: 15px 20px;
+    font-size: 0.85rem; font-weight: 700; color: var(--text-light);
+    text-transform: uppercase; border-bottom: 2px solid var(--border);
+}
+.excel-table td {
+    padding: 15px 20px; border-bottom: 1px solid var(--border);
+    font-size: 0.95rem; color: var(--text-dark);
+}
+.excel-table tr:hover { background: #f8fafc; }
+
+.text-bold { font-weight: 700; }
+.due-amount { color: var(--danger); font-weight: 800; }
+.paid-amount { color: var(--success); }
+
+.btn-view {
+    padding: 6px 12px; border-radius: 8px; border: 1px solid var(--primary);
+    color: var(--primary); background: transparent; cursor: pointer; font-size: 0.8rem;
+    transition: 0.3s;
+}
+.btn-view:hover { background: var(--primary); color: white; }
+
+@media (max-width: 600px) {
+    .filter-grid { flex-direction: column; }
+    .excel-table { font-size: 0.8rem; }
+    .action-btns { width: 100%; }
+    .btn-export { width: 100%; justify-content: center; }
+}
