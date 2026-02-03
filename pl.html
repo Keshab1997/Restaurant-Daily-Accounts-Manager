@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profit & Loss - RestroManager</title>
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/hamburger.css">
+    <link rel="stylesheet" href="css/pl.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
+</head>
+<body>
+    <div class="hamburger-trigger" onclick="toggleSidebar()"><i class="ri-menu-2-line"></i></div>
+
+    <div id="sidebarMenu" class="custom-sidebar">
+        <div class="sidebar-header">
+            <div class="nav-logo"><i class="ri-restaurant-2-line"></i><span id="sideNavName">RestroManager</span></div>
+            <i class="ri-close-line close-sidebar" onclick="toggleSidebar()"></i>
+        </div>
+        <nav class="sidebar-nav-links">
+            <a href="dashboard.html"><i class="ri-home-4-line"></i> <span>Home</span></a>
+            <a href="tally.html"><i class="ri-money-dollar-box-line"></i> <span>Cash Tally</span></a>
+            <a href="vendors.html"><i class="ri-store-2-line"></i> <span>Vendors</span></a>
+            <a href="vendor-history.html"><i class="ri-file-list-3-line"></i> <span>Vendor History</span></a>
+            <a href="owner.html"><i class="ri-user-star-line"></i> <span>Owner</span></a>
+            <a href="salary.html"><i class="ri-contacts-book-line"></i> <span>Salary Sheet</span></a>
+            <a href="pl.html" class="active"><i class="ri-pie-chart-line"></i> <span>Profit & Loss</span></a>
+            <a href="settings.html"><i class="ri-settings-3-line"></i> <span>Settings</span></a>
+        </nav>
+        <div class="sidebar-bottom"><a onclick="logout()" class="logout-link"><i class="ri-logout-box-r-line"></i> <span>Logout</span></a></div>
+    </div>
+    <div id="menuOverlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+    <main class="main-content">
+        <div class="top-bar">
+            <div class="page-title">
+                <h1>Profit & Loss Analysis 📊</h1>
+                <p>Monthly business performance overview</p>
+            </div>
+            <div class="date-filter">
+                <input type="month" id="plMonth" onchange="loadPLData()">
+            </div>
+        </div>
+
+        <div class="pl-grid">
+            <!-- Sales Side -->
+            <div class="glass-card">
+                <div class="card-header"><i class="ri-arrow-up-circle-line text-green"></i> <h3>Total Revenue (Sales)</h3></div>
+                <div class="pl-list">
+                    <div class="pl-item"><span>Cash Sale</span> <b id="valCashSale">₹0</b></div>
+                    
+                    <div class="pl-item-complex">
+                        <div class="main-row"><span>Card / UPI Sale</span> <b id="valCardSale">₹0</b></div>
+                        <div class="sub-row">
+                            <label>Comm. %</label>
+                            <input type="number" id="cardComm" value="2" oninput="calculatePL()">
+                            <small id="cardNet">Net: ₹0</small>
+                        </div>
+                    </div>
+
+                    <div class="pl-item-complex">
+                        <div class="main-row"><span>Online (Swiggy/Zomato)</span> <b id="valOnlineSale">₹0</b></div>
+                        <div class="sub-row">
+                            <label>Comm. %</label>
+                            <input type="number" id="onlineComm" value="25" oninput="calculatePL()">
+                            <small id="onlineNet">Net: ₹0</small>
+                        </div>
+                    </div>
+
+                    <div class="pl-item">
+                        <span>Stock Amount (Closing)</span>
+                        <input type="number" id="stockAmt" value="0" oninput="calculatePL()" class="inline-input">
+                    </div>
+
+                    <div class="pl-total-box green">
+                        <span>TOTAL REVENUE</span>
+                        <h2 id="totalRevenue">₹0</h2>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Expense Side -->
+            <div class="glass-card">
+                <div class="card-header">
+                    <i class="ri-arrow-down-circle-line text-red"></i> 
+                    <h3>Total Expenses</h3>
+                    <button class="btn-add-cat" onclick="showAddCategory()"><i class="ri-add-line"></i></button>
+                </div>
+                <div class="pl-list">
+                    <div class="pl-item"><span>Cash Expenses (Daily)</span> <b id="valCashExp">₹0</b></div>
+                    <div class="pl-item"><span>Staff Salaries</span> <b id="valSalary">₹0</b></div>
+                    
+                    <div class="pl-item">
+                        <span>Shop Rent</span>
+                        <input type="number" id="expRent" value="0" oninput="calculatePL()" class="inline-input">
+                    </div>
+                    
+                    <div class="pl-item">
+                        <span>GST / Taxes</span>
+                        <input type="number" id="expGST" value="0" oninput="calculatePL()" class="inline-input">
+                    </div>
+
+                    <!-- Dynamic Custom Expenses -->
+                    <div id="customExpensesList"></div>
+
+                    <div class="pl-total-box red">
+                        <span>TOTAL EXPENSES</span>
+                        <h2 id="totalExpenses">₹0</h2>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Final Result -->
+        <div class="glass-card result-card">
+            <div class="final-pl-box" id="finalBox">
+                <span id="resultLabel">NET PROFIT</span>
+                <h1 id="finalAmount">₹0</h1>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal for adding custom expense category -->
+    <div id="catModal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <div class="modal-header"><h3>Add Expense Category</h3><button onclick="closeModal()"><i class="ri-close-line"></i></button></div>
+            <div class="modal-body">
+                <div class="input-group"><label>Category Name</label><input type="text" id="newCatName" placeholder="e.g. Electricity Bill"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+                <button class="btn-save" onclick="saveCategory()">Add Category</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/hamburger.js"></script>
+    <script src="js/pl.js"></script>
+</body>
+</html>

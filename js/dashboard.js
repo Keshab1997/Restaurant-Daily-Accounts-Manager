@@ -8,11 +8,15 @@ window.onload = async () => {
     currentUser = session.user;
     
     // ১. রেস্টুরেন্টের নাম লোড করা
-    const { data: profile } = await _supabase.from('profiles').select('restaurant_name').eq('id', currentUser.id).maybeSingle();
+    const { data: profile } = await _supabase.from('profiles').select('restaurant_name, authorized_signature').eq('id', currentUser.id).maybeSingle();
     if(profile) {
         restaurantName = profile.restaurant_name;
         document.getElementById('sideNavName').innerText = restaurantName;
         document.getElementById('mainRestroName').innerText = restaurantName;
+        // সিগনেচার সেট করা
+        if(document.getElementById('repSignature')) {
+            document.getElementById('repSignature').innerText = profile.authorized_signature || restaurantName;
+        }
     }
 
     const dateInput = document.getElementById('date');

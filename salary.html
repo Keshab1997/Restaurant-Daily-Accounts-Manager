@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Salary Sheet - RestroManager</title>
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/hamburger.css">
+    <link rel="stylesheet" href="css/salary.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
+</head>
+<body>
+    <div class="hamburger-trigger" onclick="toggleSidebar()"><i class="ri-menu-2-line"></i></div>
+
+    <div id="sidebarMenu" class="custom-sidebar">
+        <div class="sidebar-header">
+            <div class="nav-logo"><i class="ri-restaurant-2-line"></i><span id="sideNavName">RestroManager</span></div>
+            <i class="ri-close-line close-sidebar" onclick="toggleSidebar()"></i>
+        </div>
+        <nav class="sidebar-nav-links">
+            <a href="dashboard.html"><i class="ri-home-4-line"></i> <span>Home</span></a>
+            <a href="tally.html"><i class="ri-money-dollar-box-line"></i> <span>Cash Tally</span></a>
+            <a href="vendors.html"><i class="ri-store-2-line"></i> <span>Vendors</span></a>
+            <a href="vendor-history.html"><i class="ri-file-list-3-line"></i> <span>Vendor History</span></a>
+            <a href="owner.html"><i class="ri-user-star-line"></i> <span>Owner</span></a>
+            <a href="salary.html" class="active"><i class="ri-contacts-book-line"></i> <span>Salary Sheet</span></a>
+            <a href="settings.html"><i class="ri-settings-3-line"></i> <span>Settings</span></a>
+        </nav>
+        <div class="sidebar-bottom"><a onclick="logout()" class="logout-link"><i class="ri-logout-box-r-line"></i> <span>Logout</span></a></div>
+    </div>
+    <div id="menuOverlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+    <main class="main-content">
+        <div class="top-bar">
+            <div class="page-title">
+                <h1>Salary Management 💳</h1>
+                <p>Manage staff salaries and attendance</p>
+            </div>
+            <div class="action-btns">
+                <button class="btn-add" onclick="showStaffModal()"><i class="ri-user-add-line"></i> Add Staff</button>
+                <button class="btn-share" onclick="generateSalaryImage()"><i class="ri-image-line"></i> Share Sheet</button>
+            </div>
+        </div>
+
+        <div class="glass-card filter-section">
+            <div class="salary-header-controls">
+                <div class="input-box">
+                    <label>Select Month & Year</label>
+                    <input type="month" id="salaryMonth" onchange="loadSalarySheet()">
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-card table-card">
+            <div class="table-wrapper">
+                <table class="salary-table">
+                    <thead>
+                        <tr>
+                            <th>Sr.No</th>
+                            <th>Employee Name</th>
+                            <th>Designation</th>
+                            <th>Basic</th>
+                            <th>Absent</th>
+                            <th>Salary Cut</th>
+                            <th>Net Salary</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="salaryTableBody"></tbody>
+                    <tfoot>
+                        <tr class="total-row">
+                            <td colspan="3">TOTAL</td>
+                            <td id="totalBasic">₹0</td>
+                            <td>-</td>
+                            <td id="totalCut">₹0</td>
+                            <td id="totalNet">₹0</td>
+                            <td colspan="2"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- Add Staff Modal -->
+    <div id="staffModal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <div class="modal-header"><h3>Add New Staff</h3><button onclick="closeModal()"><i class="ri-close-line"></i></button></div>
+            <div class="modal-body">
+                <div class="input-group"><label>Name</label><input type="text" id="staffName"></div>
+                <div class="input-group"><label>Designation</label><input type="text" id="staffDesignation"></div>
+                <div class="input-group"><label>Basic Salary</label><input type="number" id="staffBasic"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+                <button class="btn-save" onclick="saveStaff()">Save Staff</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden Template for Image Generation -->
+    <div id="salaryImageTemplate" style="width: 1100px; padding: 40px; background: white; position: absolute; left: -9999px; font-family: 'Inter', sans-serif;">
+        <div style="text-align: center; border-bottom: 2px solid #2563eb; padding-bottom: 20px; margin-bottom: 20px;">
+            <h1 id="tempRestroName" style="margin: 0; color: #1e293b; text-transform: uppercase;">ICHAMOTEE RESTURENT</h1>
+            <p id="tempAddress" style="margin: 5px 0; color: #64748b; font-weight: 600;">16, MARQUIS STREET, KOLKATA-700016</p>
+            <h3 id="tempMonthTitle" style="margin: 10px 0; background: #f1f5f9; display: inline-block; padding: 5px 20px; border-radius: 5px;">Salary Sheet For The Month Of JAN 2026</h3>
+        </div>
+        <table style="width: 100%; border-collapse: collapse; border: 1px solid #cbd5e1;">
+            <thead style="background: #f8fafc;">
+                <tr>
+                    <th style="border: 1px solid #cbd5e1; padding: 12px;">Sr.No</th>
+                    <th style="border: 1px solid #cbd5e1; padding: 12px;">Employee Name</th>
+                    <th style="border: 1px solid #cbd5e1; padding: 12px;">Designation</th>
+                    <th style="border: 1px solid #cbd5e1; padding: 12px;">Basic</th>
+                    <th style="border: 1px solid #cbd5e1; padding: 12px;">Absent</th>
+                    <th style="border: 1px solid #cbd5e1; padding: 12px;">SALARY CUT</th>
+                    <th style="border: 1px solid #cbd5e1; padding: 12px;">Net Salary</th>
+                    <th style="border: 1px solid #cbd5e1; padding: 12px;">Status</th>
+                </tr>
+            </thead>
+            <tbody id="tempTableBody"></tbody>
+            <tfoot>
+                <tr style="background: #fef08a; font-weight: 800;">
+                    <td colspan="3" style="border: 1px solid #cbd5e1; padding: 12px; text-align: center;">TOTAL</td>
+                    <td id="tempTotalBasic" style="border: 1px solid #cbd5e1; padding: 12px;">₹0</td>
+                    <td style="border: 1px solid #cbd5e1; padding: 12px;">-</td>
+                    <td id="tempTotalCut" style="border: 1px solid #cbd5e1; padding: 12px;">₹0</td>
+                    <td id="tempTotalNet" style="border: 1px solid #cbd5e1; padding: 12px;">₹0</td>
+                    <td style="border: 1px solid #cbd5e1; padding: 12px;"></td>
+                </tr>
+            </tfoot>
+        </table>
+        <div style="margin-top: 50px; display: flex; justify-content: flex-end;">
+            <div style="text-align: center; width: 250px;">
+                <div id="tempSignature" style="font-family: 'Brush Script MT', cursive; font-size: 28px; color: #2563eb;">Keshab Sarkar</div>
+                <p style="margin: 0; font-weight: 800; border-top: 2px solid #1e293b; padding-top: 5px;">Authorized Signature</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/hamburger.js"></script>
+    <script src="js/salary.js"></script>
+</body>
+</html>

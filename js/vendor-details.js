@@ -1,11 +1,22 @@
 let currentUser = null;
 let vendorId = null;
 let allBills = {}; // Store bill-wise calculations
+let restaurantName = "RestroManager";
 
 window.onload = async () => {
     const session = await checkAuth(true);
     currentUser = session.user;
     
+    // ১. রেস্টুরেন্টের নাম লোড করা
+    const { data: profile } = await _supabase.from('profiles').select('restaurant_name, authorized_signature').eq('id', currentUser.id).maybeSingle();
+    if(profile && profile.restaurant_name) {
+        restaurantName = profile.restaurant_name;
+        document.getElementById('sideNavName').innerText = restaurantName;
+        document.getElementById('invRestroName').innerText = restaurantName;
+        // সিগনেচার সেট করা
+        document.getElementById('invSignature').innerText = profile.authorized_signature || restaurantName;
+    }
+
     const params = new URLSearchParams(window.location.search);
     vendorId = params.get('id');
     

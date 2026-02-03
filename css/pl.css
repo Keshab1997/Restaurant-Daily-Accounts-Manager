@@ -1,0 +1,37 @@
+.pl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 20px; }
+.pl-list { display: flex; flex-direction: column; gap: 15px; }
+.pl-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f1f5f9; }
+.pl-item span { font-weight: 600; color: var(--text-light); }
+
+.pl-item-complex { padding: 10px 0; border-bottom: 1px solid #f1f5f9; }
+.main-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-weight: 600; }
+.sub-row { display: flex; align-items: center; gap: 10px; background: #f8fafc; padding: 8px; border-radius: 8px; }
+.sub-row label { font-size: 0.75rem; font-weight: 700; color: var(--primary); }
+.sub-row input { width: 50px; padding: 4px; border: 1px solid var(--border); border-radius: 4px; text-align: center; }
+.sub-row small { margin-left: auto; font-weight: 700; color: var(--text-dark); }
+
+.inline-input { width: 100px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; text-align: right; font-weight: 700; }
+
+.pl-total-box { margin-top: 20px; padding: 20px; border-radius: 15px; text-align: center; color: white; }
+.pl-total-box.green { background: linear-gradient(135deg, #10b981, #059669); }
+.pl-total-box.red { background: linear-gradient(135deg, #ef4444, #b91c1c); }
+.pl-total-box span { font-size: 0.8rem; font-weight: 700; opacity: 0.9; }
+.pl-total-box h2 { margin: 5px 0 0 0; font-size: 1.8rem; }
+
+.result-card { margin-top: 30px; text-align: center; }
+.final-pl-box { padding: 30px; border-radius: 20px; display: inline-block; min-width: 300px; }
+.final-pl-box.profit { background: #d1fae5; color: #059669; border: 2px solid #059669; }
+.final-pl-box.loss { background: #fee2e2; color: #ef4444; border: 2px solid #ef4444; }
+.final-pl-box span { font-size: 0.9rem; font-weight: 800; letter-spacing: 1px; }
+.final-pl-box h1 { font-size: 3rem; margin: 10px 0 0 0; }
+
+.btn-add-cat { background: #f1f5f9; border: none; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; color: var(--primary); }
+.btn-add-cat:hover { background: var(--primary); color: white; }
+
+.text-green { color: #10b981; }
+.text-red { color: #ef4444; }
+
+.card-header { display: flex; align-items: center; gap: 10px; }
+.card-header button { margin-left: auto; }
+
+@media (max-width: 900px) { .pl-grid { grid-template-columns: 1fr; } }

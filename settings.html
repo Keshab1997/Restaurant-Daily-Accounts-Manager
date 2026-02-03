@@ -59,6 +59,10 @@
                 <label>Restaurant Name</label>
                 <input type="text" id="restroNameInput" placeholder="e.g. Ichamotee Resturent">
             </div>
+            <div class="input-box" style="margin-bottom: 20px;">
+                <label>Authorized Signature Name</label>
+                <input type="text" id="signatureInput" placeholder="e.g. Keshab Sarkar">
+            </div>
             <button class="btn-update" onclick="saveSettings()">Save Changes</button>
         </div>
     </main>
@@ -75,20 +79,24 @@
         };
 
         async function loadSettings() {
-            const { data } = await _supabase.from('profiles').select('restaurant_name').eq('id', currentUser.id).single();
+            const { data } = await _supabase.from('profiles').select('restaurant_name, authorized_signature').eq('id', currentUser.id).single();
             if(data) {
-                document.getElementById('restroNameInput').value = data.restaurant_name;
-                document.getElementById('sideNavName').innerText = data.restaurant_name;
+                document.getElementById('restroNameInput').value = data.restaurant_name || "";
+                document.getElementById('signatureInput').value = data.authorized_signature || "";
+                document.getElementById('sideNavName').innerText = data.restaurant_name || "RestroManager";
             }
         }
 
         async function saveSettings() {
             const name = document.getElementById('restroNameInput').value.trim();
-            if(!name) return alert("Name cannot be empty");
+            const signature = document.getElementById('signatureInput').value.trim();
+            
+            if(!name) return alert("Restaurant Name cannot be empty");
 
             const { error } = await _supabase.from('profiles').upsert({
                 id: currentUser.id,
-                restaurant_name: name
+                restaurant_name: name,
+                authorized_signature: signature
             });
 
             if(error) alert("Error: " + error.message);
