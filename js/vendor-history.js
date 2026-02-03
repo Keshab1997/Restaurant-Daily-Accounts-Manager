@@ -9,7 +9,7 @@ window.onload = async () => {
 
 async function loadVendorHistory() {
     const tbody = document.getElementById('vendorHistoryBody');
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px;">Calculating History...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:40px;">Calculating History...</td></tr>';
 
     const { data: vendors } = await _supabase.from('vendors').select('*').eq('user_id', currentUser.id);
     
@@ -18,14 +18,16 @@ async function loadVendorHistory() {
     let historyList = [];
 
     for (const v of vendors) {
-        const { data: ledger } = await _supabase.from('vendor_ledger').select('*').eq('vendor_id', v.id);
+        const { data: ledger } = await _supabase.from('vendor_ledger').select('*').eq('vendor_id', v.id).order('t_date', { ascending: false });
         
         let totalBill = v.opening_due || 0;
         let paidCash = 0;
         let paidOwner = 0;
         let lastCategory = "N/A";
+        let lastDate = v.created_at ? v.created_at.split('T')[0] : "N/A";
 
-        if(ledger) {
+        if(ledger && ledger.length > 0) {
+            lastDate = ledger[0].t_date;
             ledger.forEach(l => {
                 if(l.t_type === 'BILL') {
                     totalBill += l.amount;
@@ -43,6 +45,7 @@ async function loadVendorHistory() {
             id: v.id,
             name: v.name,
             category: lastCategory,
+            lastDate: lastDate,
             bill: totalBill,
             paidCash: paidCash,
             paidOwner: paidOwner,
@@ -59,7 +62,7 @@ function renderTable(data) {
     tbody.innerHTML = '';
 
     if(data.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px; color:#94a3b8;">No vendors found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:40px; color:#94a3b8;">No vendors found</td></tr>';
         return;
     }
 
@@ -68,6 +71,7 @@ function renderTable(data) {
             <tr>
                 <td class="text-bold">${v.name}</td>
                 <td><span style="background:#f1f5f9; color:#475569; padding:4px 10px; border-radius:6px; font-size:0.85rem;">${v.category}</span></td>
+                <td style="font-size:0.85rem; color:#64748b;">${v.lastDate}</td>
                 <td>₹${v.bill.toLocaleString('en-IN')}</td>
                 <td class="paid-amount">₹${v.paidCash.toLocaleString('en-IN')}</td>
                 <td style="color:var(--warning)">₹${v.paidOwner.toLocaleString('en-IN')}</td>
@@ -96,9 +100,9 @@ function applyFilters() {
 }
 
 function exportToExcel() {
-    let csv = "Vendor Name,Category,Total Bill,Paid (Cash),Paid (Owner),Current Due\n";
+    let csv = "Vendor Name,Category,Last Date,Total Bill,Paid (Cash),Paid (Owner),Current Due\n";
     allVendorData.forEach(v => {
-        csv += `${v.name},${v.category},${v.bill},${v.paidCash},${v.paidOwner},${v.due}\n`;
+        csv += `${v.name},${v.category},${v.lastDate},${v.bill},${v.paidCash},${v.paidOwner},${v.due}\n`;
     });
 
     const blob = new Blob([csv], { type: 'text/csv' });

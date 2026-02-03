@@ -138,26 +138,30 @@ async function handleAddExpense() {
 
     if(status === 'PAID') {
         await saveExpenseRecord(fullDesc, totalAmount, 'CASH', date);
+        if(vendor) {
+            await updateVendorLedger(vendor.id, date, 'BILL', totalAmount, `Bill for ${itemName || vendorName}`);
+            await updateVendorLedger(vendor.id, date, 'PAYMENT', totalAmount, `Cash Paid for ${itemName || vendorName}`);
+        }
     } 
     else if(status === 'OWNER') {
         await saveExpenseRecord(`${fullDesc} (Owner Paid)`, totalAmount, 'OWNER', date);
         await updateOwnerLedger(date, 'LOAN_TAKEN', totalAmount, `Paid for ${fullDesc}`);
         if(vendor) {
-            await updateVendorLedger(vendor.id, date, 'BILL', totalAmount, `Bill for ${itemName || 'Purchase'}`);
-            await updateVendorLedger(vendor.id, date, 'PAYMENT', totalAmount, "Paid by Owner");
+            await updateVendorLedger(vendor.id, date, 'BILL', totalAmount, `Bill for ${itemName || vendorName}`);
+            await updateVendorLedger(vendor.id, date, 'PAYMENT', totalAmount, `Paid by Owner for ${itemName || vendorName}`);
         }
     }
     else if(status === 'DUE') {
         await saveExpenseRecord(fullDesc, totalAmount, 'DUE', date);
-        if(vendor) await updateVendorLedger(vendor.id, date, 'BILL', totalAmount, `Baki for ${itemName || 'Purchase'}`);
+        if(vendor) await updateVendorLedger(vendor.id, date, 'BILL', totalAmount, `Baki for ${itemName || vendorName}`);
     } 
     else if(status === 'PARTIAL') {
         if(partialPaid >= totalAmount) return alert("Partial paid must be less than total");
         await saveExpenseRecord(`${fullDesc} (Partial Paid)`, partialPaid, 'CASH', date);
         await saveExpenseRecord(`${fullDesc} (Baki)`, totalAmount - partialPaid, 'DUE', date);
         if(vendor) {
-            await updateVendorLedger(vendor.id, date, 'BILL', totalAmount, `Bill for ${itemName || 'Purchase'}`);
-            await updateVendorLedger(vendor.id, date, 'PAYMENT', partialPaid, "Paid from Cash");
+            await updateVendorLedger(vendor.id, date, 'BILL', totalAmount, `Bill for ${itemName || vendorName}`);
+            await updateVendorLedger(vendor.id, date, 'PAYMENT', partialPaid, `Partial Cash Paid for ${itemName || vendorName}`);
         }
     }
 

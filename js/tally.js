@@ -1,67 +1,71 @@
 let currentUser = null;
+let currentSystemBalance = 0;
 
 window.onload = async () => {
     const session = await checkAuth(true);
     currentUser = session.user;
     
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    document.getElementById('tallyDateDisplay').innerText = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
     document.querySelectorAll('.note-input').forEach(input => {
-        input.addEventListener('input', calculatePhysical);
+        input.addEventListener('input', calculateLiveTally);
     });
 
-    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-    document.getElementById('tallyDate').innerText = `Date: ${today}`;
-
     await loadSystemBalance(today);
+    await loadTallyHistory();
 };
 
-async function calculatePhysical() {
-    let total = 0;
+async function loadSystemBalance(date) {
+    const { data: lastSavedDay } = await _supabase.from('cash_tally')
+        .select('report_date, system_balance')
+        .eq('user_id', currentUser.id)
+        .lt('report_date', date)
+        .order('report_date', { ascending: false })
+        .limit(1);
+
+    let baseBalance = 0;
+    if (lastSavedDay && lastSavedDay.length > 0) {
+        baseBalance = lastSavedDay[0].system_balance;
+    }
+
+    const { data: sales } = await _supabase.from('sales').select('amount').eq('user_id', currentUser.id).eq('report_date', date).eq('sale_type', 'CASH');
+    const { data: expenses } = await _supabase.from('expenses').select('amount').eq('user_id', currentUser.id).eq('report_date', date).eq('payment_source', 'CASH');
+
+    const cashSale = sales && sales.length > 0 ? sales.reduce((sum, s) => sum + s.amount, 0) : 0;
+    const cashExp = expenses ? expenses.reduce((sum, e) => sum + e.amount, 0) : 0;
+
+    currentSystemBalance = baseBalance + cashSale - cashExp;
+    document.getElementById('sysTotal').innerText = `₹${currentSystemBalance.toLocaleString('en-IN')}`;
+    calculateLiveTally();
+}
+
+function calculateLiveTally() {
+    let totalPhy = 0;
     document.querySelectorAll('.note-input').forEach(input => {
         const val = parseInt(input.getAttribute('data-val'));
         const count = parseInt(input.value) || 0;
         const sub = val * count;
-        
-        input.nextElementSibling.innerText = sub;
-        total += sub;
+        input.nextElementSibling.innerText = sub.toLocaleString('en-IN');
+        totalPhy += sub;
     });
 
-    document.getElementById('phyTotal').innerText = `₹${total}`;
+    document.getElementById('phyTotal').innerText = `₹${totalPhy.toLocaleString('en-IN')}`;
     
-    const sysStr = document.getElementById('sysTotal').innerText.replace('₹', '');
-    const sys = parseFloat(sysStr) || 0;
-    const diff = total - sys;
-
+    const diff = totalPhy - currentSystemBalance;
     const diffEl = document.getElementById('diffTotal');
-    diffEl.innerText = `₹${diff}`;
-    diffEl.style.color = diff >= 0 ? 'green' : 'red';
+    diffEl.innerText = `₹${diff.toLocaleString('en-IN')}`;
+    
+    if(diff === 0) diffEl.style.color = "var(--text-dark)";
+    else if(diff > 0) diffEl.style.color = "var(--success)";
+    else diffEl.style.color = "var(--danger)";
 }
 
-async function loadSystemBalance(date) {
-    const { data: sales } = await _supabase.from('sales')
-        .select('amount')
-        .eq('user_id', currentUser.id)
-        .eq('report_date', date)
-        .eq('sale_type', 'CASH');
-    
-    const cashSale = sales.length > 0 ? sales[0].amount : 0;
-
-    const { data: expenses } = await _supabase.from('expenses')
-        .select('amount')
-        .eq('user_id', currentUser.id)
-        .eq('report_date', date)
-        .eq('payment_source', 'CASH');
-
-    const cashExp = expenses.reduce((sum, e) => sum + e.amount, 0);
-    const sysBalance = cashSale - cashExp;
-    
-    document.getElementById('sysTotal').innerText = `₹${sysBalance}`;
-}
-
-async function saveAndShareDayEnd() {
+async function saveTally() {
     const date = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-    
     const notes = {};
     let totalPhy = 0;
+
     document.querySelectorAll('.note-input').forEach(input => {
         const val = input.getAttribute('data-val');
         const count = parseInt(input.value) || 0;
@@ -69,69 +73,75 @@ async function saveAndShareDayEnd() {
         totalPhy += (parseInt(val) * count);
     });
 
-    const sysTotal = parseFloat(document.getElementById('sysTotal').innerText.replace('₹', ''));
-    const diff = totalPhy - sysTotal;
+    const diff = totalPhy - currentSystemBalance;
 
     const { error } = await _supabase.from('cash_tally').upsert({
         user_id: currentUser.id,
         report_date: date,
         ...notes,
         total_physical: totalPhy,
-        system_balance: sysTotal,
+        system_balance: currentSystemBalance,
         difference: diff
     }, { onConflict: 'user_id, report_date' });
 
-    if(error) {
-        alert("Error saving tally: " + error.message);
-        return;
+    if(error) alert("Error: " + error.message);
+    else {
+        alert("✅ Tally Saved Successfully!");
+        loadTallyHistory();
     }
-
-    await shareDayEndReport(date, totalPhy, sysTotal, diff);
 }
 
-async function shareDayEndReport(date, phy, sys, diff) {
-    const { data: sales } = await _supabase.from('sales').select('*').eq('user_id', currentUser.id).eq('report_date', date);
-    let cashSale = 0, cardSale = 0, swiggy = 0, zomato = 0;
-    
-    if(sales) {
-        sales.forEach(s => {
-            if(s.sale_type === 'CASH') cashSale = s.amount;
-            if(s.sale_type === 'CARD') cardSale = s.amount;
-            if(s.sale_type === 'SWIGGY') swiggy = s.amount;
-            if(s.sale_type === 'ZOMATO') zomato = s.amount;
+async function loadTallyHistory() {
+    const { data, error } = await _supabase.from('cash_tally')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .order('report_date', { ascending: false })
+        .limit(10);
+
+    const tbody = document.getElementById('tallyHistoryBody');
+    tbody.innerHTML = '';
+
+    if(data && data.length > 0) {
+        data.forEach(row => {
+            let statusBadge = "";
+            if(row.difference === 0) statusBadge = '<span class="status-badge badge-match">Matched</span>';
+            else if(row.difference < 0) statusBadge = '<span class="status-badge badge-short">Shortage</span>';
+            else statusBadge = '<span class="status-badge badge-extra">Extra</span>';
+
+            const diffColor = row.difference < 0 ? 'var(--danger)' : (row.difference > 0 ? 'var(--success)' : 'inherit');
+
+            tbody.innerHTML += `
+                <tr>
+                    <td><b>${row.report_date}</b></td>
+                    <td>₹${row.total_physical.toLocaleString('en-IN')}</td>
+                    <td>₹${row.system_balance.toLocaleString('en-IN')}</td>
+                    <td style="color:${diffColor}; font-weight:bold;">₹${row.difference.toLocaleString('en-IN')}</td>
+                    <td>${statusBadge}</td>
+                </tr>
+            `;
         });
-    }
-
-    const totalSale = cashSale + cardSale + swiggy + zomato;
-
-    const { data: expenses } = await _supabase.from('expenses').select('amount').eq('user_id', currentUser.id).eq('report_date', date);
-    const totalExp = expenses ? expenses.reduce((sum, e) => sum + e.amount, 0) : 0;
-
-    let msg = `*📅 DAY END REPORT (${date})*\n`;
-    msg += `----------------------------\n`;
-    msg += `*💰 Total Sale:* ₹${totalSale}\n`;
-    msg += `   - Cash: ₹${cashSale}\n`;
-    msg += `   - Online: ₹${cardSale}\n`;
-    msg += `   - Swiggy: ₹${swiggy}\n`;
-    msg += `   - Zomato: ₹${zomato}\n`;
-    msg += `----------------------------\n`;
-    msg += `*💸 Total Expense:* ₹${totalExp}\n`;
-    msg += `----------------------------\n`;
-    msg += `*🧮 CASH TALLY*\n`;
-    msg += `   - System Cash: ₹${sys}\n`;
-    msg += `   - Physical Cash: ₹${phy}\n`;
-    
-    if(diff !== 0) {
-        const icon = diff > 0 ? '🟢 Extra' : '🔴 Short';
-        msg += `   - ${icon}: ₹${Math.abs(diff)}\n`;
     } else {
-        msg += `   - ✅ Cash Matched!\n`;
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color: var(--text-light);">No history available</td></tr>';
     }
+}
+
+function shareWhatsAppReport() {
+    const date = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    const phy = document.getElementById('phyTotal').innerText;
+    const sys = document.getElementById('sysTotal').innerText;
+    const diff = document.getElementById('diffTotal').innerText;
+
+    let msg = `*📊 CASH TALLY REPORT (${date})*\n`;
+    msg += `----------------------------\n`;
+    msg += `💰 *Physical Cash:* ${phy}\n`;
+    msg += `💻 *System Cash:* ${sys}\n`;
+    msg += `⚖️ *Difference:* ${diff}\n`;
+    msg += `----------------------------\n`;
+    
+    const diffVal = parseFloat(diff.replace('₹', '').replace(/,/g, ''));
+    if(diffVal === 0) msg += `✅ *Status:* Cash Matched!`;
+    else if(diffVal < 0) msg += `🔴 *Status:* Cash Shortage!`;
+    else msg += `🟢 *Status:* Extra Cash Found!`;
 
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
-}
-
-async function logout() {
-    await _supabase.auth.signOut();
-    window.location.href = 'index.html';
 }
