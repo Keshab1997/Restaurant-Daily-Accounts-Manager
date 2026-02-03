@@ -64,7 +64,12 @@ function renderTable() {
                         <option value="PAID" ${record.status === 'PAID' ? 'selected' : ''}>PAID</option>
                     </select>
                 </td>
-                <td><button class="btn-save-row" onclick="saveRow('${staff.id}')">Save</button></td>
+                <td>
+                    <div style="display:flex; gap:5px;">
+                        <button class="btn-save-row" onclick="saveRow('${staff.id}')" title="Save"><i class="ri-save-line"></i></button>
+                        <button class="btn-delete-row" onclick="deleteStaff('${staff.id}')" title="Delete Staff" style="background:#fee2e2; color:#ef4444; border:1px solid #fecaca; padding:5px 8px; border-radius:5px; cursor:pointer;"><i class="ri-delete-bin-line"></i></button>
+                    </div>
+                </td>
             </tr>
         `;
     });
@@ -106,6 +111,51 @@ async function saveRow(staffId) {
         loadSalarySheet();
     }
 }
+
+async function deleteStaff(id) {
+    if(!confirm("Are you sure you want to delete this staff? All their salary records will be removed.")) return;
+    const { error } = await _supabase.from('staff').delete().eq('id', id);
+    if(error) alert(error.message);
+    else loadStaff();
+}
+
+async function showHistoryModal() {
+    const { data } = await _supabase.from('salary_records').select('month_year').eq('user_id', currentUser.id);
+    const listContainer = document.getElementById('historyList');
+    listContainer.innerHTML = '';
+
+    if(data && data.length > 0) {
+        const uniqueMonths = [...new Set(data.map(r => r.month_year))].sort().reverse();
+        
+        uniqueMonths.forEach(month => {
+            const dateObj = new Date(month + "-01");
+            const monthName = dateObj.toLocaleString('default', { month: 'long', year: 'numeric' });
+            
+            const item = document.createElement('div');
+            item.className = 'history-item';
+            item.innerHTML = `
+                <div class="history-info">
+                    <i class="ri-calendar-check-line"></i>
+                    <span>${monthName}</span>
+                </div>
+                <i class="ri-arrow-right-s-line"></i>
+            `;
+            item.onclick = () => loadMonthFromHistory(month);
+            listContainer.appendChild(item);
+        });
+    } else {
+        listContainer.innerHTML = '<p style="text-align:center; color:#94a3b8; padding:20px;">No past records found.</p>';
+    }
+    document.getElementById('historyModal').classList.remove('hidden');
+}
+
+function loadMonthFromHistory(month) {
+    document.getElementById('salaryMonth').value = month;
+    loadSalarySheet();
+    closeHistoryModal();
+}
+
+function closeHistoryModal() { document.getElementById('historyModal').classList.add('hidden'); }
 
 function showStaffModal() { document.getElementById('staffModal').classList.remove('hidden'); }
 function closeModal() { 

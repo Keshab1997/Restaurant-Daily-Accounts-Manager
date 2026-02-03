@@ -39,6 +39,7 @@
                 <p>Manage staff salaries and attendance</p>
             </div>
             <div class="action-btns">
+                <button class="btn-history" onclick="showHistoryModal()"><i class="ri-history-line"></i> View History</button>
                 <button class="btn-add" onclick="showStaffModal()"><i class="ri-user-add-line"></i> Add Staff</button>
                 <button class="btn-share" onclick="generateSalaryImage()"><i class="ri-image-line"></i> Share Sheet</button>
             </div>
@@ -97,6 +98,22 @@
             <div class="modal-footer">
                 <button class="btn-cancel" onclick="closeModal()">Cancel</button>
                 <button class="btn-save" onclick="saveStaff()">Save Staff</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- History Modal -->
+    <div id="historyModal" class="modal-overlay hidden">
+        <div class="modal-card" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3><i class="ri-calendar-todo-line"></i> Salary History</h3>
+                <button onclick="closeHistoryModal()"><i class="ri-close-line"></i></button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 15px;">Click on a month to view full details</p>
+                <div id="historyList" class="history-list-container">
+                    <!-- History items will be injected here -->
+                </div>
             </div>
         </div>
     </div>

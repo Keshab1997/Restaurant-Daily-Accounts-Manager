@@ -34,3 +34,32 @@
     .action-btns { width: 100%; }
     .btn-add, .btn-share { flex: 1; justify-content: center; }
 }
+
+.btn-history {
+    background: #64748b;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.btn-history:hover { background: #475569; }
+
+.btn-delete-row:hover { background: #dc2626 !important; }
+
+#historyTableBody b { color: var(--primary); }
+
+/* History List Styles */
+.history-list-container { display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto; }
+.history-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 15px; background: #f8fafc; border-radius: 12px; border: 1px solid var(--border);
+    cursor: pointer; transition: 0.3s;
+}
+.history-item:hover { background: white; border-color: var(--primary); transform: translateX(5px); }
+.history-info { display: flex; align-items: center; gap: 12px; font-weight: 600; color: var(--text-dark); }
+.history-info i { color: var(--primary); font-size: 1.2rem; }
