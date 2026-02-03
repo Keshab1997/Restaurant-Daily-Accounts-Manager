@@ -9,3 +9,34 @@ async function checkAuth(required = true) {
     if (!required && session) window.location.href = 'dashboard.html';
     return session;
 }
+
+// Hamburger Menu Toggle
+function toggleMenu() {
+    const sideNav = document.getElementById('sideNav');
+    const overlay = document.getElementById('menuOverlay');
+    if (sideNav && overlay) {
+        sideNav.classList.toggle('active');
+        overlay.classList.toggle('active');
+    }
+}
+
+// Close menu when clicking overlay or nav link
+if (typeof document !== 'undefined') {
+    document.addEventListener('DOMContentLoaded', () => {
+        const overlay = document.getElementById('menuOverlay');
+        const navLinks = document.querySelectorAll('.nav-links a');
+        
+        if (overlay) {
+            overlay.addEventListener('click', toggleMenu);
+        }
+        
+        navLinks.forEach(link => {
+            link.addEventListener('click', () => {
+                const sideNav = document.getElementById('sideNav');
+                if (sideNav && sideNav.classList.contains('active')) {
+                    toggleMenu();
+                }
+            });
+        });
+    });
+}

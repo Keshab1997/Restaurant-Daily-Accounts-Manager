@@ -1,0 +1,133 @@
+/* Hamburger Menu Styles */
+:root {
+    --sidebar-bg: #1e293b;
+    --sidebar-width: 280px;
+    --sidebar-transition: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Trigger Button */
+.hamburger-trigger {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 999;
+    background: white;
+    width: 45px;
+    height: 45px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    border: 1px solid #e2e8f0;
+    transition: 0.3s;
+}
+
+.hamburger-trigger:hover {
+    background: #f8fafc;
+    transform: scale(1.05);
+}
+
+/* Sidebar Container */
+.custom-sidebar {
+    position: fixed;
+    top: 0;
+    left: calc(-1 * var(--sidebar-width));
+    width: var(--sidebar-width);
+    height: 100vh;
+    background: var(--sidebar-bg);
+    z-index: 1100;
+    transition: var(--sidebar-transition);
+    display: flex;
+    flex-direction: column;
+    padding: 30px 20px;
+    box-shadow: 10px 0 30px rgba(0,0,0,0.2);
+}
+
+.custom-sidebar.active {
+    left: 0;
+}
+
+/* Header inside Sidebar */
+.sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 40px;
+    color: white;
+}
+
+.close-sidebar {
+    font-size: 1.8rem;
+    cursor: pointer;
+    color: #94a3b8;
+    transition: 0.3s;
+}
+
+.close-sidebar:hover { color: white; }
+
+/* Links */
+.sidebar-nav-links {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex-grow: 1;
+}
+
+.sidebar-nav-links a {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 14px 18px;
+    color: #94a3b8;
+    text-decoration: none;
+    border-radius: 12px;
+    transition: 0.3s;
+    font-weight: 500;
+}
+
+.sidebar-nav-links a:hover, .sidebar-nav-links a.active {
+    background: rgba(255,255,255,0.1);
+    color: white;
+}
+
+.sidebar-nav-links a i { font-size: 1.3rem; }
+
+/* Footer/Logout */
+.sidebar-bottom {
+    border-top: 1px solid rgba(255,255,255,0.1);
+    padding-top: 20px;
+}
+
+.logout-link {
+    color: #f87171 !important;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 15px;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+/* Overlay */
+.sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(4px);
+    z-index: 1050;
+    display: none;
+    opacity: 0;
+    transition: 0.3s;
+}
+
+.sidebar-overlay.active {
+    display: block;
+    opacity: 1;
+}
