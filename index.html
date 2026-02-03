@@ -3,35 +3,108 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Restaurant Manager</title>
+    <title>Login - RestroManager</title>
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/login.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
 </head>
 <body>
-    <div class="login-container">
-        <h2>Restaurant Manager 👨🍳</h2>
-        <input type="email" id="email" placeholder="Email">
-        <input type="password" id="password" placeholder="Password">
-        <button onclick="login()">Login</button>
-        <button onclick="signup()" class="btn-secondary">Sign Up</button>
+    <div class="container" id="container">
+        <!-- Sign Up Form -->
+        <div class="form-container sign-up">
+            <form id="signupForm">
+                <h1>Sign up</h1>
+                <div class="input-group">
+                    <i class="ri-mail-line"></i>
+                    <input type="email" id="signupEmail" placeholder="Email" required>
+                </div>
+                <div class="input-group">
+                    <i class="ri-lock-line"></i>
+                    <input type="password" id="signupPassword" placeholder="Password" required>
+                </div>
+                <button type="button" onclick="signup()">Register</button>
+                <p class="mobile-toggle">Already have an account? <span onclick="toggleForm()">Login</span></p>
+            </form>
+        </div>
+
+        <!-- Login Form -->
+        <div class="form-container sign-in">
+            <form id="loginForm">
+                <h1>Login</h1>
+                <div class="input-group">
+                    <i class="ri-mail-line"></i>
+                    <input type="email" id="loginEmail" placeholder="Email" required>
+                </div>
+                <div class="input-group">
+                    <i class="ri-lock-line"></i>
+                    <input type="password" id="loginPassword" placeholder="Password" required>
+                </div>
+                <a href="#" class="forgot">Forgot your password?</a>
+                <button type="button" onclick="login()">Login</button>
+                <p class="mobile-toggle">Don't have an account? <span onclick="toggleForm()">Sign Up</span></p>
+            </form>
+        </div>
+
+        <!-- Toggle Overlay -->
+        <div class="toggle-container">
+            <div class="toggle">
+                <div class="toggle-panel toggle-left">
+                    <div class="glass-effect">
+                        <h1>Welcome Back!</h1>
+                        <p>Enter your personal details to use all of site features</p>
+                        <button class="hidden" id="loginBtn">Login</button>
+                    </div>
+                </div>
+                <div class="toggle-panel toggle-right">
+                    <div class="glass-effect">
+                        <h1>Hello, Friend!</h1>
+                        <p>Register with your personal details to use all of site features</p>
+                        <button class="hidden" id="registerBtn">Create an account</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
+
     <script src="js/config.js"></script>
     <script>
+        const container = document.getElementById('container');
+        const registerBtn = document.getElementById('registerBtn');
+        const loginBtn = document.getElementById('loginBtn');
+
+        registerBtn.addEventListener('click', () => {
+            container.classList.add("active");
+        });
+
+        loginBtn.addEventListener('click', () => {
+            container.classList.remove("active");
+        });
+
+        function toggleForm() {
+            container.classList.toggle("active");
+        }
+
         async function login() {
-            const email = document.getElementById('email').value;
-            const pass = document.getElementById('password').value;
+            const email = document.getElementById('loginEmail').value;
+            const pass = document.getElementById('loginPassword').value;
+            if(!email || !pass) return alert("Please fill all fields");
+
             const { error } = await _supabase.auth.signInWithPassword({ email, password: pass });
             if (error) alert(error.message);
             else window.location.href = 'dashboard.html';
         }
+
         async function signup() {
-            const email = document.getElementById('email').value;
-            const pass = document.getElementById('password').value;
+            const email = document.getElementById('signupEmail').value;
+            const pass = document.getElementById('signupPassword').value;
+            if(!email || !pass) return alert("Please fill all fields");
+
             const { error } = await _supabase.auth.signUp({ email, password: pass });
             if (error) alert(error.message);
-            else alert("Check email for confirmation!");
+            else alert("Registration successful! Please check your email (and Spam folder) for confirmation link.");
         }
+
         checkAuth(false);
     </script>
 </body>
