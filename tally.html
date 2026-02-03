@@ -58,20 +58,50 @@
             </div>
 
             <div class="tally-layout">
-                <div class="glass-card">
+                <!-- Left Side: Note Counter -->
+                <div class="glass-card counter-card">
                     <div class="card-header"><i class="ri-coins-line"></i> <h3>Count Your Notes</h3></div>
                     <div class="tally-grid">
-                        <div class="note-row"><span class="note-label">₹500</span><input type="number" class="note-input" data-val="500" placeholder="0" inputmode="numeric"><b class="note-total">0</b></div>
-                        <div class="note-row"><span class="note-label">₹200</span><input type="number" class="note-input" data-val="200" placeholder="0" inputmode="numeric"><b class="note-total">0</b></div>
-                        <div class="note-row"><span class="note-label">₹100</span><input type="number" class="note-input" data-val="100" placeholder="0" inputmode="numeric"><b class="note-total">0</b></div>
-                        <div class="note-row"><span class="note-label">₹50</span><input type="number" class="note-input" data-val="50" placeholder="0" inputmode="numeric"><b class="note-total">0</b></div>
-                        <div class="note-row"><span class="note-label">₹20</span><input type="number" class="note-input" data-val="20" placeholder="0" inputmode="numeric"><b class="note-total">0</b></div>
-                        <div class="note-row"><span class="note-label">₹10</span><input type="number" class="note-input" data-val="10" placeholder="0" inputmode="numeric"><b class="note-total">0</b></div>
-                        <div class="note-row"><span class="note-label">Coins</span><input type="number" class="note-input" data-val="1" placeholder="0" inputmode="numeric"><b class="note-total">0</b></div>
+                        <div class="note-row n500">
+                            <div class="note-info"><span class="note-label">₹500</span></div>
+                            <input type="number" class="note-input" data-val="500" placeholder="0" inputmode="numeric">
+                            <b class="note-total">0</b>
+                        </div>
+                        <div class="note-row n200">
+                            <div class="note-info"><span class="note-label">₹200</span></div>
+                            <input type="number" class="note-input" data-val="200" placeholder="0" inputmode="numeric">
+                            <b class="note-total">0</b>
+                        </div>
+                        <div class="note-row n100">
+                            <div class="note-info"><span class="note-label">₹100</span></div>
+                            <input type="number" class="note-input" data-val="100" placeholder="0" inputmode="numeric">
+                            <b class="note-total">0</b>
+                        </div>
+                        <div class="note-row n50">
+                            <div class="note-info"><span class="note-label">₹50</span></div>
+                            <input type="number" class="note-input" data-val="50" placeholder="0" inputmode="numeric">
+                            <b class="note-total">0</b>
+                        </div>
+                        <div class="note-row n20">
+                            <div class="note-info"><span class="note-label">₹20</span></div>
+                            <input type="number" class="note-input" data-val="20" placeholder="0" inputmode="numeric">
+                            <b class="note-total">0</b>
+                        </div>
+                        <div class="note-row n10">
+                            <div class="note-info"><span class="note-label">₹10</span></div>
+                            <input type="number" class="note-input" data-val="10" placeholder="0" inputmode="numeric">
+                            <b class="note-total">0</b>
+                        </div>
+                        <div class="note-row nCoins">
+                            <div class="note-info"><span class="note-label">Coins</span></div>
+                            <input type="number" class="note-input" data-val="1" placeholder="0" inputmode="numeric">
+                            <b class="note-total">0</b>
+                        </div>
                     </div>
                 </div>
 
-                <div class="glass-card result-sticky">
+                <!-- Right Side: Results -->
+                <div class="glass-card result-card">
                     <div class="card-header"><i class="ri-pie-chart-2-line"></i> <h3>Tally Result</h3></div>
                     <div class="result-box">
                         <div class="res-item">
@@ -86,7 +116,7 @@
                             <span>Today's Cash Exp (-)</span>
                             <h2 id="todayCashExp" class="text-red">₹0</h2>
                         </div>
-                        <div class="res-item border-top" style="padding-top: 10px; margin-top: 5px;">
+                        <div class="res-item border-top">
                             <span>System Cash (Software)</span>
                             <h2 id="sysTotal">₹0</h2>
                         </div>
@@ -94,7 +124,7 @@
                             <span>Physical Cash (Hand)</span>
                             <h2 id="phyTotal" class="text-green">₹0</h2>
                         </div>
-                        <div class="res-item border-top">
+                        <div class="res-item border-top highlight">
                             <span>Difference</span>
                             <h2 id="diffTotal">₹0</h2>
                         </div>
@@ -111,6 +141,7 @@
                 </div>
             </div>
 
+            <!-- History Section -->
             <div class="glass-card history-section">
                 <div class="card-header"><i class="ri-history-line"></i> <h3>Previous Tally History</h3></div>
                 <div class="history-table-wrapper">
@@ -124,8 +155,7 @@
                                 <th>Status</th>
                             </tr>
                         </thead>
-                        <tbody id="tallyHistoryBody">
-                        </tbody>
+                        <tbody id="tallyHistoryBody"></tbody>
                     </table>
                 </div>
             </div>
@@ -134,5 +164,6 @@
     <script src="js/config.js"></script>
     <script src="js/hamburger.js"></script>
     <script src="js/tally.js"></script>
+    <script src="js/shortcuts.js"></script>
 </body>
 </html>

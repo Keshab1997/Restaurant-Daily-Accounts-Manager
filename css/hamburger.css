@@ -46,6 +46,15 @@
     flex-direction: column;
     padding: 30px 20px;
     box-shadow: 10px 0 30px rgba(0,0,0,0.3);
+    overflow-y: auto;
+}
+
+.custom-sidebar::-webkit-scrollbar {
+    width: 5px;
+}
+.custom-sidebar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
 }
 
 .custom-sidebar.active {
@@ -57,8 +66,9 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 40px;
+    margin-bottom: 30px;
     color: white;
+    flex-shrink: 0;
 }
 
 .nav-logo { display: flex; align-items: center; gap: 10px; }
@@ -78,7 +88,7 @@
 .sidebar-nav-links {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 5px;
     flex-grow: 1;
 }
 
@@ -86,7 +96,7 @@
     display: flex;
     align-items: center;
     gap: 15px;
-    padding: 14px 18px;
+    padding: 12px 18px;
     color: #94a3b8;
     text-decoration: none;
     border-radius: 12px;
@@ -104,7 +114,9 @@
 /* Footer/Logout */
 .sidebar-bottom {
     border-top: 1px solid rgba(255,255,255,0.1);
-    padding-top: 20px;
+    padding-top: 15px;
+    margin-top: 20px;
+    flex-shrink: 0;
 }
 
 .logout-link {
@@ -116,6 +128,12 @@
     padding: 15px;
     text-decoration: none;
     font-weight: 600;
+    border-radius: 12px;
+    transition: 0.3s;
+}
+
+.logout-link:hover {
+    background: rgba(248, 113, 113, 0.1);
 }
 
 /* Overlay */
