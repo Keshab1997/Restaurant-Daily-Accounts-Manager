@@ -81,6 +81,28 @@ body { background: var(--bg-main); overflow-x: hidden; margin: 0; padding: 0; }
 .sum-card small { font-size: 0.75rem; opacity: 0.8; font-weight: 600; text-transform: uppercase; }
 .sum-card h2 { font-size: 1.4rem; margin-top: 5px; font-weight: 800; margin-bottom: 0; }
 
+.btn-share-report {
+    margin-top: 20px; width: 100%; padding: 15px; background: #25D366; color: white;
+    border: none; border-radius: 12px; font-weight: 700; cursor: pointer; transition: 0.3s;
+    display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 1rem;
+}
+.btn-share-report:hover { background: #1da851; transform: translateY(-2px); }
+.btn-share-report i { font-size: 1.3rem; }
+
+.report-actions {
+    margin-top: 25px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px;
+}
+.btn-text-report, .btn-image-report {
+    padding: 15px; color: white; border: none; border-radius: 12px;
+    font-weight: 700; cursor: pointer; transition: 0.3s;
+    display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 1rem;
+}
+.btn-text-report { background: #1e293b; }
+.btn-text-report:hover { background: #0f172a; transform: translateY(-2px); }
+.btn-image-report { background: #2563eb; }
+.btn-image-report:hover { background: #1d4ed8; transform: translateY(-2px); }
+.btn-text-report i, .btn-image-report i { font-size: 1.2rem; }
+
 .form-row { display: flex; gap: 15px; margin-bottom: 15px; }
 .flex-2 { flex: 2; }
 .flex-1 { flex: 1; }

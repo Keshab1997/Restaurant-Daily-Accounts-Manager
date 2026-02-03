@@ -3,37 +3,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Restaurant Manager - Dashboard</title>
+    <title>Dashboard - Ichamotee Resturent</title>
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/hamburger.css">
     <link rel="stylesheet" href="css/dashboard.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
 </head>
 <body>
-    <!-- Hamburger Menu Trigger Button -->
+    <!-- Hamburger Menu Trigger -->
     <div class="hamburger-trigger" onclick="toggleSidebar()">
         <i class="ri-menu-2-line"></i>
     </div>
 
-    <!-- Sidebar Navigation -->
+    <!-- Sidebar Menu -->
     <div id="sidebarMenu" class="custom-sidebar">
         <div class="sidebar-header">
             <div class="nav-logo">
                 <i class="ri-restaurant-2-line"></i>
-                <span>RestroManager</span>
+                <span id="sideNavName">RestroManager</span>
             </div>
             <i class="ri-close-line close-sidebar" onclick="toggleSidebar()"></i>
         </div>
-        
         <nav class="sidebar-nav-links">
-            <a href="dashboard.html"><i class="ri-home-4-line"></i> <span>Home</span></a>
+            <a href="dashboard.html" class="active"><i class="ri-home-4-line"></i> <span>Home</span></a>
             <a href="tally.html"><i class="ri-money-dollar-box-line"></i> <span>Cash Tally</span></a>
             <a href="vendors.html"><i class="ri-store-2-line"></i> <span>Vendors</span></a>
             <a href="vendor-history.html"><i class="ri-file-list-3-line"></i> <span>Vendor History</span></a>
             <a href="owner.html"><i class="ri-user-star-line"></i> <span>Owner</span></a>
+            <a href="settings.html"><i class="ri-settings-3-line"></i> <span>Settings</span></a>
         </nav>
-
         <div class="sidebar-bottom">
             <a onclick="logout()" class="logout-link">
                 <i class="ri-logout-box-r-line"></i> <span>Logout</span>
@@ -41,117 +41,185 @@
         </div>
     </div>
 
-    <!-- Overlay to close menu when clicking outside -->
+    <!-- Overlay -->
     <div id="menuOverlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
 
-    <div class="full-wrapper">
+    <main class="main-content">
+        <div class="top-bar">
+            <div class="page-title">
+                <h1 id="mainRestroName">Ichamotee Resturent</h1>
+                <p id="displayDate">Loading...</p>
+            </div>
+            <div class="date-selector">
+                <i class="ri-calendar-event-line"></i>
+                <input type="date" id="date">
+            </div>
+        </div>
 
-        <main class="main-content">
-            <div class="top-bar">
-                <div class="page-title">
-                    <h1>Daily Sales & Expense</h1>
-                    <p id="displayDate">Loading...</p>
+        <div class="dashboard-grid">
+            <div class="grid-col">
+                <!-- Sales Entry Card -->
+                <div class="glass-card">
+                    <div class="card-header">
+                        <i class="ri-funds-line"></i>
+                        <h3>Sales Entry</h3>
+                    </div>
+                    <div class="sales-inputs">
+                        <!-- Opening Balance Input -->
+                        <div class="input-box" style="grid-column: span 2; background: #fff7ed; padding: 12px; border-radius: 12px; border: 1px solid #ffedd5; margin-bottom: 10px;">
+                            <label style="color: #c2410c; font-weight: 700;">Opening Balance (Hater Cash)</label>
+                            <input type="number" id="openingBal" placeholder="₹ 0" oninput="updateCalculations()" style="background: white; border-color: #fdba74; font-size: 1.1rem; font-weight: 700;">
+                        </div>
+                        <div class="input-box">
+                            <label>Cash Sale</label>
+                            <input type="number" id="saleCash" placeholder="₹ 0" oninput="updateCalculations()">
+                        </div>
+                        <div class="input-box">
+                            <label>Card / UPI</label>
+                            <input type="number" id="saleCard" placeholder="₹ 0" oninput="updateCalculations()">
+                        </div>
+                        <div class="input-box">
+                            <label>Swiggy</label>
+                            <input type="number" id="saleSwiggy" placeholder="₹ 0" oninput="updateCalculations()">
+                        </div>
+                        <div class="input-box">
+                            <label>Zomato</label>
+                            <input type="number" id="saleZomato" placeholder="₹ 0" oninput="updateCalculations()">
+                        </div>
+                    </div>
+                    <button class="btn-update" onclick="saveSales()">Update Today's Sales & Balance</button>
                 </div>
-                <div class="date-selector">
-                    <i class="ri-calendar-event-line"></i>
-                    <input type="date" id="date">
+
+                <!-- Summary Cards -->
+                <div class="summary-container">
+                    <div class="sum-card blue">
+                        <small>Total Sale (All)</small>
+                        <h2 id="totalSale">₹0</h2>
+                    </div>
+                    <div class="sum-card red">
+                        <small>Cash Expenses</small>
+                        <h2 id="totalExp">₹0</h2>
+                    </div>
+                    <div class="sum-card green">
+                        <small>Closing (Cash in Hand)</small>
+                        <h2 id="sysCash">₹0</h2>
+                    </div>
+                </div>
+
+                <!-- Report Buttons -->
+                <div class="report-actions" style="margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <button class="btn-text-report" onclick="shareDailyReportText()" style="padding: 15px; background: #1e293b; color: white; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;">
+                        <i class="ri-chat-poll-line"></i> Send Text
+                    </button>
+                    <button class="btn-image-report" onclick="shareDailyReportImage()" style="padding: 15px; background: #2563eb; color: white; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;">
+                        <i class="ri-image-line"></i> Share Image
+                    </button>
                 </div>
             </div>
 
-            <div class="dashboard-grid">
-                <div class="grid-col">
-                    <div class="glass-card">
-                        <div class="card-header">
-                            <i class="ri-funds-line"></i>
-                            <h3>Sales Entry</h3>
-                        </div>
-                        <div class="sales-inputs">
-                            <div class="input-box">
-                                <label>Cash Sale</label>
-                                <input type="number" id="saleCash" placeholder="₹ 0" oninput="updateCalculations()">
-                            </div>
-                            <div class="input-box">
-                                <label>Card / UPI</label>
-                                <input type="number" id="saleCard" placeholder="₹ 0" oninput="updateCalculations()">
-                            </div>
-                            <div class="input-box">
-                                <label>Swiggy</label>
-                                <input type="number" id="saleSwiggy" placeholder="₹ 0" oninput="updateCalculations()">
-                            </div>
-                            <div class="input-box">
-                                <label>Zomato</label>
-                                <input type="number" id="saleZomato" placeholder="₹ 0" oninput="updateCalculations()">
-                            </div>
-                        </div>
-                        <button class="btn-update" onclick="saveSales()">Update Today's Sales</button>
+            <div class="grid-col">
+                <!-- Expense Entry Card -->
+                <div class="glass-card">
+                    <div class="card-header">
+                        <i class="ri-shopping-cart-2-line"></i>
+                        <h3>Expense / Vendor Payment</h3>
                     </div>
-
-                    <div class="summary-container">
-                        <div class="sum-card blue">
-                            <small>Total Sale (All)</small>
-                            <h2 id="totalSale">₹0</h2>
+                    <div class="expense-form">
+                        <div class="form-row">
+                            <div class="input-box flex-2">
+                                <label>Vendor Name</label>
+                                <input type="text" id="expDesc" placeholder="e.g. Rahim Store" list="vendorSuggestions">
+                            </div>
+                            <div class="input-box flex-1">
+                                <label>Item / Category</label>
+                                <input type="text" id="expItem" placeholder="e.g. Chicken">
+                            </div>
                         </div>
-                        <div class="sum-card red">
-                            <small>Cash Expenses</small>
-                            <h2 id="totalExp">₹0</h2>
+                        <div class="form-row">
+                            <div class="input-box flex-1">
+                                <label>Bill No</label>
+                                <input type="number" id="expBillNo" placeholder="e.g. 101">
+                            </div>
+                            <div class="input-box flex-1">
+                                <label>Total Amount</label>
+                                <input type="number" id="expAmount" placeholder="₹ 0">
+                            </div>
+                            <div class="input-box flex-1">
+                                <label>Status</label>
+                                <select id="expStatus">
+                                    <option value="PAID">Full Paid (Cash)</option>
+                                    <option value="OWNER">Paid from Owner</option>
+                                    <option value="DUE">Full Due (Baki)</option>
+                                    <option value="PARTIAL">Partial Paid</option>
+                                </select>
+                            </div>
                         </div>
-                        <div class="sum-card green">
-                            <small>Cash In Hand</small>
-                            <h2 id="sysCash">₹0</h2>
-                        </div>
+                        <input type="number" id="partialPaid" placeholder="Enter Paid Amount" class="hidden-input">
+                        <button class="btn-add-exp" onclick="handleAddExpense()">
+                            <i class="ri-add-circle-line"></i> Add Entry
+                        </button>
                     </div>
-                </div>
-
-                <div class="grid-col">
-                    <div class="glass-card">
-                        <div class="card-header">
-                            <i class="ri-shopping-cart-2-line"></i>
-                            <h3>Expense / Vendor Payment</h3>
-                        </div>
-                        <div class="expense-form">
-                            <div class="form-row">
-                                <div class="input-box flex-2">
-                                    <label>Vendor Name</label>
-                                    <input type="text" id="expDesc" placeholder="e.g. Rahim Store" list="vendorSuggestions">
-                                </div>
-                                <div class="input-box flex-1">
-                                    <label>Item / Category</label>
-                                    <input type="text" id="expItem" placeholder="e.g. Chicken">
-                                </div>
-                            </div>
-                            <div class="form-row">
-                                <div class="input-box flex-1">
-                                    <label>Bill No (Numeric)</label>
-                                    <input type="number" id="expBillNo" placeholder="e.g. 101">
-                                </div>
-                                <div class="input-box flex-1">
-                                    <label>Total Amount</label>
-                                    <input type="number" id="expAmount" placeholder="₹ 0">
-                                </div>
-                                <div class="input-box flex-1">
-                                    <label>Payment Status</label>
-                                    <select id="expStatus">
-                                        <option value="PAID">Full Paid (Cash)</option>
-                                        <option value="OWNER">Paid from Owner</option>
-                                        <option value="DUE">Full Due (Baki)</option>
-                                        <option value="PARTIAL">Partial Paid</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <input type="number" id="partialPaid" placeholder="Enter Paid Amount" class="hidden-input">
-                            <button class="btn-add-exp" onclick="handleAddExpense()">
-                                <i class="ri-add-circle-line"></i> Add Entry
-                            </button>
-                        </div>
-                        
-                        <div class="expense-list-container">
-                            <div class="list-header">Recent Entries</div>
-                            <ul id="expenseList" class="modern-list"></ul>
-                        </div>
+                    
+                    <div class="expense-list-container">
+                        <div class="list-header">Recent Entries</div>
+                        <ul id="expenseList" class="modern-list"></ul>
                     </div>
                 </div>
             </div>
-        </main>
+        </div>
+    </main>
+
+    <!-- Hidden Image Template for Daily Report -->
+    <div id="dailyReportTemplate" style="width: 500px; padding: 40px; background: #ffffff; position: absolute; left: -9999px; font-family: 'Inter', sans-serif; color: #1e293b;">
+        <div style="text-align: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; margin-bottom: 20px;">
+            <h1 id="repRestroName" style="color: #2563eb; margin: 0; font-size: 28px;">Ichamotee Resturent</h1>
+            <p style="color: #64748b; margin: 5px 0; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">Daily Sales Summary</p>
+            <h3 id="repDate" style="margin: 10px 0; color: #1e293b;">02/02/2026</h3>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+            <div style="display: flex; justify-content: space-between; padding: 12px; background: #f8fafc; border-radius: 10px; border: 1px solid #e2e8f0;">
+                <span style="color: #64748b; font-weight: 600;">Opening Balance (Hater Cash)</span>
+                <strong id="repOpening" style="color: #1e293b; font-size: 1.1rem;">₹0</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding: 10px;">
+                <span style="color: #64748b; font-weight: 600;">Cash Sale (+)</span>
+                <span id="repCashSale" style="color: #1e293b; font-weight: 700;">₹0</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding: 10px;">
+                <span style="color: #ef4444; font-weight: 600;">Cash Expenses (-)</span>
+                <span id="repExpenses" style="color: #ef4444; font-weight: 700;">₹0</span>
+            </div>
+
+            <!-- Closing Highlight Box -->
+            <div style="margin: 10px 0; padding: 20px; background: #2563eb; border-radius: 15px; color: white; text-align: center; box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3);">
+                <p style="margin: 0; font-size: 12px; opacity: 0.9; font-weight: 600; letter-spacing: 1px;">CLOSING BALANCE (CASH IN HAND)</p>
+                <h1 id="repClosing" style="margin: 5px 0; font-size: 36px; font-weight: 800;">₹0</h1>
+            </div>
+
+            <div style="border-top: 1px solid #f1f5f9; padding-top: 15px;">
+                <div style="display: flex; justify-content: space-between; padding: 6px;">
+                    <span style="color: #64748b; font-size: 14px; font-weight: 500;">Card / UPI Sale</span>
+                    <span id="repCardSale" style="color: #1e293b; font-weight: 600;">₹0</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 6px;">
+                    <span style="color: #64748b; font-size: 14px; font-weight: 500;">Online Orders (Swiggy/Zomato)</span>
+                    <span id="repOnlineSale" style="color: #1e293b; font-weight: 600;">₹0</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 12px; background: #eff6ff; border-radius: 10px; margin-top: 10px; border: 1px solid #dbeafe;">
+                    <span style="color: #2563eb; font-weight: 800; font-size: 1rem;">TOTAL SALE (ALL)</span>
+                    <strong id="repTotalSale" style="color: #2563eb; font-size: 1.2rem; font-weight: 800;">₹0</strong>
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-top: 40px; display: flex; justify-content: space-between; align-items: flex-end;">
+            <div style="font-size: 10px; color: #94a3b8;">Generated by RestroManager App</div>
+            <div style="text-align: center;">
+                <div style="font-family: 'Brush Script MT', cursive; font-size: 24px; color: #2563eb;">Keshab Sarkar</div>
+                <p style="margin: 0; font-size: 10px; font-weight: 800; border-top: 1px solid #e2e8f0; padding-top: 5px; color: #1e293b;">Authorized Signature</p>
+            </div>
+        </div>
     </div>
 
     <datalist id="vendorSuggestions"></datalist>
