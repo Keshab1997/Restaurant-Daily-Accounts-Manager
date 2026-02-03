@@ -2,18 +2,17 @@ let currentUser = null;
 let vendorsList = [];
 let currentDayExpenses = [];
 let restaurantName = "RestroManager";
+let saveTimeout;
 
 window.onload = async () => {
     const session = await checkAuth(true);
     currentUser = session.user;
     
-    // ১. রেস্টুরেন্টের নাম লোড করা
     const { data: profile } = await _supabase.from('profiles').select('restaurant_name, authorized_signature').eq('id', currentUser.id).maybeSingle();
     if(profile) {
         restaurantName = profile.restaurant_name;
         document.getElementById('sideNavName').innerText = restaurantName;
         document.getElementById('mainRestroName').innerText = restaurantName;
-        // সিগনেচার সেট করা
         if(document.getElementById('repSignature')) {
             document.getElementById('repSignature').innerText = profile.authorized_signature || restaurantName;
         }
@@ -35,13 +34,21 @@ window.onload = async () => {
         else partialInput.classList.remove('show');
     });
 
-    await fetchVendors();
-    await loadData();
-    
-    // অটোমেটিক বিল নম্বর এবং ক্যাটাগরি খোঁজা
-    document.getElementById('expDesc').addEventListener('input', async function() {
+    document.getElementById('expDesc').addEventListener('change', async function() {
         const name = this.value.trim();
-        if (name.length < 2) return;
+        if (!name) return;
+
+        const { data: lastExp } = await _supabase.from('expenses')
+            .select('description')
+            .ilike('description', `${name}%`)
+            .order('created_at', { ascending: false })
+            .limit(1);
+
+        if (lastExp && lastExp.length > 0) {
+            const match = lastExp[0].description.match(/\(([^)]+)\)/);
+            if (match) document.getElementById('expItem').value = match[1];
+        }
+
         const vendor = vendorsList.find(v => v.name.toLowerCase() === name.toLowerCase());
         if (vendor) {
             const { data: lastBillData } = await _supabase.from('vendor_ledger')
@@ -50,10 +57,36 @@ window.onload = async () => {
                 .eq('t_type', 'BILL')
                 .order('bill_no', { ascending: false })
                 .limit(1);
-            document.getElementById('expBillNo').value = lastBillData && lastBillData.length > 0 ? (parseInt(lastBillData[0].bill_no) || 0) + 1 : 1;
+            document.getElementById('expBillNo').value = (lastBillData && lastBillData.length > 0) ? (parseInt(lastBillData[0].bill_no) || 0) + 1 : 1;
         }
     });
+
+    ['expDesc', 'expItem', 'expBillNo', 'expAmount', 'partialPaid'].forEach(id => {
+        document.getElementById(id).addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleAddExpense();
+            }
+        });
+    });
+
+    ['openingBal', 'saleCash', 'saleCard', 'saleSwiggy', 'saleZomato'].forEach(id => {
+        document.getElementById(id).addEventListener('input', () => {
+            updateCalculations();
+            triggerAutoSave();
+        });
+    });
+
+    await fetchVendors();
+    await loadData();
 };
+
+function triggerAutoSave() {
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(() => {
+        saveSales(true);
+    }, 1500);
+}
 
 function updateDisplayDate(dateStr) {
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
@@ -72,19 +105,16 @@ async function fetchVendors() {
 async function loadData() {
     const date = document.getElementById('date').value;
     
-    // ১. ওপেনিং ব্যালেন্স লোড করা
     const { data: balData } = await _supabase.from('daily_balances').select('opening_balance').eq('user_id', currentUser.id).eq('report_date', date).maybeSingle();
     
     if(balData) {
         document.getElementById('openingBal').value = balData.opening_balance;
     } else {
-        // যদি আজকের ওপেনিং না থাকে, তবে গতকালের ক্লোজিং খোঁজা
         const prevDate = new Date(new Date(date) - 86400000).toISOString().split('T')[0];
         const { data: prevBal } = await _supabase.from('daily_balances').select('closing_balance').eq('user_id', currentUser.id).eq('report_date', prevDate).maybeSingle();
         document.getElementById('openingBal').value = prevBal ? prevBal.closing_balance : 0;
     }
 
-    // ২. সেলস লোড করা
     const { data: sales } = await _supabase.from('sales').select('*').eq('user_id', currentUser.id).eq('report_date', date);
     ['saleCash', 'saleCard', 'saleSwiggy', 'saleZomato'].forEach(id => document.getElementById(id).value = '');
     if(sales) {
@@ -96,7 +126,6 @@ async function loadData() {
         });
     }
 
-    // ৩. খরচ লোড করা
     const { data: expenses } = await _supabase.from('expenses').select('*').eq('user_id', currentUser.id).eq('report_date', date).order('created_at', { ascending: false });
     currentDayExpenses = expenses || [];
     const list = document.getElementById('expenseList');
@@ -127,13 +156,11 @@ function updateCalculations() {
     currentDayExpenses.forEach(exp => { if(exp.payment_source === 'CASH') cashExpenseTotal += exp.amount; });
 
     document.getElementById('totalExp').innerText = `₹${cashExpenseTotal.toLocaleString('en-IN')}`;
-    
-    // Closing = Opening + Cash Sale - Cash Expense
     const closingBalance = opening + cashSale - cashExpenseTotal;
     document.getElementById('sysCash').innerText = `₹${closingBalance.toLocaleString('en-IN')}`;
 }
 
-async function saveSales() {
+async function saveSales(silent = false) {
     const date = document.getElementById('date').value;
     const opening = parseFloat(document.getElementById('openingBal').value) || 0;
     const cashSale = parseFloat(document.getElementById('saleCash').value) || 0;
@@ -142,10 +169,8 @@ async function saveSales() {
     currentDayExpenses.forEach(exp => { if(exp.payment_source === 'CASH') cashExpenseTotal += exp.amount; });
     const closing = opening + cashSale - cashExpenseTotal;
 
-    // ১. ব্যালেন্স সেভ করা
     await _supabase.from('daily_balances').upsert({ user_id: currentUser.id, report_date: date, opening_balance: opening, closing_balance: closing }, { onConflict: 'user_id, report_date' });
 
-    // ২. সেলস সেভ করা
     const types = [{t:'CASH', id:'saleCash'}, {t:'CARD', id:'saleCard'}, {t:'SWIGGY', id:'saleSwiggy'}, {t:'ZOMATO', id:'saleZomato'}];
     for(let item of types) {
         const amount = parseFloat(document.getElementById(item.id).value) || 0;
@@ -153,8 +178,7 @@ async function saveSales() {
         if(exist.length > 0) await _supabase.from('sales').update({ amount }).eq('id', exist[0].id);
         else await _supabase.from('sales').insert({ user_id: currentUser.id, report_date: date, sale_type: item.t, amount });
     }
-    alert("Data Saved Successfully!");
-    loadData();
+    if(!silent) alert("Data Saved Successfully!");
 }
 
 async function handleAddExpense() {
@@ -166,7 +190,8 @@ async function handleAddExpense() {
     const partialPaid = parseFloat(document.getElementById('partialPaid').value) || 0;
     const date = document.getElementById('date').value;
 
-    if(!vendorName || !totalAmount) return alert("Enter vendor and amount");
+    if(!vendorName || !totalAmount) return;
+
     const fullDesc = itemName ? `${vendorName} (${itemName})` : vendorName;
     const vendor = vendorsList.find(v => v.name.toLowerCase() === vendorName.toLowerCase());
 
@@ -194,8 +219,15 @@ async function handleAddExpense() {
             await updateVendorLedger(vendor.id, date, 'PAYMENT', partialPaid, `Partial Cash Paid`, billNo);
         }
     }
-    document.getElementById('expDesc').value = ''; document.getElementById('expItem').value = ''; document.getElementById('expBillNo').value = ''; document.getElementById('expAmount').value = '';
+    
+    document.getElementById('expDesc').value = ''; 
+    document.getElementById('expItem').value = ''; 
+    document.getElementById('expBillNo').value = ''; 
+    document.getElementById('expAmount').value = '';
+    document.getElementById('partialPaid').value = '';
+    
     loadData();
+    document.getElementById('expDesc').focus();
 }
 
 async function saveExpenseRecord(desc, amount, source, date, billNo) {
@@ -204,49 +236,6 @@ async function saveExpenseRecord(desc, amount, source, date, billNo) {
 
 async function updateVendorLedger(vId, date, type, amount, note, billNo) {
     await _supabase.from('vendor_ledger').insert({ user_id: currentUser.id, vendor_id: vId, t_date: date, t_type: type, amount: amount, description: note, bill_no: billNo });
-}
-
-function shareDailyReportText() {
-    const data = getReportData();
-    let msg = `*📊 DAILY SALES REPORT*\n🏢 *${restaurantName}*\n📅 *Date:* ${data.date}\n----------------------------\n💰 *Total Sale:* ₹${data.totalSale}\n----------------------------\n🏠 *Opening Balance:* ₹${data.opening}\n💵 *Cash Sale (+):* ₹${data.cashSale}\n📉 *Cash Expenses (-):* ₹${data.expenses}\n----------------------------\n👛 *CLOSING CASH:* ₹${data.closing}\n----------------------------\n💳 *Card/UPI:* ₹${data.cardSale}\n🛵 *Online:* ₹${data.onlineOrder}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
-}
-
-async function shareDailyReportImage() {
-    const data = getReportData();
-    
-    // এরর হ্যান্ডলিং: আইডিগুলো আছে কিনা চেক করা
-    const ids = ['repRestroName', 'repDate', 'repOpening', 'repCashSale', 'repExpenses', 'repClosing', 'repCardSale', 'repOnlineSale', 'repTotalSale'];
-    for(let id of ids) {
-        if(!document.getElementById(id)) {
-            console.error(`Missing ID in HTML: ${id}`);
-            return alert(`Error: Element with ID "${id}" not found in HTML template.`);
-        }
-    }
-
-    document.getElementById('repRestroName').innerText = restaurantName;
-    document.getElementById('repDate').innerText = data.date;
-    document.getElementById('repOpening').innerText = `₹${data.opening}`;
-    document.getElementById('repCashSale').innerText = `₹${data.cashSale}`;
-    document.getElementById('repExpenses').innerText = `₹${data.expenses}`;
-    document.getElementById('repClosing').innerText = `₹${data.closing}`;
-    document.getElementById('repCardSale').innerText = `₹${data.cardSale}`;
-    document.getElementById('repOnlineSale').innerText = `₹${data.onlineOrder}`;
-    document.getElementById('repTotalSale').innerText = `₹${data.totalSale}`;
-
-    const element = document.getElementById('dailyReportTemplate');
-    html2canvas(element, { scale: 2 }).then(canvas => {
-        const link = document.createElement('a');
-        link.download = `Report_${data.date}.png`;
-        link.href = canvas.toDataURL("image/png");
-        link.click();
-        if (navigator.share) {
-            canvas.toBlob(blob => {
-                const file = new File([blob], "report.png", { type: "image/png" });
-                navigator.share({ files: [file], title: 'Daily Report' }).catch(console.error);
-            });
-        }
-    });
 }
 
 function getReportData() {
@@ -268,6 +257,32 @@ function getReportData() {
         onlineOrder: (swiggy + zomato).toLocaleString('en-IN'),
         totalSale: (cashSale + cardSale + swiggy + zomato).toLocaleString('en-IN')
     };
+}
+
+function shareDailyReportText() {
+    const data = getReportData();
+    let msg = `*📊 DAILY SALES REPORT*\n🏢 *${restaurantName}*\n📅 *Date:* ${data.date}\n----------------------------\n💰 *Total Sale:* ₹${data.totalSale}\n----------------------------\n🏠 *Opening Balance:* ₹${data.opening}\n💵 *Cash Sale (+):* ₹${data.cashSale}\n📉 *Cash Expenses (-):* ₹${data.expenses}\n----------------------------\n👛 *CLOSING CASH:* ₹${data.closing}\n----------------------------\n💳 *Card/UPI:* ₹${data.cardSale}\n🛵 *Online:* ₹${data.onlineOrder}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
+async function shareDailyReportImage() {
+    const data = getReportData();
+    document.getElementById('repRestroName').innerText = restaurantName;
+    document.getElementById('repDate').innerText = data.date;
+    document.getElementById('repOpening').innerText = `₹${data.opening}`;
+    document.getElementById('repCashSale').innerText = `₹${data.cashSale}`;
+    document.getElementById('repExpenses').innerText = `₹${data.expenses}`;
+    document.getElementById('repClosing').innerText = `₹${data.closing}`;
+    document.getElementById('repCardSale').innerText = `₹${data.cardSale}`;
+    document.getElementById('repOnlineSale').innerText = `₹${data.onlineOrder}`;
+    document.getElementById('repTotalSale').innerText = `₹${data.totalSale}`;
+
+    html2canvas(document.getElementById('dailyReportTemplate'), { scale: 2 }).then(canvas => {
+        const link = document.createElement('a');
+        link.download = `Report_${data.date}.png`;
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+    });
 }
 
 async function logout() { await _supabase.auth.signOut(); window.location.href = 'index.html'; }
