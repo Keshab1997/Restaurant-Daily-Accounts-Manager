@@ -1,12 +1,53 @@
 .salary-header-controls { display: flex; gap: 20px; align-items: flex-end; }
+
+.input-box label {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-light);
+    margin-bottom: 5px;
+    display: block;
+}
+
+.input-box input {
+    width: 100%;
+    padding: 14px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: white;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--primary);
+    outline: none;
+}
 .salary-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
 .salary-table th { background: #f1f5f9; padding: 15px; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-light); border-bottom: 2px solid var(--border); }
 .salary-table td { padding: 12px 15px; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
 .salary-table input[type="number"] { width: 60px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; text-align: center; font-weight: 700; }
 .total-row { background: #fef08a; font-weight: 800; }
-.btn-add { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 10px; cursor: pointer; font-weight: 700; display: flex; align-items: center; gap: 8px; }
-.btn-share { background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 10px; cursor: pointer; font-weight: 700; display: flex; align-items: center; gap: 8px; }
 .action-btns { display: flex; gap: 10px; }
+
+.btn-history, .btn-add, .btn-share {
+    padding: 12px 18px;
+    border-radius: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: none;
+    font-size: 0.9rem;
+    transition: 0.3s;
+    white-space: nowrap;
+}
+
+.btn-history { background: #64748b; color: white; }
+.btn-add { background: var(--primary); color: white; }
+.btn-share { background: #10b981; color: white; }
+
+.btn-history:hover { background: #475569; }
+.btn-add:hover { background: var(--primary-dark); }
+.btn-share:hover { background: #059669; }
 .btn-save-row { background: #1e293b; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 0.8rem; }
 
 /* Status Select Styles */
@@ -29,25 +70,52 @@
 .btn-cancel { background: #e2e8f0; color: var(--text-dark); border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; }
 .btn-save { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; }
 
-@media (max-width: 600px) {
-    .top-bar { flex-direction: column; align-items: flex-start; gap: 15px; }
-    .action-btns { width: 100%; }
-    .btn-add, .btn-share { flex: 1; justify-content: center; }
-}
+/* Mobile Card List (Hidden on Desktop) */
+.mobile-salary-list { display: none; }
 
-.btn-history {
-    background: #64748b;
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    border-radius: 10px;
-    cursor: pointer;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    gap: 8px;
+@media (max-width: 768px) {
+    .top-bar { flex-direction: column; align-items: flex-start; gap: 15px; }
+    .action-btns { width: 100%; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .btn-history, .btn-add, .btn-share { padding: 10px; font-size: 0.8rem; flex-direction: column; text-align: center; gap: 5px; }
+    .btn-history i, .btn-add i, .btn-share i { font-size: 1.2rem; }
+    
+    /* Hide Desktop Table */
+    .glass-card:has(.salary-table) { display: none; }
+    
+    /* Show Mobile Cards */
+    .mobile-salary-list { display: flex; flex-direction: column; gap: 15px; }
+    
+    .salary-card {
+        background: white;
+        padding: 20px;
+        border-radius: 16px;
+        border: 1px solid var(--border);
+        box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+    }
+    
+    .sc-header {
+        display: flex; justify-content: space-between; align-items: flex-start;
+        margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid #f1f5f9;
+    }
+    .sc-name h3 { margin: 0; font-size: 1.1rem; color: var(--text-dark); }
+    .sc-desig { font-size: 0.8rem; color: #64748b; background: #f1f5f9; padding: 2px 8px; border-radius: 4px; margin-top: 5px; display: inline-block; }
+    .sc-basic { text-align: right; }
+    .sc-basic small { display: block; font-size: 0.7rem; color: #94a3b8; }
+    .sc-basic strong { font-size: 1rem; color: var(--text-dark); }
+    
+    .sc-body { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; }
+    .sc-input-grp label { font-size: 0.75rem; font-weight: 700; color: #64748b; display: block; margin-bottom: 5px; }
+    .sc-input-grp input { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border); text-align: center; font-weight: 700; font-size: 1rem; }
+    .sc-cut-val { font-size: 1rem; font-weight: 700; color: var(--danger); padding-top: 10px; display: block; }
+    
+    .sc-net { background: #eff6ff; padding: 10px; border-radius: 10px; text-align: center; margin-bottom: 15px; border: 1px solid #dbeafe; }
+    .sc-net span { font-size: 0.75rem; font-weight: 700; color: var(--primary); letter-spacing: 1px; }
+    .sc-net h2 { margin: 0; font-size: 1.6rem; color: var(--primary-dark); }
+    
+    .sc-footer { display: flex; gap: 10px; align-items: center; }
+    .sc-footer select { flex: 1; }
+    .sc-footer button { padding: 10px 15px; }
 }
-.btn-history:hover { background: #475569; }
 
 .btn-delete-row:hover { background: #dc2626 !important; }
 

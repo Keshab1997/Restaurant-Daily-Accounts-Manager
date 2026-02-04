@@ -39,8 +39,16 @@ async function loadSalarySheet() {
 
 function renderTable() {
     const tbody = document.getElementById('salaryTableBody');
+    const mobileList = document.getElementById('mobileSalaryList');
+    
     tbody.innerHTML = '';
+    if(mobileList) mobileList.innerHTML = '';
+    
     let tBasic = 0, tCut = 0, tNet = 0;
+
+    if(staffList.length === 0 && mobileList) {
+        mobileList.innerHTML = '<p style="text-align:center; padding:20px; color:#64748b;">No staff added yet.</p>';
+    }
 
     staffList.forEach((staff, index) => {
         const record = salaryRecords.find(r => r.staff_id === staff.id) || { absent_days: 0, salary_cut: 0, net_salary: staff.basic_salary, status: 'UNPAID' };
@@ -49,6 +57,7 @@ function renderTable() {
         tCut += record.salary_cut;
         tNet += record.net_salary;
 
+        // Render Desktop Table Row
         tbody.innerHTML += `
             <tr>
                 <td>${index + 1}</td>
@@ -72,6 +81,46 @@ function renderTable() {
                 </td>
             </tr>
         `;
+        
+        // Render Mobile Card
+        if(mobileList) {
+            mobileList.innerHTML += `
+                <div class="salary-card">
+                    <div class="sc-header">
+                        <div class="sc-name">
+                            <h3>${staff.name}</h3>
+                            <span class="sc-desig">${staff.designation || 'Staff'}</span>
+                        </div>
+                        <div class="sc-basic">
+                            <small>Basic Salary</small>
+                            <strong>₹${staff.basic_salary.toLocaleString('en-IN')}</strong>
+                        </div>
+                    </div>
+                    <div class="sc-body">
+                        <div class="sc-input-grp">
+                            <label>Absent Days</label>
+                            <input type="number" id="absent-mob-${staff.id}" value="${record.absent_days}" onchange="updateRow('${staff.id}', this.value, ${staff.basic_salary}, true)">
+                        </div>
+                        <div class="sc-input-grp">
+                            <label>Salary Cut</label>
+                            <span id="cut-mob-${staff.id}" class="sc-cut-val">₹${record.salary_cut.toLocaleString('en-IN')}</span>
+                        </div>
+                    </div>
+                    <div class="sc-net">
+                        <span>NET PAYABLE SALARY</span>
+                        <h2 id="net-mob-${staff.id}">₹${record.net_salary.toLocaleString('en-IN')}</h2>
+                    </div>
+                    <div class="sc-footer">
+                        <select id="status-mob-${staff.id}" class="status-select ${record.status.toLowerCase()}">
+                            <option value="UNPAID" ${record.status === 'UNPAID' ? 'selected' : ''}>UNPAID</option>
+                            <option value="PAID" ${record.status === 'PAID' ? 'selected' : ''}>PAID</option>
+                        </select>
+                        <button class="btn-save-row" onclick="saveRow('${staff.id}', true)"><i class="ri-save-line"></i> Save</button>
+                        <button class="btn-delete-row" onclick="deleteStaff('${staff.id}')" style="background:#fee2e2; color:#ef4444; border:1px solid #fecaca; padding:10px 15px; border-radius:8px; cursor:pointer;"><i class="ri-delete-bin-line"></i></button>
+                    </div>
+                </div>
+            `;
+        }
     });
 
     document.getElementById('totalBasic').innerText = `₹${tBasic.toLocaleString('en-IN')}`;
@@ -79,18 +128,38 @@ function renderTable() {
     document.getElementById('totalNet').innerText = `₹${tNet.toLocaleString('en-IN')}`;
 }
 
-function updateRow(staffId, absent, basic) {
+function updateRow(staffId, absent, basic, isMobile = false) {
     const cut = Math.round((basic / 30) * absent);
     const net = basic - cut;
-    document.getElementById(`cut-${staffId}`).innerText = `₹${cut.toLocaleString('en-IN')}`;
-    document.getElementById(`net-${staffId}`).innerText = `₹${net.toLocaleString('en-IN')}`;
+    
+    // Update Desktop
+    const cutEl = document.getElementById(`cut-${staffId}`);
+    const netEl = document.getElementById(`net-${staffId}`);
+    const absInput = document.getElementById(`absent-${staffId}`);
+    
+    if(cutEl) cutEl.innerText = `₹${cut.toLocaleString('en-IN')}`;
+    if(netEl) netEl.innerText = `₹${net.toLocaleString('en-IN')}`;
+    if(absInput && isMobile) absInput.value = absent;
+    
+    // Update Mobile
+    const cutMob = document.getElementById(`cut-mob-${staffId}`);
+    const netMob = document.getElementById(`net-mob-${staffId}`);
+    const absMob = document.getElementById(`absent-mob-${staffId}`);
+    
+    if(cutMob) cutMob.innerText = `₹${cut.toLocaleString('en-IN')}`;
+    if(netMob) netMob.innerText = `₹${net.toLocaleString('en-IN')}`;
+    if(absMob && !isMobile) absMob.value = absent;
 }
 
-async function saveRow(staffId) {
+async function saveRow(staffId, isMobile = false) {
     const month = document.getElementById('salaryMonth').value;
     const staff = staffList.find(s => s.id === staffId);
-    const absent = parseFloat(document.getElementById(`absent-${staffId}`).value) || 0;
-    const status = document.getElementById(`status-${staffId}`).value;
+    
+    const absentId = isMobile ? `absent-mob-${staffId}` : `absent-${staffId}`;
+    const statusId = isMobile ? `status-mob-${staffId}` : `status-${staffId}`;
+    
+    const absent = parseFloat(document.getElementById(absentId).value) || 0;
+    const status = document.getElementById(statusId).value;
     
     const cut = Math.round((staff.basic_salary / 30) * absent);
     const net = staff.basic_salary - cut;
