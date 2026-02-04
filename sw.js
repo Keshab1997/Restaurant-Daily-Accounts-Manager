@@ -1,8 +1,10 @@
-const CACHE_NAME = 'restro-manager-v4';
+const CACHE_NAME = 'restro-manager-v6';
 const ASSETS = [
   '/',
   '/index.html',
   '/dashboard.html',
+  '/expense-entry.html',
+  '/expense-history.html',
   '/tally.html',
   '/vendors.html',
   '/vendor-history.html',
@@ -15,6 +17,8 @@ const ASSETS = [
   '/css/dashboard.css',
   '/css/hamburger.css',
   '/css/login.css',
+  '/css/expense-entry.css',
+  '/css/expense-history.css',
   '/js/config.js',
   '/js/shortcuts.js',
   'https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css'

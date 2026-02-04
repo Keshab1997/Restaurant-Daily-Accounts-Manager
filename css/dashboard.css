@@ -94,9 +94,10 @@ body { background: var(--bg-main); overflow-x: hidden; margin: 0; padding: 0; }
 .btn-update:hover { background: var(--primary-dark); transform: translateY(-2px); }
 
 /* Summary Cards */
-.summary-container { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-top: 25px; }
+.summary-container { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-top: 25px; }
 .sum-card { padding: 20px; border-radius: 18px; text-align: center; color: white; display: flex; flex-direction: column; justify-content: center; }
 .sum-card.blue { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+.sum-card.purple { background: linear-gradient(135deg, #8b5cf6, #6d28d9); }
 .sum-card.red { background: linear-gradient(135deg, #f87171, #ef4444); }
 .sum-card.green { background: linear-gradient(135deg, #34d399, #10b981); }
 .sum-card small { font-size: 0.75rem; opacity: 0.9; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
@@ -149,6 +150,7 @@ body { background: var(--bg-main); overflow-x: hidden; margin: 0; padding: 0; }
 
 @media (max-width: 1024px) {
     .dashboard-grid { grid-template-columns: 1fr; }
+    .summary-container { grid-template-columns: 1fr 1fr; }
     .side-nav { width: 80px; padding: 20px 10px; }
     .nav-logo span, .nav-links span, .nav-footer span { display: none; }
     .main-content { padding: 20px; }

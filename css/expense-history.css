@@ -1,0 +1,9 @@
+.history-table { width: 100%; border-collapse: collapse; }
+.history-table th { text-align: left; padding: 15px; background: #f1f5f9; color: #64748b; font-size: 0.8rem; border-bottom: 2px solid #e2e8f0; }
+.history-table td { padding: 15px; border-bottom: 1px solid #f1f5f9; font-size: 0.95rem; }
+.total-row { background: #f8fafc; font-weight: 800; font-size: 1.1rem; }
+.btn-del { background: none; border: none; color: #ef4444; cursor: pointer; font-size: 1.1rem; }
+.filter-box input { padding: 10px; border-radius: 10px; border: 1px solid var(--border); font-weight: 700; color: var(--primary); }
+.text-green { color: #059669; }
+.text-blue { color: #2563eb; }
+.text-red { color: #ef4444; }

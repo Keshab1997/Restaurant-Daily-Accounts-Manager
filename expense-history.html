@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/2727/2727313.png">
+    <title>Expense History - RestroManager</title>
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/hamburger.css">
+    <link rel="stylesheet" href="css/expense-history.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
+</head>
+<body>
+    <div class="hamburger-trigger" onclick="toggleSidebar()"><i class="ri-menu-2-line"></i></div>
+
+    <div id="sidebarMenu" class="custom-sidebar">
+        <div class="sidebar-header">
+            <div class="nav-logo"><i class="ri-restaurant-2-line"></i><span>RestroManager</span></div>
+            <i class="ri-close-line close-sidebar" onclick="toggleSidebar()"></i>
+        </div>
+        <nav class="sidebar-nav-links">
+            <a href="dashboard.html"><i class="ri-home-4-line"></i> <span>Home</span></a>
+            <a href="expense-entry.html"><i class="ri-shopping-cart-2-line"></i> <span>Expense Entry</span></a>
+            <a href="expense-history.html" class="active"><i class="ri-history-line"></i> <span>Expense History</span></a>
+            <a href="tally.html"><i class="ri-money-dollar-box-line"></i> <span>Cash Tally</span></a>
+            <a href="vendors.html"><i class="ri-store-2-line"></i> <span>Vendors</span></a>
+            <a href="vendor-history.html"><i class="ri-file-list-3-line"></i> <span>Vendor History</span></a>
+            <a href="owner.html"><i class="ri-user-star-line"></i> <span>Owner</span></a>
+            <a href="salary.html"><i class="ri-contacts-book-line"></i> <span>Salary Sheet</span></a>
+            <a href="pl.html"><i class="ri-pie-chart-line"></i> <span>Profit & Loss</span></a>
+            <a href="settings.html"><i class="ri-settings-3-line"></i> <span>Settings</span></a>
+        </nav>
+        <div class="sidebar-bottom"><a onclick="logout()" class="logout-link"><i class="ri-logout-box-r-line"></i> <span>Logout</span></a></div>
+    </div>
+    <div id="menuOverlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+    <main class="main-content">
+        <div class="top-bar">
+            <div class="page-title">
+                <h1>Expense History 📊</h1>
+                <p>View all expenses by date</p>
+            </div>
+            <div class="filter-box">
+                <input type="date" id="historyDate" onchange="loadHistory()">
+            </div>
+        </div>
+
+        <div class="glass-card">
+            <div class="table-wrapper">
+                <table class="history-table">
+                    <thead>
+                        <tr>
+                            <th>Bill No</th>
+                            <th>Description</th>
+                            <th>Source</th>
+                            <th>Amount</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyBody"></tbody>
+                    <tfoot>
+                        <tr class="total-row">
+                            <td colspan="3">TOTAL EXPENSE</td>
+                            <td id="historyTotal" colspan="2">₹0</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script src="js/config.js"></script>
+    <script src="js/hamburger.js"></script>
+    <script>
+        let currentUser = null;
+        window.onload = async () => {
+            const session = await checkAuth(true);
+            currentUser = session.user;
+            document.getElementById('historyDate').value = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+            loadHistory();
+        };
+
+        async function loadHistory() {
+            const date = document.getElementById('historyDate').value;
+            const { data, error } = await _supabase.from('expenses')
+                .select('*')
+                .eq('user_id', currentUser.id)
+                .eq('report_date', date)
+                .order('created_at', { ascending: false });
+
+            const tbody = document.getElementById('historyBody');
+            tbody.innerHTML = '';
+            let total = 0;
+
+            if(data && data.length > 0) {
+                data.forEach(exp => {
+                    total += exp.amount;
+                    const sourceClass = exp.payment_source === 'CASH' ? 'text-green' : (exp.payment_source === 'OWNER' ? 'text-blue' : 'text-red');
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>#${exp.bill_no || '-'}</td>
+                            <td>${exp.description}</td>
+                            <td class="${sourceClass}"><b>${exp.payment_source}</b></td>
+                            <td>₹${exp.amount.toLocaleString('en-IN')}</td>
+                            <td><button class="btn-del" onclick="deleteExp('${exp.id}')"><i class="ri-delete-bin-line"></i></button></td>
+                        </tr>
+                    `;
+                });
+            } else {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">No expenses found for this date.</td></tr>';
+            }
+            document.getElementById('historyTotal').innerText = `₹${total.toLocaleString('en-IN')}`;
+        }
+
+        async function deleteExp(id) {
+            if(!confirm("Delete this expense?")) return;
+            await _supabase.from('expenses').delete().eq('id', id);
+            loadHistory();
+        }
+
+        async function logout() { await _supabase.auth.signOut(); window.location.href = 'index.html'; }
+    </script>
+</body>
+</html>

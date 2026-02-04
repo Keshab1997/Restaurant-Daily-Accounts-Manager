@@ -35,6 +35,8 @@
         </div>
         <nav class="sidebar-nav-links">
             <a href="dashboard.html" class="active"><i class="ri-home-4-line"></i> <span>Home</span></a>
+            <a href="expense-entry.html"><i class="ri-shopping-cart-2-line"></i> <span>Expense Entry</span></a>
+            <a href="expense-history.html"><i class="ri-history-line"></i> <span>Expense History</span></a>
             <a href="tally.html"><i class="ri-money-dollar-box-line"></i> <span>Cash Tally</span></a>
             <a href="vendors.html"><i class="ri-store-2-line"></i> <span>Vendors</span></a>
             <a href="vendor-history.html"><i class="ri-file-list-3-line"></i> <span>Vendor History</span></a>
@@ -65,7 +67,7 @@
             </div>
         </div>
 
-        <div class="dashboard-grid">
+        <div class="dashboard-grid" style="grid-template-columns: 1fr;">
             <div class="grid-col">
                 <!-- Sales Entry Card -->
                 <div class="glass-card">
@@ -105,6 +107,10 @@
                         <small>Total Sale (All)</small>
                         <h2 id="totalSale">₹0</h2>
                     </div>
+                    <div class="sum-card purple">
+                        <small>Total Expense (All)</small>
+                        <h2 id="totalExpAll">₹0</h2>
+                    </div>
                     <div class="sum-card red">
                         <small>Cash Expenses</small>
                         <h2 id="totalExp">₹0</h2>
@@ -123,62 +129,6 @@
                     <button class="btn-image-report" onclick="shareDailyReportImage()" style="padding: 15px; background: #2563eb; color: white; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;">
                         <i class="ri-image-line"></i> Share Image
                     </button>
-                </div>
-            </div>
-
-            <div class="grid-col">
-                <!-- Expense Entry Card -->
-                <div class="glass-card">
-                    <div class="card-header">
-                        <i class="ri-shopping-cart-2-line"></i>
-                        <h3>Expense / Vendor Payment</h3>
-                    </div>
-                    <div class="expense-form">
-                        <div class="form-row">
-                            <div class="input-box flex-2">
-                                <label>Vendor Name</label>
-                                <input type="text" id="expDesc" placeholder="e.g. Rahim Store" list="vendorSuggestions">
-                            </div>
-                            <div class="input-box flex-1">
-                                <label>Item / Category</label>
-                                <input type="text" id="expItem" placeholder="e.g. Chicken">
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="input-box flex-1">
-                                <label>Actual Bill Date</label>
-                                <input type="date" id="expBillDate">
-                            </div>
-                            <div class="input-box flex-1">
-                                <label>Bill No</label>
-                                <input type="number" id="expBillNo" placeholder="e.g. 101">
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="input-box flex-1">
-                                <label>Total Amount</label>
-                                <input type="number" id="expAmount" placeholder="₹ 0">
-                            </div>
-                            <div class="input-box flex-1">
-                                <label>Status</label>
-                                <select id="expStatus">
-                                    <option value="PAID">Full Paid (Cash)</option>
-                                    <option value="OWNER">Paid from Owner</option>
-                                    <option value="DUE">Full Due (Baki)</option>
-                                    <option value="PARTIAL">Partial Paid</option>
-                                </select>
-                            </div>
-                        </div>
-                        <input type="number" id="partialPaid" placeholder="Enter Paid Amount" class="hidden-input">
-                        <button class="btn-add-exp" onclick="handleAddExpense()">
-                            <i class="ri-add-circle-line"></i> Add Entry
-                        </button>
-                    </div>
-                    
-                    <div class="expense-list-container">
-                        <div class="list-header">Recent Entries (Internal)</div>
-                        <ul id="expenseList" class="modern-list"></ul>
-                    </div>
                 </div>
             </div>
         </div>
@@ -236,8 +186,6 @@
             </div>
         </div>
     </div>
-
-    <datalist id="vendorSuggestions"></datalist>
 
     <script src="js/config.js"></script>
     <script src="js/hamburger.js"></script>

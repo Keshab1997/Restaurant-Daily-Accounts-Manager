@@ -1,8 +1,6 @@
 let currentUser = null;
-let vendorsList = [];
-let currentDayExpenses = [];
 let restaurantName = "RestroManager";
-let saveTimeout;
+let currentDayExpenses = [];
 
 window.onload = async () => {
     const session = await checkAuth(true);
@@ -21,108 +19,20 @@ window.onload = async () => {
     const dateInput = document.getElementById('date');
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
     dateInput.value = today;
-    
-    // Default bill date to today
-    document.getElementById('expBillDate').value = today;
-    
     updateDisplayDate(today);
     
     dateInput.addEventListener('change', function() {
         updateDisplayDate(this.value);
-        // Sync bill date with selected dashboard date for convenience
-        document.getElementById('expBillDate').value = this.value;
         loadData();
     });
-    
-    document.getElementById('expStatus').addEventListener('change', function() {
-        const partialInput = document.getElementById('partialPaid');
-        if(this.value === 'PARTIAL') partialInput.classList.add('show');
-        else partialInput.classList.remove('show');
-    });
 
-    // Updated: Use 'input' event for better mobile datalist support
-    const expDescInput = document.getElementById('expDesc');
-    
-    // Show datalist on focus/click
-    expDescInput.addEventListener('focus', function() {
-        if (this.value === '') {
-            // Trigger dropdown by setting and clearing a space
-            this.value = ' ';
-            this.value = '';
-        }
-    });
-    
-    expDescInput.addEventListener('input', async function() {
-        const name = this.value.trim();
-        if (!name) return;
-
-        // Check if the typed name matches a vendor in our list
-        const vendor = vendorsList.find(v => v.name.toLowerCase() === name.toLowerCase());
-        
-        if (vendor) {
-            // Auto-fill bill number
-            const { data: lastBillData } = await _supabase.from('vendor_ledger')
-                .select('bill_no')
-                .eq('vendor_id', vendor.id)
-                .eq('t_type', 'BILL')
-                .order('bill_no', { ascending: false })
-                .limit(1);
-            
-            document.getElementById('expBillNo').value = (lastBillData && lastBillData.length > 0) ? (parseInt(lastBillData[0].bill_no) || 0) + 1 : 1;
-            
-            // Auto-fill category/item
-            const { data: lastExp } = await _supabase.from('expenses')
-                .select('description')
-                .ilike('description', `${name}%`)
-                .order('created_at', { ascending: false })
-                .limit(1);
-
-            if (lastExp && lastExp.length > 0) {
-                const match = lastExp[0].description.match(/\(([^)]+)\)/);
-                if (match) document.getElementById('expItem').value = match[1];
-            }
-        }
-    });
-
-    ['expDesc', 'expItem', 'expBillNo', 'expAmount', 'partialPaid'].forEach(id => {
-        document.getElementById(id).addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                handleAddExpense();
-            }
-        });
-    });
-
-    ['openingBal', 'saleCash', 'saleCard', 'saleSwiggy', 'saleZomato'].forEach(id => {
-        document.getElementById(id).addEventListener('input', () => {
-            updateCalculations();
-            triggerAutoSave();
-        });
-    });
-
-    await fetchVendors();
     await loadData();
-};
-
-function triggerAutoSave() {
-    clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(() => {
-        saveSales(true);
-    }, 1500);
 }
 
 function updateDisplayDate(dateStr) {
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
     const date = new Date(dateStr + 'T00:00:00');
     document.getElementById('displayDate').innerText = date.toLocaleDateString('en-US', options);
-}
-
-async function fetchVendors() {
-    const { data } = await _supabase.from('vendors').select('id, name').eq('user_id', currentUser.id);
-    if(data) {
-        vendorsList = data;
-        document.getElementById('vendorSuggestions').innerHTML = data.map(v => `<option value="${v.name}">`).join('');
-    }
 }
 
 async function loadData() {
@@ -149,20 +59,8 @@ async function loadData() {
         });
     }
 
-    const { data: expenses } = await _supabase.from('expenses').select('*').eq('user_id', currentUser.id).eq('report_date', date).order('created_at', { ascending: false });
+    const { data: expenses } = await _supabase.from('expenses').select('*').eq('user_id', currentUser.id).eq('report_date', date);
     currentDayExpenses = expenses || [];
-    const list = document.getElementById('expenseList');
-    list.innerHTML = '';
-    if(currentDayExpenses.length > 0) {
-        currentDayExpenses.forEach(e => {
-            let sourceText = e.payment_source === 'CASH' ? "Paid from Cash" : (e.payment_source === 'OWNER' ? "Paid by Owner" : "Added to Baki");
-            let color = e.payment_source === 'CASH' ? "#ef4444" : "#64748b";
-            const billDisplay = e.bill_no ? `<span style="color:var(--primary); font-weight:700;">#${e.bill_no}</span>` : '';
-            list.innerHTML += `<li class="expense-li"><div class="li-info"><strong>${billDisplay} ${e.description}</strong><small>${sourceText}</small></div><b style="color: ${color}">₹${e.amount.toLocaleString('en-IN')}</b></li>`;
-        });
-    } else {
-        list.innerHTML = '<p style="text-align:center; color:#94a3b8; padding:20px;">No expenses yet</p>';
-    }
     updateCalculations();
 }
 
@@ -176,14 +74,21 @@ function updateCalculations() {
     document.getElementById('totalSale').innerText = `₹${(cashSale + cardSale + swiggy + zomato).toLocaleString('en-IN')}`;
 
     let cashExpenseTotal = 0;
-    currentDayExpenses.forEach(exp => { if(exp.payment_source === 'CASH') cashExpenseTotal += exp.amount; });
+    let allExpenseTotal = 0;
 
+    currentDayExpenses.forEach(exp => { 
+        allExpenseTotal += exp.amount;
+        if(exp.payment_source === 'CASH') cashExpenseTotal += exp.amount;
+    });
+
+    document.getElementById('totalExpAll').innerText = `₹${allExpenseTotal.toLocaleString('en-IN')}`;
     document.getElementById('totalExp').innerText = `₹${cashExpenseTotal.toLocaleString('en-IN')}`;
+    
     const closingBalance = opening + cashSale - cashExpenseTotal;
     document.getElementById('sysCash').innerText = `₹${closingBalance.toLocaleString('en-IN')}`;
 }
 
-async function saveSales(silent = false) {
+async function saveSales() {
     const date = document.getElementById('date').value;
     const opening = parseFloat(document.getElementById('openingBal').value) || 0;
     const cashSale = parseFloat(document.getElementById('saleCash').value) || 0;
@@ -201,71 +106,7 @@ async function saveSales(silent = false) {
         if(exist.length > 0) await _supabase.from('sales').update({ amount }).eq('id', exist[0].id);
         else await _supabase.from('sales').insert({ user_id: currentUser.id, report_date: date, sale_type: item.t, amount });
     }
-    if(!silent) alert("Data Saved Successfully!");
-}
-
-async function handleAddExpense() {
-    const vendorName = document.getElementById('expDesc').value;
-    const itemName = document.getElementById('expItem').value;
-    const billNo = document.getElementById('expBillNo').value;
-    const totalAmount = parseFloat(document.getElementById('expAmount').value);
-    const status = document.getElementById('expStatus').value;
-    const partialPaid = parseFloat(document.getElementById('partialPaid').value) || 0;
-    
-    const dashboardDate = document.getElementById('date').value; // Internal Accounting Date
-    const actualBillDate = document.getElementById('expBillDate').value; // External Vendor Date
-
-    if(!vendorName || !totalAmount) return;
-
-    const fullDesc = itemName ? `${vendorName} (${itemName})` : vendorName;
-    const vendor = vendorsList.find(v => v.name.toLowerCase() === vendorName.toLowerCase());
-
-    if(status === 'PAID') {
-        // Internal record (Today's cash)
-        await saveExpenseRecord(fullDesc, totalAmount, 'CASH', dashboardDate, billNo);
-        if(vendor) {
-            // External record (Vendor's bill date)
-            await updateVendorLedger(vendor.id, actualBillDate, 'BILL', totalAmount, `Bill for ${itemName || vendorName}`, billNo);
-            await updateVendorLedger(vendor.id, dashboardDate, 'PAYMENT', totalAmount, `Cash Paid`, billNo);
-        }
-    } else if(status === 'OWNER') {
-        await saveExpenseRecord(`${fullDesc} (Owner Paid)`, totalAmount, 'OWNER', dashboardDate, billNo);
-        await _supabase.from('owner_ledger').insert({ user_id: currentUser.id, t_date: dashboardDate, t_type: 'LOAN_TAKEN', amount: totalAmount, description: `Paid for ${fullDesc}` });
-        if(vendor) {
-            await updateVendorLedger(vendor.id, actualBillDate, 'BILL', totalAmount, `Bill for ${itemName || vendorName}`, billNo);
-            await updateVendorLedger(vendor.id, dashboardDate, 'PAYMENT', totalAmount, `Paid by Owner`, billNo);
-        }
-    } else if(status === 'DUE') {
-        await saveExpenseRecord(fullDesc, totalAmount, 'DUE', dashboardDate, billNo);
-        if(vendor) await updateVendorLedger(vendor.id, actualBillDate, 'BILL', totalAmount, `Baki for ${itemName || vendorName}`, billNo);
-    } else if(status === 'PARTIAL') {
-        await saveExpenseRecord(`${fullDesc} (Partial Paid)`, partialPaid, 'CASH', dashboardDate, billNo);
-        await saveExpenseRecord(`${fullDesc} (Baki)`, totalAmount - partialPaid, 'DUE', dashboardDate, billNo);
-        if(vendor) {
-            await updateVendorLedger(vendor.id, actualBillDate, 'BILL', totalAmount, `Bill for ${itemName || vendorName}`, billNo);
-            await updateVendorLedger(vendor.id, dashboardDate, 'PAYMENT', partialPaid, `Partial Cash Paid`, billNo);
-        }
-    }
-    
-    document.getElementById('expDesc').value = ''; 
-    document.getElementById('expItem').value = ''; 
-    document.getElementById('expBillNo').value = ''; 
-    document.getElementById('expAmount').value = '';
-    document.getElementById('partialPaid').value = '';
-    
-    // Reset bill date to current dashboard date
-    document.getElementById('expBillDate').value = dashboardDate;
-    
-    loadData();
-    document.getElementById('expDesc').focus();
-}
-
-async function saveExpenseRecord(desc, amount, source, date, billNo) {
-    await _supabase.from('expenses').insert({ user_id: currentUser.id, report_date: date, description: desc, amount: amount, payment_source: source, bill_no: billNo });
-}
-
-async function updateVendorLedger(vId, date, type, amount, note, billNo) {
-    await _supabase.from('vendor_ledger').insert({ user_id: currentUser.id, vendor_id: vId, t_date: date, t_type: type, amount: amount, description: note, bill_no: billNo });
+    alert("Sales Data Saved!");
 }
 
 function getReportData() {

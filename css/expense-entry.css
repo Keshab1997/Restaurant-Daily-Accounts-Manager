@@ -1,0 +1,27 @@
+.excel-container { padding: 0; overflow: hidden; margin-top: 20px; }
+.table-wrapper { overflow-x: auto; max-height: 65vh; }
+.excel-table { width: 100%; border-collapse: collapse; min-width: 1000px; }
+.excel-table th { background: #f1f5f9; padding: 12px; text-align: left; font-size: 0.75rem; color: #64748b; border-bottom: 2px solid #e2e8f0; position: sticky; top: 0; z-index: 10; }
+.excel-table td { padding: 4px; border-bottom: 1px solid #f1f5f9; }
+.excel-table input, .excel-table select { width: 100%; padding: 10px; border: 1px solid transparent; border-radius: 6px; font-size: 0.9rem; outline: none; background: transparent; }
+.excel-table input:focus { background: white; border-color: var(--primary); }
+
+/* Status Colors */
+.status-cash { background: #d1fae5 !important; color: #065f46 !important; font-weight: 700; border: 1px solid #059669 !important; }
+.status-owner { background: #dbeafe !important; color: #1e40af !important; font-weight: 700; border: 1px solid #2563eb !important; }
+.status-due { background: #fee2e2 !important; color: #991b1b !important; font-weight: 700; border: 1px solid #ef4444 !important; }
+.status-partial { background: #fef3c7 !important; color: #92400e !important; font-weight: 700; border: 1px solid #f59e0b !important; }
+
+.opt-cash { background: white; color: #059669; }
+.opt-owner { background: white; color: #2563eb; }
+.opt-due { background: white; color: #ef4444; }
+.opt-partial { background: white; color: #f59e0b; }
+
+.hidden { display: none; }
+.btn-remove { color: #ef4444; background: none; border: none; cursor: pointer; font-size: 1.1rem; }
+.table-footer { padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: #f8fafc; border-top: 1px solid #e2e8f0; }
+.btn-add-row { background: white; border: 1px dashed #cbd5e1; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-weight: 600; color: var(--primary); }
+.action-bar { margin-top: 20px; display: flex; justify-content: flex-end; }
+.btn-save-all { background: var(--primary); color: white; border: none; padding: 12px 30px; border-radius: 10px; font-weight: 700; cursor: pointer; }
+.accounting-date { display: flex; align-items: center; gap: 10px; background: #fff7ed; padding: 8px 15px; border-radius: 10px; border: 1px solid #ffedd5; }
+.accounting-date input { border: 1px solid #fdba74; padding: 5px; border-radius: 5px; font-weight: 700; color: #c2410c; }
