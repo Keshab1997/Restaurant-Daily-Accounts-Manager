@@ -21,10 +21,16 @@ window.onload = async () => {
     const dateInput = document.getElementById('date');
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
     dateInput.value = today;
+    
+    // Default bill date to today
+    document.getElementById('expBillDate').value = today;
+    
     updateDisplayDate(today);
     
     dateInput.addEventListener('change', function() {
         updateDisplayDate(this.value);
+        // Sync bill date with selected dashboard date for convenience
+        document.getElementById('expBillDate').value = this.value;
         loadData();
     });
     
@@ -205,7 +211,9 @@ async function handleAddExpense() {
     const totalAmount = parseFloat(document.getElementById('expAmount').value);
     const status = document.getElementById('expStatus').value;
     const partialPaid = parseFloat(document.getElementById('partialPaid').value) || 0;
-    const date = document.getElementById('date').value;
+    
+    const dashboardDate = document.getElementById('date').value; // Internal Accounting Date
+    const actualBillDate = document.getElementById('expBillDate').value; // External Vendor Date
 
     if(!vendorName || !totalAmount) return;
 
@@ -213,27 +221,29 @@ async function handleAddExpense() {
     const vendor = vendorsList.find(v => v.name.toLowerCase() === vendorName.toLowerCase());
 
     if(status === 'PAID') {
-        await saveExpenseRecord(fullDesc, totalAmount, 'CASH', date, billNo);
+        // Internal record (Today's cash)
+        await saveExpenseRecord(fullDesc, totalAmount, 'CASH', dashboardDate, billNo);
         if(vendor) {
-            await updateVendorLedger(vendor.id, date, 'BILL', totalAmount, `Bill for ${itemName || vendorName}`, billNo);
-            await updateVendorLedger(vendor.id, date, 'PAYMENT', totalAmount, `Cash Paid`, billNo);
+            // External record (Vendor's bill date)
+            await updateVendorLedger(vendor.id, actualBillDate, 'BILL', totalAmount, `Bill for ${itemName || vendorName}`, billNo);
+            await updateVendorLedger(vendor.id, dashboardDate, 'PAYMENT', totalAmount, `Cash Paid`, billNo);
         }
     } else if(status === 'OWNER') {
-        await saveExpenseRecord(`${fullDesc} (Owner Paid)`, totalAmount, 'OWNER', date, billNo);
-        await _supabase.from('owner_ledger').insert({ user_id: currentUser.id, t_date: date, t_type: 'LOAN_TAKEN', amount: totalAmount, description: `Paid for ${fullDesc}` });
+        await saveExpenseRecord(`${fullDesc} (Owner Paid)`, totalAmount, 'OWNER', dashboardDate, billNo);
+        await _supabase.from('owner_ledger').insert({ user_id: currentUser.id, t_date: dashboardDate, t_type: 'LOAN_TAKEN', amount: totalAmount, description: `Paid for ${fullDesc}` });
         if(vendor) {
-            await updateVendorLedger(vendor.id, date, 'BILL', totalAmount, `Bill for ${itemName || vendorName}`, billNo);
-            await updateVendorLedger(vendor.id, date, 'PAYMENT', totalAmount, `Paid by Owner`, billNo);
+            await updateVendorLedger(vendor.id, actualBillDate, 'BILL', totalAmount, `Bill for ${itemName || vendorName}`, billNo);
+            await updateVendorLedger(vendor.id, dashboardDate, 'PAYMENT', totalAmount, `Paid by Owner`, billNo);
         }
     } else if(status === 'DUE') {
-        await saveExpenseRecord(fullDesc, totalAmount, 'DUE', date, billNo);
-        if(vendor) await updateVendorLedger(vendor.id, date, 'BILL', totalAmount, `Baki for ${itemName || vendorName}`, billNo);
+        await saveExpenseRecord(fullDesc, totalAmount, 'DUE', dashboardDate, billNo);
+        if(vendor) await updateVendorLedger(vendor.id, actualBillDate, 'BILL', totalAmount, `Baki for ${itemName || vendorName}`, billNo);
     } else if(status === 'PARTIAL') {
-        await saveExpenseRecord(`${fullDesc} (Partial Paid)`, partialPaid, 'CASH', date, billNo);
-        await saveExpenseRecord(`${fullDesc} (Baki)`, totalAmount - partialPaid, 'DUE', date, billNo);
+        await saveExpenseRecord(`${fullDesc} (Partial Paid)`, partialPaid, 'CASH', dashboardDate, billNo);
+        await saveExpenseRecord(`${fullDesc} (Baki)`, totalAmount - partialPaid, 'DUE', dashboardDate, billNo);
         if(vendor) {
-            await updateVendorLedger(vendor.id, date, 'BILL', totalAmount, `Bill for ${itemName || vendorName}`, billNo);
-            await updateVendorLedger(vendor.id, date, 'PAYMENT', partialPaid, `Partial Cash Paid`, billNo);
+            await updateVendorLedger(vendor.id, actualBillDate, 'BILL', totalAmount, `Bill for ${itemName || vendorName}`, billNo);
+            await updateVendorLedger(vendor.id, dashboardDate, 'PAYMENT', partialPaid, `Partial Cash Paid`, billNo);
         }
     }
     
@@ -242,6 +252,9 @@ async function handleAddExpense() {
     document.getElementById('expBillNo').value = ''; 
     document.getElementById('expAmount').value = '';
     document.getElementById('partialPaid').value = '';
+    
+    // Reset bill date to current dashboard date
+    document.getElementById('expBillDate').value = dashboardDate;
     
     loadData();
     document.getElementById('expDesc').focus();

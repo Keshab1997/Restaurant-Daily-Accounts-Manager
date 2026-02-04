@@ -146,9 +146,15 @@
                         </div>
                         <div class="form-row">
                             <div class="input-box flex-1">
+                                <label>Actual Bill Date</label>
+                                <input type="date" id="expBillDate">
+                            </div>
+                            <div class="input-box flex-1">
                                 <label>Bill No</label>
                                 <input type="number" id="expBillNo" placeholder="e.g. 101">
                             </div>
+                        </div>
+                        <div class="form-row">
                             <div class="input-box flex-1">
                                 <label>Total Amount</label>
                                 <input type="number" id="expAmount" placeholder="₹ 0">
@@ -170,7 +176,7 @@
                     </div>
                     
                     <div class="expense-list-container">
-                        <div class="list-header">Recent Entries</div>
+                        <div class="list-header">Recent Entries (Internal)</div>
                         <ul id="expenseList" class="modern-list"></ul>
                     </div>
                 </div>

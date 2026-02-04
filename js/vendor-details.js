@@ -57,10 +57,18 @@ async function loadDetails() {
     document.getElementById('vNameTitle').innerText = vendor.name;
     document.getElementById('invVendorName').innerText = vendor.name;
 
-    const { data: ledger } = await _supabase.from('vendor_ledger')
+    // Fetch for calculation (oldest to newest)
+    const { data: calcLedger } = await _supabase.from('vendor_ledger')
         .select('*')
         .eq('vendor_id', vendorId)
         .order('t_date', { ascending: true });
+
+    // Fetch for display (newest to oldest)
+    const { data: displayLedger } = await _supabase.from('vendor_ledger')
+        .select('*')
+        .eq('vendor_id', vendorId)
+        .order('t_date', { ascending: false })
+        .order('created_at', { ascending: false });
 
     allBills = {};
     let totalBillAmt = vendor.opening_due || 0;
@@ -71,8 +79,8 @@ async function loadDetails() {
         allBills["0"] = { date: 'Initial', total: vendor.opening_due, paid: 0, due: vendor.opening_due };
     }
 
-    if(ledger) {
-        ledger.forEach(l => {
+    if(calcLedger) {
+        calcLedger.forEach(l => {
             const bNo = l.bill_no || "0";
             if(!allBills[bNo]) allBills[bNo] = { date: l.t_date, total: 0, paid: 0, due: 0 };
             
@@ -101,47 +109,44 @@ async function loadDetails() {
     document.getElementById('currDue').innerText = `₹${netDue.toLocaleString('en-IN')}`;
     document.getElementById('invTotalDue').innerText = `₹${netDue.toLocaleString('en-IN')}`;
 
-    // Render List Items (Reverse order for history - newest first in list, but calculation was oldest first)
-    // We need to re-fetch or just iterate ledger array for the list view
-    // Let's iterate the ledger array again but in reverse for display
-    const displayLedger = [...(ledger || [])].reverse();
+    // Render List Items (Newest Date First)
+    if(displayLedger) {
+        displayLedger.forEach((l) => {
+            let badgeClass = 'badge-bill';
+            let statusLabel = 'BILL';
+            let amountColor = 'var(--danger)';
 
-    displayLedger.forEach((l) => {
-        let badgeClass = 'badge-bill';
-        let statusLabel = 'BILL';
-        let amountColor = 'var(--danger)';
+            if(l.t_type === 'PAYMENT') {
+                badgeClass = 'badge-payment';
+                statusLabel = 'PAID (CASH)';
+                amountColor = 'var(--success)';
+            } else if (l.t_type === 'PAYMENT_OWNER') {
+                badgeClass = 'badge-owner';
+                statusLabel = 'PAID (OWNER)';
+                amountColor = '#4338ca';
+            }
 
-        if(l.t_type === 'PAYMENT') {
-            badgeClass = 'badge-payment';
-            statusLabel = 'PAID (CASH)';
-            amountColor = 'var(--success)';
-        } else if (l.t_type === 'PAYMENT_OWNER') {
-            badgeClass = 'badge-owner';
-            statusLabel = 'PAID (OWNER)';
-            amountColor = '#4338ca';
-        }
+            const safeDesc = l.description ? l.description.replace(/'/g, "\\'") : "";
 
-        // Escape single quotes for JS string
-        const safeDesc = l.description ? l.description.replace(/'/g, "\\'") : "";
-
-        list.innerHTML += `
-            <li class="ledger-item">
-                <div class="li-left">
-                    <span>${l.t_type === 'BILL' ? 'Bill #' + l.bill_no : 'Payment for Bill #' + l.bill_no}</span>
-                    <small>${l.description || '-'}</small>
-                    <small><i class="ri-calendar-line"></i> ${l.t_date}</small>
-                </div>
-                <div class="li-right">
-                    <b style="color: ${amountColor}">₹${l.amount.toLocaleString('en-IN')}</b>
-                    <small class="${badgeClass}">${statusLabel}</small>
-                    <div class="li-actions">
-                        <button class="btn-icon edit" onclick="editEntry('${l.id}', '${l.t_type}', '${l.amount}', '${l.bill_no}', '${l.t_date}', '${safeDesc}')"><i class="ri-pencil-line"></i></button>
-                        <button class="btn-icon delete" onclick="deleteEntry('${l.id}', '${l.t_type}')"><i class="ri-delete-bin-line"></i></button>
+            list.innerHTML += `
+                <li class="ledger-item">
+                    <div class="li-left">
+                        <span>${l.t_type === 'BILL' ? 'Bill #' + l.bill_no : 'Payment for Bill #' + l.bill_no}</span>
+                        <small>${l.description || '-'}</small>
+                        <small><i class="ri-calendar-line"></i> ${l.t_date}</small>
                     </div>
-                </div>
-            </li>
-        `;
-    });
+                    <div class="li-right">
+                        <b style="color: ${amountColor}">₹${l.amount.toLocaleString('en-IN')}</b>
+                        <small class="${badgeClass}">${statusLabel}</small>
+                        <div class="li-actions">
+                            <button class="btn-icon edit" onclick="editEntry('${l.id}', '${l.t_type}', '${l.amount}', '${l.bill_no}', '${l.t_date}', '${safeDesc}')"><i class="ri-pencil-line"></i></button>
+                            <button class="btn-icon delete" onclick="deleteEntry('${l.id}', '${l.t_type}')"><i class="ri-delete-bin-line"></i></button>
+                        </div>
+                    </div>
+                </li>
+            `;
+        });
+    }
 
     // Render Invoice Table (Bill-wise summary)
     sortedBillNos.forEach((bNo, index) => {
