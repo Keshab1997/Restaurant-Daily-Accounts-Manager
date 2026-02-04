@@ -94,11 +94,13 @@ body { background: var(--bg-main); overflow-x: hidden; margin: 0; padding: 0; }
 .btn-update:hover { background: var(--primary-dark); transform: translateY(-2px); }
 
 /* Summary Cards */
-.summary-container { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-top: 25px; }
-.sum-card { padding: 20px; border-radius: 18px; text-align: center; color: white; display: flex; flex-direction: column; justify-content: center; }
+.summary-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 25px; }
+.sum-card { padding: 20px; border-radius: 18px; text-align: center; color: white; display: flex; flex-direction: column; justify-content: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
 .sum-card.blue { background: linear-gradient(135deg, #3b82f6, #2563eb); }
 .sum-card.purple { background: linear-gradient(135deg, #8b5cf6, #6d28d9); }
 .sum-card.red { background: linear-gradient(135deg, #f87171, #ef4444); }
+.sum-card.orange { background: linear-gradient(135deg, #fb923c, #ea580c); }
+.sum-card.indigo { background: linear-gradient(135deg, #6366f1, #4338ca); }
 .sum-card.green { background: linear-gradient(135deg, #34d399, #10b981); }
 .sum-card small { font-size: 0.75rem; opacity: 0.9; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
 .sum-card h2 { font-size: 1.6rem; font-weight: 800; margin: 0; }
