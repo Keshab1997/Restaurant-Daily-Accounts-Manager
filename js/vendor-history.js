@@ -16,7 +16,10 @@ window.onload = async () => {
 
 async function loadVendorHistory() {
     const tbody = document.getElementById('vendorHistoryBody');
+    const mobileList = document.getElementById('mobileCardList');
+    
     tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:40px;">Calculating History...</td></tr>';
+    if(mobileList) mobileList.innerHTML = '<p style="text-align:center; padding:20px; color:#64748b;">Loading...</p>';
 
     const { data: vendors } = await _supabase.from('vendors').select('*').eq('user_id', currentUser.id);
     if(!vendors) return;
@@ -53,14 +56,19 @@ async function loadVendorHistory() {
 
 function renderTable(data) {
     const tbody = document.getElementById('vendorHistoryBody');
+    const mobileList = document.getElementById('mobileCardList');
+    
     tbody.innerHTML = '';
+    if(mobileList) mobileList.innerHTML = '';
 
     if(data.length === 0) {
         tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:40px; color:#94a3b8;">No records found for this period</td></tr>';
+        if(mobileList) mobileList.innerHTML = '<p style="text-align:center; padding:40px; color:#94a3b8;">No records found</p>';
         return;
     }
 
     data.forEach(v => {
+        // Render Desktop Table Row
         tbody.innerHTML += `
             <tr>
                 <td class="text-bold">${v.name}</td>
@@ -75,6 +83,37 @@ function renderTable(data) {
                 </td>
             </tr>
         `;
+        
+        // Render Mobile Card
+        if(mobileList) {
+            mobileList.innerHTML += `
+                <div class="history-card" onclick="location.href='vendor-details.html?id=${v.id}'">
+                    <div class="hc-header">
+                        <div class="hc-title">
+                            <h3>${v.name}</h3>
+                            <span class="hc-cat">${v.category}</span>
+                        </div>
+                        <div class="hc-date">
+                            <i class="ri-calendar-line"></i> ${v.lastDate}
+                        </div>
+                    </div>
+                    <div class="hc-stats">
+                        <div class="stat-item">
+                            <span>Total Bill</span>
+                            <strong>₹${v.displayBill.toLocaleString('en-IN')}</strong>
+                        </div>
+                        <div class="stat-item">
+                            <span>Paid (Cash)</span>
+                            <strong style="color:var(--success)">₹${v.displayPaidCash.toLocaleString('en-IN')}</strong>
+                        </div>
+                    </div>
+                    <div class="hc-footer">
+                        <span class="due-label">CURRENT DUE</span>
+                        <span class="due-val">₹${v.currentDue.toLocaleString('en-IN')}</span>
+                    </div>
+                </div>
+            `;
+        }
     });
 }
 
