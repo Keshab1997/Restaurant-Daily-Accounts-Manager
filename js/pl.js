@@ -67,7 +67,7 @@ async function loadPLData() {
         .gte('report_date', startDate)
         .lte('report_date', endDate);
 
-    // ৩. ডাটাবেস থেকে ওই মাসের স্টাফ স্যালারি নিয়ে আসা
+    // ৩. ওই মাসের সব স্টাফ স্যালারি (PAID/UNPAID সব আসবে)
     const { data: salaries } = await _supabase.from('salary_records')
         .select('net_salary')
         .eq('user_id', currentUser.id)
@@ -90,6 +90,8 @@ async function loadPLData() {
         });
     }
     let autoCashExp = expenses ? expenses.reduce((sum, e) => sum + e.amount, 0) : 0;
+    
+    // এখানে সব স্যালারি যোগ করা হচ্ছে (PAID/UNPAID নির্বিশেষে)
     let autoSalaryExp = salaries ? salaries.reduce((sum, s) => sum + s.net_salary, 0) : 0;
 
     // UI-তে ভ্যালু বসানো (Priority: Saved Data > Auto Fetched Data)

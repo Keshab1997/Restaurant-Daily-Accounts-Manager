@@ -3,6 +3,7 @@ let staffList = [];
 let salaryRecords = [];
 let restaurantName = "RestroManager";
 let signatureName = "Authorized Person";
+let autoSaveTimers = {}; // Auto-save timer storage
 
 window.onload = async () => {
     const session = await checkAuth(true);
@@ -65,18 +66,18 @@ function renderTable() {
                 <td><b>${staff.name}</b></td>
                 <td>${staff.designation || '-'}</td>
                 <td>₹${staff.basic_salary.toLocaleString('en-IN')}</td>
-                <td><input type="number" id="absent-${staff.id}" value="${record.absent_days}" onchange="updateRow('${staff.id}', this.value, ${staff.basic_salary})"></td>
+                <td><input type="number" id="absent-${staff.id}" value="${record.absent_days}" oninput="updateRow('${staff.id}', this.value, ${staff.basic_salary})"></td>
                 <td id="cut-${staff.id}">₹${record.salary_cut.toLocaleString('en-IN')}</td>
                 <td id="net-${staff.id}" style="font-weight:800;">₹${record.net_salary.toLocaleString('en-IN')}</td>
                 <td>
-                    <select id="status-${staff.id}" class="status-select ${record.status.toLowerCase()}">
+                    <select id="status-${staff.id}" class="status-select ${record.status.toLowerCase()}" onchange="updateRow('${staff.id}', document.getElementById('absent-${staff.id}').value, ${staff.basic_salary})">
                         <option value="UNPAID" ${record.status === 'UNPAID' ? 'selected' : ''}>UNPAID</option>
                         <option value="PAID" ${record.status === 'PAID' ? 'selected' : ''}>PAID</option>
                     </select>
                 </td>
                 <td>
-                    <div style="display:flex; gap:5px;">
-                        <button class="btn-save-row" onclick="saveRow('${staff.id}')" title="Save"><i class="ri-save-line"></i></button>
+                    <div style="display:flex; gap:5px; align-items:center;">
+                        <span id="save-status-${staff.id}" style="font-size: 10px; color: #10b981; display:none;">Saved!</span>
                         <button class="btn-delete-row" onclick="deleteStaff('${staff.id}')" title="Delete Staff" style="background:#fee2e2; color:#ef4444; border:1px solid #fecaca; padding:5px 8px; border-radius:5px; cursor:pointer;"><i class="ri-delete-bin-line"></i></button>
                     </div>
                 </td>
@@ -100,7 +101,7 @@ function renderTable() {
                     <div class="sc-body">
                         <div class="sc-input-grp">
                             <label>Absent Days</label>
-                            <input type="number" id="absent-mob-${staff.id}" value="${record.absent_days}" onchange="updateRow('${staff.id}', this.value, ${staff.basic_salary}, true)">
+                            <input type="number" id="absent-mob-${staff.id}" value="${record.absent_days}" oninput="updateRow('${staff.id}', this.value, ${staff.basic_salary}, true)">
                         </div>
                         <div class="sc-input-grp">
                             <label>Salary Cut</label>
@@ -112,11 +113,11 @@ function renderTable() {
                         <h2 id="net-mob-${staff.id}">₹${record.net_salary.toLocaleString('en-IN')}</h2>
                     </div>
                     <div class="sc-footer">
-                        <select id="status-mob-${staff.id}" class="status-select ${record.status.toLowerCase()}">
+                        <select id="status-mob-${staff.id}" class="status-select ${record.status.toLowerCase()}" onchange="updateRow('${staff.id}', document.getElementById('absent-mob-${staff.id}').value, ${staff.basic_salary}, true)">
                             <option value="UNPAID" ${record.status === 'UNPAID' ? 'selected' : ''}>UNPAID</option>
                             <option value="PAID" ${record.status === 'PAID' ? 'selected' : ''}>PAID</option>
                         </select>
-                        <button class="btn-save-row" onclick="saveRow('${staff.id}', true)"><i class="ri-save-line"></i> Save</button>
+                        <span id="save-status-mob-${staff.id}" style="font-size: 10px; color: #10b981; display:none;">Saved!</span>
                         <button class="btn-delete-row" onclick="deleteStaff('${staff.id}')" style="background:#fee2e2; color:#ef4444; border:1px solid #fecaca; padding:10px 15px; border-radius:8px; cursor:pointer;"><i class="ri-delete-bin-line"></i></button>
                     </div>
                 </div>
@@ -124,66 +125,96 @@ function renderTable() {
         }
     });
 
-    document.getElementById('totalBasic').innerText = `₹${tBasic.toLocaleString('en-IN')}`;
-    document.getElementById('totalCut').innerText = `₹${tCut.toLocaleString('en-IN')}`;
-    document.getElementById('totalNet').innerText = `₹${tNet.toLocaleString('en-IN')}`;
+    updateGrandTotals();
 }
 
 function updateRow(staffId, absent, basic, isMobile = false) {
     const cut = Math.round((basic / 30) * absent);
     const net = basic - cut;
     
-    // Update Desktop
-    const cutEl = document.getElementById(`cut-${staffId}`);
-    const netEl = document.getElementById(`net-${staffId}`);
-    const absInput = document.getElementById(`absent-${staffId}`);
-    
-    if(cutEl) cutEl.innerText = `₹${cut.toLocaleString('en-IN')}`;
-    if(netEl) netEl.innerText = `₹${net.toLocaleString('en-IN')}`;
-    if(absInput && isMobile) absInput.value = absent;
-    
-    // Update Mobile
-    const cutMob = document.getElementById(`cut-mob-${staffId}`);
-    const netMob = document.getElementById(`net-mob-${staffId}`);
-    const absMob = document.getElementById(`absent-mob-${staffId}`);
-    
-    if(cutMob) cutMob.innerText = `₹${cut.toLocaleString('en-IN')}`;
-    if(netMob) netMob.innerText = `₹${net.toLocaleString('en-IN')}`;
-    if(absMob && !isMobile) absMob.value = absent;
+    // Update UI
+    if(isMobile) {
+        const cutMob = document.getElementById(`cut-mob-${staffId}`);
+        const netMob = document.getElementById(`net-mob-${staffId}`);
+        if(cutMob) cutMob.innerText = `₹${cut.toLocaleString('en-IN')}`;
+        if(netMob) netMob.innerText = `₹${net.toLocaleString('en-IN')}`;
+        // Sync Desktop input
+        const absDesk = document.getElementById(`absent-${staffId}`);
+        if(absDesk) absDesk.value = absent;
+    } else {
+        const cutEl = document.getElementById(`cut-${staffId}`);
+        const netEl = document.getElementById(`net-${staffId}`);
+        if(cutEl) cutEl.innerText = `₹${cut.toLocaleString('en-IN')}`;
+        if(netEl) netEl.innerText = `₹${net.toLocaleString('en-IN')}`;
+        // Sync Mobile input
+        const absMob = document.getElementById(`absent-mob-${staffId}`);
+        if(absMob) absMob.value = absent;
+    }
+
+    updateGrandTotals();
+    triggerAutoSave(staffId, isMobile);
+}
+
+function updateGrandTotals() {
+    let tBasic = 0, tCut = 0, tNet = 0;
+    staffList.forEach(staff => {
+        const abs = parseFloat(document.getElementById(`absent-${staff.id}`).value) || 0;
+        const cut = Math.round((staff.basic_salary / 30) * abs);
+        const net = staff.basic_salary - cut;
+        tBasic += staff.basic_salary;
+        tCut += cut;
+        tNet += net;
+    });
+    document.getElementById('totalBasic').innerText = `₹${tBasic.toLocaleString('en-IN')}`;
+    document.getElementById('totalCut').innerText = `₹${tCut.toLocaleString('en-IN')}`;
+    document.getElementById('totalNet').innerText = `₹${tNet.toLocaleString('en-IN')}`;
+}
+
+// Auto-save with debounce
+function triggerAutoSave(staffId, isMobile) {
+    clearTimeout(autoSaveTimers[staffId]);
+    autoSaveTimers[staffId] = setTimeout(() => {
+        saveRow(staffId, isMobile);
+    }, 1000); // Save after 1 second of inactivity
 }
 
 async function saveRow(staffId, isMobile = false) {
     const month = document.getElementById('salaryMonth').value;
     const staff = staffList.find(s => s.id === staffId);
     
-    const absentId = isMobile ? `absent-mob-${staffId}` : `absent-${staffId}`;
-    const statusId = isMobile ? `status-mob-${staffId}` : `status-${staffId}`;
+    const absentVal = parseFloat(document.getElementById(`absent-${staffId}`).value) || 0;
+    const statusVal = document.getElementById(`status-${staffId}`).value;
     
-    const absent = parseFloat(document.getElementById(absentId).value) || 0;
-    const status = document.getElementById(statusId).value;
-    
-    const cut = Math.round((staff.basic_salary / 30) * absent);
+    const cut = Math.round((staff.basic_salary / 30) * absentVal);
     const net = staff.basic_salary - cut;
 
     const { error } = await _supabase.from('salary_records').upsert({
         user_id: currentUser.id,
         staff_id: staffId,
         month_year: month,
-        absent_days: absent,
+        absent_days: absentVal,
         salary_cut: cut,
         net_salary: net,
-        status: status
+        status: statusVal
     }, { onConflict: 'staff_id, month_year' });
 
-    if(error) alert(error.message);
-    else {
-        alert("Saved!");
-        loadSalarySheet();
+    if(!error) {
+        // Show save feedback
+        const statusEl = document.getElementById(isMobile ? `save-status-mob-${staffId}` : `save-status-${staffId}`);
+        if(statusEl) {
+            statusEl.style.display = 'inline';
+            setTimeout(() => statusEl.style.display = 'none', 2000);
+        }
+        // Update local records
+        const idx = salaryRecords.findIndex(r => r.staff_id === staffId);
+        const newRec = { staff_id: staffId, absent_days: absentVal, salary_cut: cut, net_salary: net, status: statusVal };
+        if(idx > -1) salaryRecords[idx] = newRec;
+        else salaryRecords.push(newRec);
     }
 }
 
 async function deleteStaff(id) {
-    if(!confirm("Are you sure you want to delete this staff? All their salary records will be removed.")) return;
+    if(!confirm("Are you sure you want to delete this staff?")) return;
     const { error } = await _supabase.from('staff').delete().eq('id', id);
     if(error) alert(error.message);
     else loadStaff();
@@ -262,10 +293,13 @@ async function generateSalaryImage() {
     let tBasic = 0, tCut = 0, tNet = 0;
 
     staffList.forEach((staff, index) => {
-        const record = salaryRecords.find(r => r.staff_id === staff.id) || { absent_days: 0, salary_cut: 0, net_salary: staff.basic_salary, status: 'UNPAID' };
-        tBasic += staff.basic_salary; tCut += record.salary_cut; tNet += record.net_salary;
-
-        const statusColor = record.status === 'PAID' ? '#059669' : '#ef4444';
+        const abs = parseFloat(document.getElementById(`absent-${staff.id}`).value) || 0;
+        const status = document.getElementById(`status-${staff.id}`).value;
+        const cut = Math.round((staff.basic_salary / 30) * abs);
+        const net = staff.basic_salary - cut;
+        
+        tBasic += staff.basic_salary; tCut += cut; tNet += net;
+        const statusColor = status === 'PAID' ? '#059669' : '#ef4444';
 
         tempBody.innerHTML += `
             <tr>
@@ -273,10 +307,10 @@ async function generateSalaryImage() {
                 <td style="border: 1px solid #cbd5e1; padding: 10px;">${staff.name}</td>
                 <td style="border: 1px solid #cbd5e1; padding: 10px;">${staff.designation || '-'}</td>
                 <td style="border: 1px solid #cbd5e1; padding: 10px;">₹${staff.basic_salary.toLocaleString('en-IN')}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 10px; text-align:center;">${record.absent_days}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 10px;">₹${record.salary_cut.toLocaleString('en-IN')}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 10px; font-weight:bold;">₹${record.net_salary.toLocaleString('en-IN')}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 10px; text-align:center; font-weight:bold; color:${statusColor};">${record.status}</td>
+                <td style="border: 1px solid #cbd5e1; padding: 10px; text-align:center;">${abs}</td>
+                <td style="border: 1px solid #cbd5e1; padding: 10px;">₹${cut.toLocaleString('en-IN')}</td>
+                <td style="border: 1px solid #cbd5e1; padding: 10px; font-weight:bold;">₹${net.toLocaleString('en-IN')}</td>
+                <td style="border: 1px solid #cbd5e1; padding: 10px; text-align:center; font-weight:bold; color:${statusColor};">${status}</td>
             </tr>
         `;
     });
