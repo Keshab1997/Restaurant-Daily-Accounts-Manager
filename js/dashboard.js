@@ -18,8 +18,8 @@ window.onload = async () => {
 
     const dateInput = document.getElementById('date');
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-    dateInput.value = today;
-    updateDisplayDate(today);
+    if(!dateInput.value) dateInput.value = today;
+    updateDisplayDate(dateInput.value);
     
     dateInput.addEventListener('change', function() {
         updateDisplayDate(this.value);
@@ -43,9 +43,14 @@ async function loadData() {
     if(balData) {
         document.getElementById('openingBal').value = balData.opening_balance;
     } else {
-        const prevDate = new Date(new Date(date) - 86400000).toISOString().split('T')[0];
-        const { data: prevBal } = await _supabase.from('daily_balances').select('closing_balance').eq('user_id', currentUser.id).eq('report_date', prevDate).maybeSingle();
-        document.getElementById('openingBal').value = prevBal ? prevBal.closing_balance : 0;
+        const { data: lastEntry } = await _supabase.from('daily_balances')
+            .select('closing_balance')
+            .eq('user_id', currentUser.id)
+            .lt('report_date', date)
+            .order('report_date', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        document.getElementById('openingBal').value = lastEntry ? lastEntry.closing_balance : 0;
     }
 
     const { data: sales } = await _supabase.from('sales').select('*').eq('user_id', currentUser.id).eq('report_date', date);
