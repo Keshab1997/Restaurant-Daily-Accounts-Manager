@@ -96,7 +96,7 @@ function updateCalculations() {
     document.getElementById('totalDue').innerText = `₹${dueExp.toLocaleString('en-IN')}`;
     document.getElementById('totalOwner').innerText = `₹${ownerExp.toLocaleString('en-IN')}`;
     
-    const netBalance = (opening + totalSaleAll) - totalAllExp;
+    const netBalance = cashSale - totalAllExp;
     const netBalEl = document.getElementById('netBalanceToday');
     netBalEl.innerText = `₹${netBalance.toLocaleString('en-IN')}`;
     
@@ -121,7 +121,7 @@ async function saveSales() {
         latestExpenses.forEach(exp => { totalAllExp += exp.amount; });
     }
     
-    const netClosingBalance = (opening + totalSaleAll) - totalAllExp;
+    const netClosingBalance = cashSale - totalAllExp;
 
     const { error: balError } = await _supabase.from('daily_balances').upsert({ 
         user_id: currentUser.id, 
@@ -154,26 +154,20 @@ async function saveSales() {
 
 function getReportData() {
     const date = document.getElementById('date').value;
-    const opening = parseFloat(document.getElementById('openingBal').value) || 0;
     const cashSale = parseFloat(document.getElementById('saleCash').value) || 0;
-    const cardSale = parseFloat(document.getElementById('saleCard').value) || 0;
-    const swiggy = parseFloat(document.getElementById('saleSwiggy').value) || 0;
-    const zomato = parseFloat(document.getElementById('saleZomato').value) || 0;
-    const totalSaleAll = cashSale + cardSale + swiggy + zomato;
     let totalAllExp = 0;
     currentDayExpenses.forEach(exp => { totalAllExp += exp.amount; });
     return {
         date: date,
-        opening: opening.toLocaleString('en-IN'),
-        totalSale: totalSaleAll.toLocaleString('en-IN'),
+        cashSale: cashSale.toLocaleString('en-IN'),
         totalExp: totalAllExp.toLocaleString('en-IN'),
-        closing: ((opening + totalSaleAll) - totalAllExp).toLocaleString('en-IN')
+        closing: (cashSale - totalAllExp).toLocaleString('en-IN')
     };
 }
 
 function shareDailyReportText() {
     const data = getReportData();
-    let msg = `*📊 DAILY BUSINESS SUMMARY*\n🏢 *${restaurantName}*\n📅 *Date:* ${data.date}\n----------------------------\n🏠 *Opening Balance:* ₹${data.opening}\n💰 *Total Sale (All):* ₹${data.totalSale}\n📉 *Total Expense (All):* ₹${data.totalExp}\n----------------------------\n✅ *NET BALANCE:* ₹${data.closing}`;
+    let msg = `*📊 DAILY BUSINESS SUMMARY*\n🏢 *${restaurantName}*\n📅 *Date:* ${data.date}\n----------------------------\n💵 *Cash Sale:* ₹${data.cashSale}\n📉 *Total Expense (All):* ₹${data.totalExp}\n----------------------------\n✅ *NET BALANCE:* ₹${data.closing}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
@@ -181,13 +175,13 @@ async function shareDailyReportImage() {
     const data = getReportData();
     document.getElementById('repRestroName').innerText = restaurantName;
     document.getElementById('repDate').innerText = data.date;
-    document.getElementById('repOpening').innerText = `₹${data.opening}`;
-    document.getElementById('repCashSale').innerText = `₹${data.totalSale}`;
+    document.getElementById('repOpening').innerText = `₹0`;
+    document.getElementById('repCashSale').innerText = `₹${data.cashSale}`;
     document.getElementById('repExpenses').innerText = `₹${data.totalExp}`;
     document.getElementById('repClosing').innerText = `₹${data.closing}`;
     document.getElementById('repCardSale').innerText = `₹0`;
     document.getElementById('repOnlineSale').innerText = `₹0`;
-    document.getElementById('repTotalSale').innerText = `₹${data.totalSale}`;
+    document.getElementById('repTotalSale').innerText = `₹${data.cashSale}`;
 
     html2canvas(document.getElementById('dailyReportTemplate'), { scale: 2 }).then(canvas => {
         const link = document.createElement('a');
