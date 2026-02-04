@@ -34,30 +34,47 @@ window.onload = async () => {
         else partialInput.classList.remove('show');
     });
 
-    document.getElementById('expDesc').addEventListener('change', async function() {
+    // Updated: Use 'input' event for better mobile datalist support
+    const expDescInput = document.getElementById('expDesc');
+    
+    // Show datalist on focus/click
+    expDescInput.addEventListener('focus', function() {
+        if (this.value === '') {
+            // Trigger dropdown by setting and clearing a space
+            this.value = ' ';
+            this.value = '';
+        }
+    });
+    
+    expDescInput.addEventListener('input', async function() {
         const name = this.value.trim();
         if (!name) return;
 
-        const { data: lastExp } = await _supabase.from('expenses')
-            .select('description')
-            .ilike('description', `${name}%`)
-            .order('created_at', { ascending: false })
-            .limit(1);
-
-        if (lastExp && lastExp.length > 0) {
-            const match = lastExp[0].description.match(/\(([^)]+)\)/);
-            if (match) document.getElementById('expItem').value = match[1];
-        }
-
+        // Check if the typed name matches a vendor in our list
         const vendor = vendorsList.find(v => v.name.toLowerCase() === name.toLowerCase());
+        
         if (vendor) {
+            // Auto-fill bill number
             const { data: lastBillData } = await _supabase.from('vendor_ledger')
                 .select('bill_no')
                 .eq('vendor_id', vendor.id)
                 .eq('t_type', 'BILL')
                 .order('bill_no', { ascending: false })
                 .limit(1);
+            
             document.getElementById('expBillNo').value = (lastBillData && lastBillData.length > 0) ? (parseInt(lastBillData[0].bill_no) || 0) + 1 : 1;
+            
+            // Auto-fill category/item
+            const { data: lastExp } = await _supabase.from('expenses')
+                .select('description')
+                .ilike('description', `${name}%`)
+                .order('created_at', { ascending: false })
+                .limit(1);
+
+            if (lastExp && lastExp.length > 0) {
+                const match = lastExp[0].description.match(/\(([^)]+)\)/);
+                if (match) document.getElementById('expItem').value = match[1];
+            }
         }
     });
 
