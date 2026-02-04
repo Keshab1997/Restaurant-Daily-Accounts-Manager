@@ -1,41 +1,72 @@
 let currentUser = null;
 let currentSystemBalance = 0;
+let tallyOpeningBalance = 0;
+let lastCumulativeShortage = 0;
+let autoSaveTimeout = null;
 
 window.onload = async () => {
     const session = await checkAuth(true);
     currentUser = session.user;
     
+    const dateInput = document.getElementById('tallyDate');
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-    document.getElementById('tallyDateDisplay').innerText = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    dateInput.value = today;
+
+    dateInput.addEventListener('change', () => loadTallyData(dateInput.value));
 
     document.querySelectorAll('.note-input').forEach(input => {
-        input.addEventListener('input', calculateLiveTally);
+        input.addEventListener('input', () => {
+            calculateLiveTally();
+            triggerAutoSave();
+        });
     });
 
-    await loadSystemBalance(today);
+    await loadTallyData(today);
     await loadTallyHistory();
 };
 
-async function loadSystemBalance(date) {
-    const { data: sales } = await _supabase.from('sales')
-        .select('amount')
+async function loadTallyData(date) {
+    document.querySelectorAll('.note-input').forEach(i => i.value = '');
+    document.querySelectorAll('.note-total').forEach(b => b.innerText = '0');
+
+    const { data: lastTally } = await _supabase.from('cash_tally')
+        .select('total_physical, cumulative_shortage')
         .eq('user_id', currentUser.id)
-        .eq('report_date', date)
-        .eq('sale_type', 'CASH');
-    
-    const { data: expenses } = await _supabase.from('expenses')
-        .select('amount')
-        .eq('user_id', currentUser.id)
-        .eq('report_date', date)
-        .eq('payment_source', 'CASH');
+        .lt('report_date', date)
+        .order('report_date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+    tallyOpeningBalance = lastTally ? lastTally.total_physical : 0;
+    lastCumulativeShortage = lastTally ? lastTally.cumulative_shortage : 0;
+
+    document.getElementById('tallyOpening').innerText = `₹${tallyOpeningBalance.toLocaleString('en-IN')}`;
+
+    const { data: sales } = await _supabase.from('sales').select('amount').eq('user_id', currentUser.id).eq('report_date', date).eq('sale_type', 'CASH');
+    const { data: expenses } = await _supabase.from('expenses').select('amount').eq('user_id', currentUser.id).eq('report_date', date).eq('payment_source', 'CASH');
 
     const cashSale = sales ? sales.reduce((sum, s) => sum + s.amount, 0) : 0;
     const cashExp = expenses ? expenses.reduce((sum, e) => sum + e.amount, 0) : 0;
 
-    currentSystemBalance = cashSale - cashExp;
-    
+    document.getElementById('todayCashSale').innerText = `₹${cashSale.toLocaleString('en-IN')}`;
+    document.getElementById('todayCashExp').innerText = `₹${cashExp.toLocaleString('en-IN')}`;
+
+    currentSystemBalance = (tallyOpeningBalance + cashSale) - cashExp;
     document.getElementById('sysTotal').innerText = `₹${currentSystemBalance.toLocaleString('en-IN')}`;
-    
+
+    const { data: currentTally } = await _supabase.from('cash_tally')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .eq('report_date', date)
+        .maybeSingle();
+
+    if(currentTally) {
+        [500, 200, 100, 50, 20, 10, 5, 2, 1].forEach(d => {
+            const val = currentTally[`n${d}`];
+            if(val > 0) document.getElementById(`n${d}`).value = val;
+        });
+    }
+
     calculateLiveTally();
 }
 
@@ -58,10 +89,25 @@ function calculateLiveTally() {
     if(diff === 0) diffEl.style.color = "var(--text-dark)";
     else if(diff > 0) diffEl.style.color = "var(--success)";
     else diffEl.style.color = "var(--danger)";
+
+    const newCumulative = lastCumulativeShortage - diff; 
+    document.getElementById('cumulativeDiff').innerText = `₹${newCumulative.toLocaleString('en-IN')}`;
 }
 
-async function saveTally() {
-    const date = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+function triggerAutoSave() {
+    const indicator = document.getElementById('saveIndicator');
+    indicator.style.display = 'none';
+
+    clearTimeout(autoSaveTimeout);
+    autoSaveTimeout = setTimeout(async () => {
+        await saveTallyData();
+        indicator.style.display = 'flex';
+        setTimeout(() => indicator.style.display = 'none', 2000);
+    }, 1000);
+}
+
+async function saveTallyData() {
+    const date = document.getElementById('tallyDate').value;
     const notes = {};
     let totalPhy = 0;
 
@@ -73,24 +119,23 @@ async function saveTally() {
     });
 
     const diff = totalPhy - currentSystemBalance;
+    const newCumulative = lastCumulativeShortage - diff;
 
-    const { error } = await _supabase.from('cash_tally').upsert({
+    await _supabase.from('cash_tally').upsert({
         user_id: currentUser.id,
         report_date: date,
         ...notes,
         total_physical: totalPhy,
         system_balance: currentSystemBalance,
-        difference: diff
+        difference: diff,
+        cumulative_shortage: newCumulative
     }, { onConflict: 'user_id, report_date' });
-
-    if(error) return alert("Error saving tally: " + error.message);
-
-    alert("✅ Tally Saved!");
-    location.reload();
+    
+    loadTallyHistory();
 }
 
 async function loadTallyHistory() {
-    const { data, error } = await _supabase.from('cash_tally')
+    const { data } = await _supabase.from('cash_tally')
         .select('*')
         .eq('user_id', currentUser.id)
         .order('report_date', { ascending: false })
@@ -102,7 +147,7 @@ async function loadTallyHistory() {
     if(data && data.length > 0) {
         data.forEach(row => {
             let statusBadge = "";
-            if(row.difference === 0) statusBadge = '<span class="status-badge badge-match">Matched</span>';
+            if(row.difference === 0) statusBadge = '<span class="status-badge badge-match">Perfect</span>';
             else if(row.difference < 0) statusBadge = '<span class="status-badge badge-short">Shortage</span>';
             else statusBadge = '<span class="status-badge badge-extra">Extra</span>';
 
@@ -114,28 +159,34 @@ async function loadTallyHistory() {
                     <td>₹${row.total_physical.toLocaleString('en-IN')}</td>
                     <td>₹${row.system_balance.toLocaleString('en-IN')}</td>
                     <td style="color:${diffColor}; font-weight:bold;">₹${row.difference.toLocaleString('en-IN')}</td>
+                    <td style="color:#991b1b; font-weight:bold;">₹${(row.cumulative_shortage || 0).toLocaleString('en-IN')}</td>
                     <td>${statusBadge}</td>
                 </tr>
             `;
         });
     } else {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color: var(--text-light);">No history available</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color: var(--text-light);">No history available</td></tr>';
     }
 }
 
 function shareWhatsAppReport() {
-    const date = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    const date = document.getElementById('tallyDate').value;
     const phy = document.getElementById('phyTotal').innerText;
     const sys = document.getElementById('sysTotal').innerText;
     const diff = document.getElementById('diffTotal').innerText;
+    const cumul = document.getElementById('cumulativeDiff').innerText;
 
-    let msg = `CASH TALLY REPORT (${date})\n`;
+    let msg = `*CASH TALLY REPORT (${date})*\n`;
     msg += `----------------------------\n`;
+    msg += `Opening Cash: ₹${tallyOpeningBalance.toLocaleString('en-IN')}\n`;
     msg += `System Balance: ${sys}\n`;
     msg += `Physical Cash: ${phy}\n`;
     msg += `Difference: ${diff}\n`;
+    msg += `*Total Shortage:* ${cumul}\n`;
     msg += `----------------------------\n`;
-    msg += `App developed by Keshab Sarkar`;
+    msg += `_Generated by RestroManager_`;
 
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
 }
+
+async function logout() { await _supabase.auth.signOut(); window.location.href = 'index.html'; }

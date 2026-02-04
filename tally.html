@@ -5,35 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/2727/2727313.png">
     <title>Cash Tally - RestroManager</title>
-    <!-- PWA Meta Tags -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#2563eb">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2727/2727313.png">
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/hamburger.css">
-    <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/tally.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
+    <style>
+        .auto-save-indicator { font-size: 0.8rem; color: #10b981; font-weight: 600; display: none; align-items: center; gap: 5px; margin-top: 5px; }
+    </style>
 </head>
 <body>
-    <!-- Hamburger Menu Trigger Button -->
-    <div class="hamburger-trigger" onclick="toggleSidebar()">
-        <i class="ri-menu-2-line"></i>
-    </div>
+    <div class="hamburger-trigger" onclick="toggleSidebar()"><i class="ri-menu-2-line"></i></div>
 
-    <!-- Sidebar Navigation -->
     <div id="sidebarMenu" class="custom-sidebar">
         <div class="sidebar-header">
-            <div class="nav-logo">
-                <i class="ri-restaurant-2-line"></i>
-                <span>RestroManager</span>
-            </div>
+            <div class="nav-logo"><i class="ri-restaurant-2-line"></i><span>RestroManager</span></div>
             <i class="ri-close-line close-sidebar" onclick="toggleSidebar()"></i>
         </div>
-        
         <nav class="sidebar-nav-links">
             <a href="dashboard.html"><i class="ri-home-4-line"></i> <span>Home</span></a>
             <a href="expense-entry.html"><i class="ri-shopping-cart-2-line"></i> <span>Expense Entry</span></a>
@@ -46,137 +36,100 @@
             <a href="pl.html"><i class="ri-pie-chart-line"></i> <span>Profit & Loss</span></a>
             <a href="settings.html"><i class="ri-settings-3-line"></i> <span>Settings</span></a>
         </nav>
-
-        <div class="sidebar-bottom">
-            <a onclick="logout()" class="logout-link">
-                <i class="ri-logout-box-r-line"></i> <span>Logout</span>
-            </a>
-        </div>
+        <div class="sidebar-bottom"><a onclick="logout()" class="logout-link"><i class="ri-logout-box-r-line"></i> <span>Logout</span></a></div>
     </div>
-
-    <!-- Overlay to close menu when clicking outside -->
     <div id="menuOverlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
 
-    <div class="full-wrapper">
-
-        <main class="main-content">
-            <div class="top-bar">
+    <main class="main-content">
+        <div class="top-bar">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 15px;">
                 <div class="page-title">
                     <h1>Cash Tally & Denomination 🧮</h1>
-                    <p id="tallyDateDisplay">Loading...</p>
+                    <div id="saveIndicator" class="auto-save-indicator"><i class="ri-checkbox-circle-line"></i> Saved to Cloud</div>
+                </div>
+                <div style="background: white; padding: 10px 15px; border-radius: 12px; border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 10px;">
+                    <i class="ri-calendar-line" style="color: #2563eb;"></i>
+                    <input type="date" id="tallyDate" style="border: none; font-weight: 700; color: #1e293b; outline: none; cursor: pointer;">
+                </div>
+            </div>
+        </div>
+
+        <div class="tally-layout">
+            <div class="glass-card counter-card">
+                <div class="card-header"><i class="ri-coins-line"></i> <h3>Count Your Notes & Coins</h3></div>
+                <div class="tally-grid">
+                    <div class="note-row n500"><div class="note-info"><span class="note-label">₹500</span></div><input type="number" class="note-input" id="n500" data-val="500" placeholder="0" inputmode="numeric"><b class="note-total">0</b></div>
+                    <div class="note-row n200"><div class="note-info"><span class="note-label">₹200</span></div><input type="number" class="note-input" id="n200" data-val="200" placeholder="0" inputmode="numeric"><b class="note-total">0</b></div>
+                    <div class="note-row n100"><div class="note-info"><span class="note-label">₹100</span></div><input type="number" class="note-input" id="n100" data-val="100" placeholder="0" inputmode="numeric"><b class="note-total">0</b></div>
+                    <div class="note-row n50"><div class="note-info"><span class="note-label">₹50</span></div><input type="number" class="note-input" id="n50" data-val="50" placeholder="0" inputmode="numeric"><b class="note-total">0</b></div>
+                    <div class="note-row n20"><div class="note-info"><span class="note-label">₹20</span></div><input type="number" class="note-input" id="n20" data-val="20" placeholder="0" inputmode="numeric"><b class="note-total">0</b></div>
+                    <div class="note-row n10"><div class="note-info"><span class="note-label">₹10</span></div><input type="number" class="note-input" id="n10" data-val="10" placeholder="0" inputmode="numeric"><b class="note-total">0</b></div>
+                    <div class="note-row n5"><div class="note-info"><span class="note-label">₹5</span></div><input type="number" class="note-input" id="n5" data-val="5" placeholder="0" inputmode="numeric"><b class="note-total">0</b></div>
+                    <div class="note-row n2"><div class="note-info"><span class="note-label">₹2</span></div><input type="number" class="note-input" id="n2" data-val="2" placeholder="0" inputmode="numeric"><b class="note-total">0</b></div>
+                    <div class="note-row n1"><div class="note-info"><span class="note-label">₹1</span></div><input type="number" class="note-input" id="n1" data-val="1" placeholder="0" inputmode="numeric"><b class="note-total">0</b></div>
                 </div>
             </div>
 
-            <div class="tally-layout">
-                <!-- Left Side: Note Counter -->
-                <div class="glass-card counter-card">
-                    <div class="card-header"><i class="ri-coins-line"></i> <h3>Count Your Notes</h3></div>
-                    <div class="tally-grid">
-                        <div class="note-row n500">
-                            <div class="note-info"><span class="note-label">₹500</span></div>
-                            <input type="number" class="note-input" data-val="500" placeholder="0" inputmode="numeric">
-                            <b class="note-total">0</b>
-                        </div>
-                        <div class="note-row n200">
-                            <div class="note-info"><span class="note-label">₹200</span></div>
-                            <input type="number" class="note-input" data-val="200" placeholder="0" inputmode="numeric">
-                            <b class="note-total">0</b>
-                        </div>
-                        <div class="note-row n100">
-                            <div class="note-info"><span class="note-label">₹100</span></div>
-                            <input type="number" class="note-input" data-val="100" placeholder="0" inputmode="numeric">
-                            <b class="note-total">0</b>
-                        </div>
-                        <div class="note-row n50">
-                            <div class="note-info"><span class="note-label">₹50</span></div>
-                            <input type="number" class="note-input" data-val="50" placeholder="0" inputmode="numeric">
-                            <b class="note-total">0</b>
-                        </div>
-                        <div class="note-row n20">
-                            <div class="note-info"><span class="note-label">₹20</span></div>
-                            <input type="number" class="note-input" data-val="20" placeholder="0" inputmode="numeric">
-                            <b class="note-total">0</b>
-                        </div>
-                        <div class="note-row n10">
-                            <div class="note-info"><span class="note-label">₹10</span></div>
-                            <input type="number" class="note-input" data-val="10" placeholder="0" inputmode="numeric">
-                            <b class="note-total">0</b>
-                        </div>
-                        <div class="note-row nCoins">
-                            <div class="note-info"><span class="note-label">Coins</span></div>
-                            <input type="number" class="note-input" data-val="1" placeholder="0" inputmode="numeric">
-                            <b class="note-total">0</b>
-                        </div>
+            <div class="glass-card result-card">
+                <div class="card-header"><i class="ri-pie-chart-2-line"></i> <h3>Tally Result</h3></div>
+                <div class="result-box">
+                    <div class="res-item">
+                        <span>Tally Opening (Yesterday's Cash)</span>
+                        <h2 id="tallyOpening">₹0</h2>
                     </div>
-                </div>
-
-                <!-- Right Side: Results -->
-                <div class="glass-card result-card">
-                    <div class="card-header"><i class="ri-pie-chart-2-line"></i> <h3>Tally Result</h3></div>
-                    <div class="result-box">
-                        <div class="res-item">
-                            <span>Opening Balance (+)</span>
-                            <h2 id="openingTotal">₹0</h2>
-                        </div>
-                        <div class="res-item">
-                            <span>Today's Cash Sale (+)</span>
-                            <h2 id="todayCashSale">₹0</h2>
-                        </div>
-                        <div class="res-item">
-                            <span>Today's Cash Exp (-)</span>
-                            <h2 id="todayCashExp" class="text-red">₹0</h2>
-                        </div>
-                        <div class="res-item border-top">
-                            <span>System Cash (Software)</span>
-                            <h2 id="sysTotal">₹0</h2>
-                        </div>
-                        <div class="res-item">
-                            <span>Physical Cash (Hand)</span>
-                            <h2 id="phyTotal" class="text-green">₹0</h2>
-                        </div>
-                        <div class="res-item border-top highlight">
-                            <span>Today's Difference</span>
-                            <h2 id="diffTotal">₹0</h2>
-                        </div>
-                        
-                        <!-- Cumulative Difference Section -->
-                        <div class="res-item" style="margin-top: 15px; padding: 15px; background: #f1f5f9; border-radius: 12px; border: 1px solid #e2e8f0;">
-                            <span style="color: #475569; font-weight: 700;">Total Cumulative Shortage</span>
-                            <h2 id="cumulativeDiff" style="color: #1e293b;">₹0</h2>
-                        </div>
+                    <div class="res-item">
+                        <span>Today's Cash Sale (+)</span>
+                        <h2 id="todayCashSale">₹0</h2>
+                    </div>
+                    <div class="res-item">
+                        <span>Today's Cash Exp (-)</span>
+                        <h2 id="todayCashExp" class="text-red">₹0</h2>
+                    </div>
+                    <div class="res-item border-top">
+                        <span>System Cash (Software)</span>
+                        <h2 id="sysTotal">₹0</h2>
+                    </div>
+                    <div class="res-item">
+                        <span>Physical Cash (Hand)</span>
+                        <h2 id="phyTotal" class="text-green">₹0</h2>
+                    </div>
+                    <div class="res-item border-top highlight">
+                        <span>Today's Difference</span>
+                        <h2 id="diffTotal">₹0</h2>
                     </div>
                     
-                    <div class="action-buttons">
-                        <button class="btn-save-tally" onclick="saveTally()">
-                            <i class="ri-save-3-line"></i> Save Today's Tally
-                        </button>
-                        <button class="btn-share-whatsapp" onclick="shareWhatsAppReport()">
-                            <i class="ri-whatsapp-line"></i> Share Report
-                        </button>
+                    <div class="res-item" style="margin-top: 15px; padding: 15px; background: #fef2f2; border-radius: 12px; border: 1px solid #fee2e2;">
+                        <span style="color: #991b1b; font-weight: 700;">Total Cumulative Shortage</span>
+                        <h2 id="cumulativeDiff" style="color: #991b1b;">₹0</h2>
                     </div>
                 </div>
-            </div>
-
-            <!-- History Section -->
-            <div class="glass-card history-section">
-                <div class="card-header"><i class="ri-history-line"></i> <h3>Previous Tally History</h3></div>
-                <div class="history-table-wrapper">
-                    <table class="modern-table">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Physical</th>
-                                <th>System</th>
-                                <th>Diff.</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tallyHistoryBody"></tbody>
-                    </table>
+                
+                <div class="action-buttons">
+                    <button class="btn-share-whatsapp" onclick="shareWhatsAppReport()"><i class="ri-whatsapp-line"></i> Share Report</button>
                 </div>
             </div>
-        </main>
-    </div>
+        </div>
+
+        <div class="glass-card history-section">
+            <div class="card-header"><i class="ri-history-line"></i> <h3>Previous Tally History</h3></div>
+            <div class="history-table-wrapper">
+                <table class="modern-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Physical</th>
+                            <th>System</th>
+                            <th>Diff.</th>
+                            <th>Cumul. Shortage</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tallyHistoryBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
     <script src="js/config.js"></script>
     <script src="js/hamburger.js"></script>
     <script src="js/tally.js"></script>
