@@ -132,14 +132,13 @@ async function saveSales() {
     const swiggy = parseFloat(document.getElementById('saleSwiggy').value) || 0;
     const zomato = parseFloat(document.getElementById('saleZomato').value) || 0;
     
-    const { data: latestExpenses } = await _supabase.from('expenses').select('amount').eq('user_id', currentUser.id).eq('report_date', date);
+    // এক্সপেন্স পুনরায় ক্যালকুলেট করা
     let totalAllExp = 0;
-    if(latestExpenses) {
-        latestExpenses.forEach(exp => { totalAllExp += exp.amount; });
-    }
+    currentDayExpenses.forEach(exp => { totalAllExp += exp.amount; });
     
     const netClosingBalance = cashSale - totalAllExp;
 
+    // ১. ব্যালেন্স সেভ
     const { error: balError } = await _supabase.from('daily_balances').upsert({ 
         user_id: currentUser.id, 
         report_date: date, 
@@ -147,17 +146,28 @@ async function saveSales() {
         closing_balance: netClosingBalance 
     }, { onConflict: 'user_id, report_date' });
 
-    if(balError) return alert("Error saving balance: " + balError.message);
+    if(balError) return alert("Error: " + balError.message);
 
-    const types = [{t:'CASH', val: cashSale}, {t:'CARD', val: cardSale}, {t:'SWIGGY', val: swiggy}, {t:'ZOMATO', val: zomato}];
+    // ২. সেলস সেভ
+    const types = [
+        {t:'CASH', val: cashSale}, 
+        {t:'CARD', val: cardSale}, 
+        {t:'SWIGGY', val: swiggy}, 
+        {t:'ZOMATO', val: zomato}
+    ];
+
     for(let item of types) {
         await _supabase.from('sales').upsert({ 
-            user_id: currentUser.id, report_date: date, sale_type: item.t, amount: item.val 
+            user_id: currentUser.id, 
+            report_date: date, 
+            sale_type: item.t, 
+            amount: item.val 
         }, { onConflict: 'user_id, report_date, sale_type' });
     }
     
-    alert("Data Saved! Tomorrow's Opening will be: ₹" + netClosingBalance.toLocaleString('en-IN'));
-    loadData();
+    alert("Data Updated Successfully!");
+    // ডাটাবেস থেকে পুনরায় লোড করার বদলে সরাসরি ক্যালকুলেশন কল করা যাতে ০ না হয়
+    updateCalculations();
 }
 
 function getReportData() {
