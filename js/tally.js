@@ -1,5 +1,8 @@
 let currentUser = null;
 let currentSystemBalance = 0;
+let openingBalFromDb = 0;
+let totalCumulativeDiff = 0;
+let autoSaveTimeout = null;
 
 window.onload = async () => {
     const session = await checkAuth(true);
@@ -9,7 +12,10 @@ window.onload = async () => {
     document.getElementById('tallyDateDisplay').innerText = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
     document.querySelectorAll('.note-input').forEach(input => {
-        input.addEventListener('input', calculateLiveTally);
+        input.addEventListener('input', () => {
+            calculateLiveTally();
+            triggerAutoSave();
+        });
     });
 
     await loadSystemBalance(today);
@@ -17,24 +23,24 @@ window.onload = async () => {
 };
 
 async function loadSystemBalance(date) {
-    // ১. ড্যাশবোর্ড থেকে আজকের ওপেনিং ব্যালেন্স (Hater Cash) নিয়ে আসা
+    // ১. ড্যাশবোর্ড থেকে আজকের ওপেনিং ব্যালেন্স (যা আপনি সকালে গুনে বসিয়েছেন)
     const { data: balData } = await _supabase.from('daily_balances')
         .select('opening_balance')
         .eq('user_id', currentUser.id)
         .eq('report_date', date)
         .maybeSingle();
     
-    const openingBal = balData ? balData.opening_balance : 0;
-    document.getElementById('openingTotal').innerText = `₹${openingBal.toLocaleString('en-IN')}`;
+    openingBalFromDb = balData ? balData.opening_balance : 0;
+    document.getElementById('openingTotal').innerText = `₹${openingBalFromDb.toLocaleString('en-IN')}`;
 
-    // ২. আজকের ক্যাশ সেল নিয়ে আসা
+    // ২. আজকের মোট ক্যাশ সেল ফেচ করা
     const { data: sales } = await _supabase.from('sales')
         .select('amount')
         .eq('user_id', currentUser.id)
         .eq('report_date', date)
         .eq('sale_type', 'CASH');
     
-    // ৩. আজকের ক্যাশ খরচ নিয়ে আসা
+    // ৩. আজকের মোট ক্যাশ খরচ (Vendor Payment + Expenses) ফেচ করা
     const { data: expenses } = await _supabase.from('expenses')
         .select('amount')
         .eq('user_id', currentUser.id)
@@ -47,11 +53,44 @@ async function loadSystemBalance(date) {
     document.getElementById('todayCashSale').innerText = `₹${cashSale.toLocaleString('en-IN')}`;
     document.getElementById('todayCashExp').innerText = `₹${cashExp.toLocaleString('en-IN')}`;
 
-    // ৪. সিস্টেম ক্যাশ হিসাব: Opening + Sales - Expenses
-    currentSystemBalance = openingBal + cashSale - cashExp;
+    // ৪. সিস্টেম অনুযায়ী ক্যাশ বক্সে কত থাকা উচিত: Opening + Sales - Expenses
+    currentSystemBalance = openingBalFromDb + cashSale - cashExp;
     
     document.getElementById('sysTotal').innerText = `₹${currentSystemBalance.toLocaleString('en-IN')}`;
+    // ৫. কিউমুলেটিভ ডিফারেন্স (সব শর্টেজ যোগফল) ফেচ করা
+    const { data: allTally } = await _supabase.from('cash_tally')
+        .select('difference')
+        .eq('user_id', currentUser.id);
+    
+    totalCumulativeDiff = allTally ? allTally.reduce((sum, t) => sum + t.difference, 0) : 0;
+    updateCumulativeDisplay();
+    
+    // ৬. আজকের যদি কোনো সেভ করা ট্যালি থাকে তবে তা লোড করা
+    const { data: existingTally } = await _supabase.from('cash_tally')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .eq('report_date', date)
+        .maybeSingle();
+
+    if(existingTally) {
+        const notes = [500, 200, 100, 50, 20, 10, 1];
+        notes.forEach(n => {
+            const input = document.querySelector(`.note-input[data-val="${n}"]`);
+            if(input) input.value = existingTally[`n${n}`] || 0;
+        });
+    }
+    
     calculateLiveTally();
+}
+
+function updateCumulativeDisplay() {
+    const cumEl = document.getElementById('cumulativeDiff');
+    if(cumEl) {
+        cumEl.innerText = `₹${totalCumulativeDiff.toLocaleString('en-IN')}`;
+        if(totalCumulativeDiff < 0) cumEl.style.color = "var(--danger)";
+        else if(totalCumulativeDiff > 0) cumEl.style.color = "var(--success)";
+        else cumEl.style.color = "var(--text-dark)";
+    }
 }
 
 function calculateLiveTally() {
@@ -75,7 +114,14 @@ function calculateLiveTally() {
     else diffEl.style.color = "var(--danger)";
 }
 
-async function saveTally() {
+function triggerAutoSave() {
+    clearTimeout(autoSaveTimeout);
+    autoSaveTimeout = setTimeout(() => {
+        saveTally(true);
+    }, 1000);
+}
+
+async function saveTally(isAuto = false) {
     const date = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
     const notes = {};
     let totalPhy = 0;
@@ -89,7 +135,8 @@ async function saveTally() {
 
     const diff = totalPhy - currentSystemBalance;
 
-    const { error } = await _supabase.from('cash_tally').upsert({
+    // ১. ক্যাশ ট্যালি টেবিলে নোটের ব্রেকডাউন সেভ করা
+    const { error: tallyError } = await _supabase.from('cash_tally').upsert({
         user_id: currentUser.id,
         report_date: date,
         ...notes,
@@ -98,10 +145,23 @@ async function saveTally() {
         difference: diff
     }, { onConflict: 'user_id, report_date' });
 
-    if(error) alert("Error: " + error.message);
-    else {
-        alert("✅ Tally Saved Successfully!");
-        loadTallyHistory();
+    if(tallyError) {
+        if(!isAuto) alert("Error saving tally: " + tallyError.message);
+        return;
+    }
+
+    const { error: balError } = await _supabase.from('daily_balances').upsert({
+        user_id: currentUser.id,
+        report_date: date,
+        opening_balance: openingBalFromDb,
+        closing_balance: totalPhy
+    }, { onConflict: 'user_id, report_date' });
+
+    if(balError && !isAuto) return alert("Error updating closing balance: " + balError.message);
+
+    if(!isAuto) {
+        alert("✅ Tally Saved! Physical Cash ₹" + totalPhy.toLocaleString('en-IN') + " will be tomorrow's opening.");
+        location.reload();
     }
 }
 
@@ -141,28 +201,21 @@ async function loadTallyHistory() {
 
 function shareWhatsAppReport() {
     const date = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-    const opening = document.getElementById('openingTotal').innerText;
-    const sales = document.getElementById('todayCashSale').innerText;
-    const exp = document.getElementById('todayCashExp').innerText;
     const phy = document.getElementById('phyTotal').innerText;
     const sys = document.getElementById('sysTotal').innerText;
     const diff = document.getElementById('diffTotal').innerText;
+    const cumEl = document.getElementById('cumulativeDiff');
+    const cum = cumEl ? cumEl.innerText : '₹0';
 
-    let msg = `*📊 CASH TALLY REPORT (${date})*\n`;
+    let msg = `CASH TALLY REPORT (${date})\n`;
     msg += `----------------------------\n`;
-    msg += `🏠 *Opening Cash:* ${opening}\n`;
-    msg += `💰 *Cash Sales (+):* ${sales}\n`;
-    msg += `📉 *Cash Expenses (-):* ${exp}\n`;
+    msg += `System Balance: ${sys}\n`;
+    msg += `Physical Cash: ${phy}\n`;
+    msg += `Today's Difference: ${diff}\n`;
     msg += `----------------------------\n`;
-    msg += `💻 *System Balance:* ${sys}\n`;
-    msg += `💵 *Physical Cash:* ${phy}\n`;
-    msg += `⚖️ *Difference:* ${diff}\n`;
+    msg += `TOTAL CUMULATIVE SHORTAGE: ${cum}\n`;
     msg += `----------------------------\n`;
-    
-    const diffVal = parseFloat(diff.replace('₹', '').replace(/,/g, ''));
-    if(diffVal === 0) msg += `✅ *Status:* Cash Matched!`;
-    else if(diffVal < 0) msg += `🔴 *Status:* Cash Shortage!`;
-    else msg += `🟢 *Status:* Extra Cash Found!`;
+    msg += `App developed by Keshab Sarkar`;
 
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
 }
