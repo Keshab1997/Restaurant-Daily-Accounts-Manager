@@ -16,6 +16,31 @@
     <link rel="stylesheet" href="css/dashboard.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
+    <style>
+        .danger-zone {
+            margin-top: 50px;
+            padding: 25px;
+            border: 2px dashed #ef4444;
+            border-radius: 20px;
+            background: #fff1f1;
+        }
+        .danger-zone h3 { color: #ef4444; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
+        .danger-zone p { font-size: 0.9rem; color: #7f1d1d; margin-bottom: 20px; }
+        .btn-reset {
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 14px 25px;
+            border-radius: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .btn-reset:hover { background: #b91c1c; transform: translateY(-2px); box-shadow: 0 5px 15px rgba(239, 68, 68, 0.3); }
+    </style>
 </head>
 <body>
     <div class="hamburger-trigger" onclick="toggleSidebar()">
@@ -77,6 +102,15 @@
             </div>
             <button class="btn-update" onclick="saveSettings()">Save Changes</button>
         </div>
+
+        <!-- Danger Zone: Reset All Data -->
+        <div class="danger-zone" style="max-width: 500px;">
+            <h3><i class="ri-error-warning-line"></i> Danger Zone</h3>
+            <p>এক ক্লিকে আপনার সব ডাটা (Sales, Expenses, Vendors, Staff, History) চিরতরে মুছে ফেলুন। এই কাজটি আর ফিরিয়ে আনা সম্ভব হবে না।</p>
+            <button class="btn-reset" onclick="resetAllData()">
+                <i class="ri-delete-bin-7-line"></i> Reset All Data
+            </button>
+        </div>
     </main>
 
     <script src="js/config.js"></script>
@@ -115,6 +149,40 @@
             else {
                 alert("Settings saved successfully!");
                 location.reload();
+            }
+        }
+
+        async function resetAllData() {
+            const confirm1 = confirm("আপনি কি নিশ্চিত যে আপনি সব ডাটা মুছে ফেলতে চান?");
+            if(!confirm1) return;
+
+            const confirm2 = confirm("সতর্কবার্তা: সব সেলস, এক্সপেন্স, ভেন্ডর এবং স্টাফ রেকর্ড মুছে যাবে। আপনি কি সত্যিই এটি করতে চান?");
+            if(!confirm2) return;
+
+            const tables = [
+                'sales', 
+                'expenses', 
+                'daily_balances', 
+                'vendors', 
+                'vendor_ledger', 
+                'owner_ledger', 
+                'staff', 
+                'salary_records', 
+                'cash_tally', 
+                'pl_monthly_data', 
+                'expense_categories'
+            ];
+
+            try {
+                for (const table of tables) {
+                    const { error } = await _supabase.from(table).delete().eq('user_id', currentUser.id);
+                    if(error) console.error(`Error deleting from ${table}:`, error.message);
+                }
+                alert("সব ডাটা সফলভাবে মুছে ফেলা হয়েছে!");
+                window.location.href = 'dashboard.html';
+            } catch (err) {
+                alert("ডাটা মুছতে সমস্যা হয়েছে। আবার চেষ্টা করুন।");
+                console.error(err);
             }
         }
 

@@ -59,19 +59,16 @@ async function loadPLData() {
         .gte('report_date', startDate)
         .lte('report_date', endDate);
 
-    // ২. ডাটাবেস থেকে পুরো মাসের ক্যাশ খরচ নিয়ে আসা
+    // ২. পুরো মাসের সব ধরনের খরচ (CASH + OWNER + DUE) ফেচ করা
     const { data: expenses } = await _supabase.from('expenses')
         .select('amount')
         .eq('user_id', currentUser.id)
-        .eq('payment_source', 'CASH')
         .gte('report_date', startDate)
         .lte('report_date', endDate);
 
-    // ৩. ওই মাসের সব স্টাফ স্যালারি (PAID/UNPAID সব আসবে)
-    const { data: salaries } = await _supabase.from('salary_records')
-        .select('net_salary')
-        .eq('user_id', currentUser.id)
-        .eq('month_year', month);
+    // ৩. সব স্টাফ এবং তাদের স্যালারি রেকর্ড ফেচ করা (স্মার্ট ক্যালকুলেশন)
+    const { data: allStaff } = await _supabase.from('staff').select('id, basic_salary').eq('user_id', currentUser.id);
+    const { data: salaryRecs } = await _supabase.from('salary_records').select('staff_id, net_salary').eq('user_id', currentUser.id).eq('month_year', month);
 
     // ৪. আগে সেভ করা ম্যানুয়াল ডেটা লোড করা
     const { data: savedData } = await _supabase.from('pl_monthly_data')
@@ -89,18 +86,31 @@ async function loadPLData() {
             else if(s.sale_type === 'SWIGGY' || s.sale_type === 'ZOMATO') autoOnlineSale += s.amount;
         });
     }
-    let autoCashExp = expenses ? expenses.reduce((sum, e) => sum + e.amount, 0) : 0;
+    // সব ধরনের খরচের যোগফল (Total Expense All)
+    let autoTotalExp = expenses ? expenses.reduce((sum, e) => sum + e.amount, 0) : 0;
     
-    // এখানে সব স্যালারি যোগ করা হচ্ছে (PAID/UNPAID নির্বিশেষে)
-    let autoSalaryExp = salaries ? salaries.reduce((sum, s) => sum + s.net_salary, 0) : 0;
+    // স্মার্ট স্যালারি ক্যালকুলেশন: রেকর্ড থাকলে net_salary, না থাকলে basic_salary
+    let autoSalaryExp = 0;
+    if(allStaff) {
+        allStaff.forEach(staff => {
+            const record = salaryRecs ? salaryRecs.find(r => r.staff_id === staff.id) : null;
+            if(record) {
+                autoSalaryExp += record.net_salary;
+            } else {
+                autoSalaryExp += staff.basic_salary;
+            }
+        });
+    }
 
-    // UI-তে ভ্যালু বসানো (Priority: Saved Data > Auto Fetched Data)
+    // UI-তে ডাটা বসানো
     if(savedData) {
         document.getElementById('valCashSale').value = savedData.cash_sale_manual || autoCashSale;
         document.getElementById('valCardSale').value = savedData.card_sale_manual || autoCardSale;
         document.getElementById('valOnlineSale').value = savedData.online_sale_manual || autoOnlineSale;
-        document.getElementById('valCashExp').value = savedData.cash_exp_manual || autoCashExp;
-        document.getElementById('valSalary').value = savedData.salary_manual || autoSalaryExp;
+        
+        // এখানে সব খরচের যোগফল বসানো হচ্ছে
+        document.getElementById('valCashExp').value = autoTotalExp;
+        document.getElementById('valSalary').value = autoSalaryExp;
         
         document.getElementById('stockAmt').value = savedData.stock_amount || 0;
         document.getElementById('cardComm').value = savedData.card_commission || 2;
@@ -115,11 +125,10 @@ async function loadPLData() {
             });
         }
     } else {
-        // যদি আগে সেভ করা না থাকে, তবে অটো-ফেচ করা ডেটা দেখাবে
         document.getElementById('valCashSale').value = autoCashSale;
         document.getElementById('valCardSale').value = autoCardSale;
         document.getElementById('valOnlineSale').value = autoOnlineSale;
-        document.getElementById('valCashExp').value = autoCashExp;
+        document.getElementById('valCashExp').value = autoTotalExp;
         document.getElementById('valSalary').value = autoSalaryExp;
         
         document.getElementById('stockAmt').value = 0;
