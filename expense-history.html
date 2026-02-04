@@ -46,16 +46,17 @@
             </div>
         </div>
 
-        <div class="glass-card">
+        <!-- Desktop Table View -->
+        <div class="glass-card desktop-view">
             <div class="table-wrapper">
                 <table class="history-table">
                     <thead>
                         <tr>
-                            <th>Bill No</th>
+                            <th width="60">Sr.No</th>
                             <th>Description</th>
                             <th>Source</th>
                             <th>Amount</th>
-                            <th>Action</th>
+                            <th width="150">Action</th>
                         </tr>
                     </thead>
                     <tbody id="historyBody"></tbody>
@@ -68,47 +69,86 @@
                 </table>
             </div>
         </div>
+
+        <!-- Mobile Card View -->
+        <div id="mobileHistoryList" class="mobile-view"></div>
     </main>
 
     <script src="js/config.js"></script>
     <script src="js/hamburger.js"></script>
     <script>
         let currentUser = null;
+        let vendorsList = [];
+
         window.onload = async () => {
             const session = await checkAuth(true);
             currentUser = session.user;
             document.getElementById('historyDate').value = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+            
+            const { data: vendors } = await _supabase.from('vendors').select('id, name').eq('user_id', currentUser.id);
+            vendorsList = vendors || [];
+            
             loadHistory();
         };
 
         async function loadHistory() {
             const date = document.getElementById('historyDate').value;
-            const { data, error } = await _supabase.from('expenses')
+            const { data } = await _supabase.from('expenses')
                 .select('*')
                 .eq('user_id', currentUser.id)
                 .eq('report_date', date)
                 .order('created_at', { ascending: false });
 
             const tbody = document.getElementById('historyBody');
+            const mobileList = document.getElementById('mobileHistoryList');
             tbody.innerHTML = '';
+            mobileList.innerHTML = '';
             let total = 0;
 
             if(data && data.length > 0) {
-                data.forEach(exp => {
+                data.forEach((exp, index) => {
                     total += exp.amount;
                     const sourceClass = exp.payment_source === 'CASH' ? 'text-green' : (exp.payment_source === 'OWNER' ? 'text-blue' : 'text-red');
+                    
+                    const vendorName = exp.description.split(' (')[0];
+                    const vendor = vendorsList.find(v => v.name.toLowerCase() === vendorName.toLowerCase());
+                    const detailsUrl = vendor ? `vendor-details.html?id=${vendor.id}` : '#';
+
                     tbody.innerHTML += `
                         <tr>
-                            <td>#${exp.bill_no || '-'}</td>
+                            <td>${index + 1}</td>
                             <td>${exp.description}</td>
                             <td class="${sourceClass}"><b>${exp.payment_source}</b></td>
                             <td>₹${exp.amount.toLocaleString('en-IN')}</td>
-                            <td><button class="btn-del" onclick="deleteExp('${exp.id}')"><i class="ri-delete-bin-line"></i></button></td>
+                            <td>
+                                <div class="action-btns">
+                                    <button class="btn-details" onclick="location.href='${detailsUrl}'" ${!vendor ? 'disabled' : ''} title="View Ledger"><i class="ri-file-list-3-line"></i> Details</button>
+                                    <button class="btn-del" onclick="deleteExp('${exp.id}')" title="Delete"><i class="ri-delete-bin-line"></i></button>
+                                </div>
+                            </td>
                         </tr>
+                    `;
+
+                    mobileList.innerHTML += `
+                        <div class="exp-card">
+                            <div class="card-top">
+                                <span class="sr-no">#${index + 1}</span>
+                                <span class="source-badge ${sourceClass}">${exp.payment_source}</span>
+                            </div>
+                            <div class="card-mid">
+                                <h3>${exp.description}</h3>
+                                <h2 class="amt">₹${exp.amount.toLocaleString('en-IN')}</h2>
+                            </div>
+                            <div class="card-bottom">
+                                <button class="btn-mob-details" onclick="location.href='${detailsUrl}'" ${!vendor ? 'style="display:none"' : ''}><i class="ri-eye-line"></i> View Ledger</button>
+                                <button class="btn-mob-del" onclick="deleteExp('${exp.id}')"><i class="ri-delete-bin-line"></i> Delete</button>
+                            </div>
+                        </div>
                     `;
                 });
             } else {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">No expenses found for this date.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">No expenses found.</td></tr>';
+                mobileList.innerHTML = '<p style="text-align:center; padding:40px; color:#94a3b8;">No expenses found for this date.</p>';
             }
             document.getElementById('historyTotal').innerText = `₹${total.toLocaleString('en-IN')}`;
         }
