@@ -1,19 +1,18 @@
 let currentUser = null;
 let restaurantName = "RestroManager";
+let signatureName = "Authorized Person";
 let currentDayExpenses = [];
 
 window.onload = async () => {
     const session = await checkAuth(true);
     currentUser = session.user;
     
-    const { data: profile } = await _supabase.from('profiles').select('restaurant_name, authorized_signature').eq('id', currentUser.id).maybeSingle();
+    const { data: profile } = await _supabase.from('profiles').select('*').eq('id', currentUser.id).maybeSingle();
     if(profile) {
-        restaurantName = profile.restaurant_name;
+        restaurantName = profile.restaurant_name || "RestroManager";
+        signatureName = profile.authorized_signature || restaurantName;
         document.getElementById('sideNavName').innerText = restaurantName;
         document.getElementById('mainRestroName').innerText = restaurantName;
-        if(document.getElementById('repSignature')) {
-            document.getElementById('repSignature').innerText = profile.authorized_signature || restaurantName;
-        }
     }
 
     const dateInput = document.getElementById('date');
@@ -177,8 +176,8 @@ async function saveSales() {
         }
     }
     
-    alert("Data Saved! Tomorrow's Opening will be: ₹" + finalClosingBalance.toLocaleString('en-IN'));
-    updateCalculations();
+    alert("Data Saved Successfully!");
+    loadData();
 }
 
 function getReportData() {
@@ -201,23 +200,73 @@ function getReportData() {
 }
 
 function shareDailyReportText() {
-    const data = getReportData();
-    let msg = `*📊 DAILY BUSINESS SUMMARY*\n🏢 *${restaurantName}*\n📅 *Date:* ${data.date}\n----------------------------\n🏠 *Opening Balance:* ₹${data.opening}\n💵 *Today's Net:* ₹${data.netToday}\n----------------------------\n✅ *FINAL CLOSING:* ₹${data.finalClosing}`;
+    const date = document.getElementById('date').value;
+    const opening = document.getElementById('openingBal').value;
+    const cashSale = document.getElementById('detCashSale').innerText;
+    const cardSale = document.getElementById('detCardSale').innerText;
+    const swiggy = document.getElementById('detSwiggy').innerText;
+    const zomato = document.getElementById('detZomato').innerText;
+    const totalSale = document.getElementById('totalSale').innerText;
+    const cashExp = document.getElementById('detCashExp').innerText;
+    const dueExp = document.getElementById('detDueExp').innerText;
+    const ownerExp = document.getElementById('detOwnerExp').innerText;
+    const totalExp = document.getElementById('totalExpAll').innerText;
+    const netToday = document.getElementById('netBalanceToday').innerText;
+    const finalClosing = document.getElementById('closingCashText').innerText.split(': ')[1];
+
+    let msg = `DAILY BUSINESS REPORT\n`;
+    msg += `Restaurant: ${restaurantName}\n`;
+    msg += `Date: ${date}\n`;
+    msg += `----------------------------\n`;
+    msg += `Opening Balance: ₹${opening}\n`;
+    msg += `----------------------------\n`;
+    msg += `REVENUE BREAKDOWN\n`;
+    msg += `Cash Sale: ${cashSale}\n`;
+    msg += `Card/UPI Sale: ${cardSale}\n`;
+    msg += `Swiggy Orders: ${swiggy}\n`;
+    msg += `Zomato Orders: ${zomato}\n`;
+    msg += `TOTAL SALE (ALL): ${totalSale}\n`;
+    msg += `----------------------------\n`;
+    msg += `EXPENSE BREAKDOWN\n`;
+    msg += `Cash Expenses: ${cashExp}\n`;
+    msg += `Due Expenses (Baki): ${dueExp}\n`;
+    msg += `Paid by Owner: ${ownerExp}\n`;
+    msg += `TOTAL EXPENSE (ALL): ${totalExp}\n`;
+    msg += `----------------------------\n`;
+    msg += `Today's Net: ${netToday}\n`;
+    msg += `FINAL CLOSING BALANCE: ${finalClosing}\n`;
+    msg += `----------------------------\n`;
+    msg += `Authorized Signature: ${signatureName}\n`;
+    msg += `App developed by Keshab Sarkar`;
+
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
 async function shareDailyReportImage() {
-    const data = getReportData();
+    const template = document.getElementById('dailyReportTemplate');
+    
+    // Update template values before capturing
     document.getElementById('repRestroName').innerText = restaurantName;
-    document.getElementById('repDate').innerText = data.date;
-    document.getElementById('repOpening').innerText = `₹${data.opening}`;
-    document.getElementById('repTotalSale').innerText = `₹${data.cashSale}`;
-    document.getElementById('repExpenses').innerText = `₹${data.totalExp}`;
-    document.getElementById('repClosing').innerText = `₹${data.finalClosing}`;
+    document.getElementById('repDate').innerText = document.getElementById('date').value;
+    document.getElementById('repOpening').innerText = `₹${document.getElementById('openingBal').value}`;
+    
+    document.getElementById('repCashSale').innerText = document.getElementById('detCashSale').innerText;
+    document.getElementById('repCardSale').innerText = document.getElementById('detCardSale').innerText;
+    document.getElementById('repSwiggy').innerText = document.getElementById('detSwiggy').innerText;
+    document.getElementById('repZomato').innerText = document.getElementById('detZomato').innerText;
+    document.getElementById('repTotalSale').innerText = document.getElementById('totalSale').innerText;
 
-    html2canvas(document.getElementById('dailyReportTemplate'), { scale: 2 }).then(canvas => {
+    document.getElementById('repCashExp').innerText = document.getElementById('detCashExp').innerText;
+    document.getElementById('repDueExp').innerText = document.getElementById('detDueExp').innerText;
+    document.getElementById('repOwnerExp').innerText = document.getElementById('detOwnerExp').innerText;
+    document.getElementById('repTotalExp').innerText = document.getElementById('totalExpAll').innerText;
+
+    document.getElementById('repClosing').innerText = document.getElementById('closingCashText').innerText.split(': ')[1];
+    document.getElementById('repSignature').innerText = signatureName;
+
+    html2canvas(template, { scale: 2 }).then(canvas => {
         const link = document.createElement('a');
-        link.download = `Report_${data.date}.png`;
+        link.download = `Report_${document.getElementById('date').value}.png`;
         link.href = canvas.toDataURL("image/png");
         link.click();
     });
