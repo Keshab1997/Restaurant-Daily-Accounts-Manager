@@ -25,7 +25,8 @@ window.onload = async () => {
 };
 
 async function loadStaff() {
-    const { data } = await _supabase.from('staff').select('*').eq('user_id', currentUser.id).order('name');
+    // Sort by created_at ascending so first added staff appears at top
+    const { data } = await _supabase.from('staff').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: true });
     staffList = data || [];
     await loadSalarySheet();
 }
