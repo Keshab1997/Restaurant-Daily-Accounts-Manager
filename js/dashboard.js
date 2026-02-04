@@ -97,15 +97,16 @@ function updateCalculations() {
     document.getElementById('totalOwner').innerText = `₹${ownerExp.toLocaleString('en-IN')}`;
     
     const netBalance = (opening + totalSaleAll) - totalAllExp;
-    const sysCashEl = document.getElementById('sysCash');
-    sysCashEl.innerText = `₹${netBalance.toLocaleString('en-IN')}`;
+    const netBalEl = document.getElementById('netBalanceToday');
+    netBalEl.innerText = `₹${netBalance.toLocaleString('en-IN')}`;
     
-    if(netBalance < 0) sysCashEl.style.color = "#fee2e2"; 
-    else sysCashEl.style.color = "white";
+    if(netBalance < 0) netBalEl.style.color = "#fee2e2"; 
+    else netBalEl.style.color = "white";
 }
 
 async function saveSales() {
     const date = document.getElementById('date').value;
+    
     const opening = parseFloat(document.getElementById('openingBal').value) || 0;
     const cashSale = parseFloat(document.getElementById('saleCash').value) || 0;
     const cardSale = parseFloat(document.getElementById('saleCard').value) || 0;
@@ -114,27 +115,40 @@ async function saveSales() {
     
     const totalSaleAll = cashSale + cardSale + swiggy + zomato;
 
+    const { data: latestExpenses } = await _supabase.from('expenses').select('amount').eq('user_id', currentUser.id).eq('report_date', date);
     let totalAllExp = 0;
-    currentDayExpenses.forEach(exp => { totalAllExp += exp.amount; });
+    if(latestExpenses) {
+        latestExpenses.forEach(exp => { totalAllExp += exp.amount; });
+    }
     
     const netClosingBalance = (opening + totalSaleAll) - totalAllExp;
 
-    await _supabase.from('daily_balances').upsert({ 
+    const { error: balError } = await _supabase.from('daily_balances').upsert({ 
         user_id: currentUser.id, 
         report_date: date, 
         opening_balance: opening, 
         closing_balance: netClosingBalance 
     }, { onConflict: 'user_id, report_date' });
 
-    const types = [{t:'CASH', id:'saleCash'}, {t:'CARD', id:'saleCard'}, {t:'SWIGGY', id:'saleSwiggy'}, {t:'ZOMATO', id:'saleZomato'}];
+    if(balError) return alert("Error saving balance: " + balError.message);
+
+    const types = [
+        {t:'CASH', val: cashSale}, 
+        {t:'CARD', val: cardSale}, 
+        {t:'SWIGGY', val: swiggy}, 
+        {t:'ZOMATO', val: zomato}
+    ];
+
     for(let item of types) {
-        const amount = parseFloat(document.getElementById(item.id).value) || 0;
-        const { data: exist } = await _supabase.from('sales').select('id').eq('user_id', currentUser.id).eq('report_date', date).eq('sale_type', item.t);
-        if(exist.length > 0) await _supabase.from('sales').update({ amount }).eq('id', exist[0].id);
-        else await _supabase.from('sales').insert({ user_id: currentUser.id, report_date: date, sale_type: item.t, amount });
+        await _supabase.from('sales').upsert({ 
+            user_id: currentUser.id, 
+            report_date: date, 
+            sale_type: item.t, 
+            amount: item.val 
+        }, { onConflict: 'user_id, report_date, sale_type' });
     }
     
-    alert("Data Saved! Tomorrow's Opening: ₹" + netClosingBalance.toLocaleString('en-IN'));
+    alert("Data Saved! Net Balance (₹" + netClosingBalance.toLocaleString('en-IN') + ") will be tomorrow's opening.");
     loadData();
 }
 
