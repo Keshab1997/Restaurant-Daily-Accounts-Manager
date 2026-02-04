@@ -187,6 +187,21 @@
 @media (max-width: 600px) {
     .main-content { padding: 15px; padding-bottom: 90px; }
     
+    /* Force Order: Form First, Result Second */
+    .tally-layout {
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .counter-card {
+        order: 1;
+    }
+    
+    .result-card {
+        order: 2;
+        position: static;
+    }
+    
     /* Note Row Mobile Optimization */
     .note-row {
         padding: 12px;
@@ -205,13 +220,6 @@
     .note-total {
         width: 70px;
         font-size: 0.95rem;
-    }
-    
-    /* Result Card */
-    .result-card {
-        position: sticky;
-        bottom: 80px;
-        z-index: 90;
     }
     
     .highlight h2 { font-size: 1.5rem !important; }
