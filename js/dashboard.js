@@ -132,21 +132,25 @@ async function saveSales() {
     const swiggy = parseFloat(document.getElementById('saleSwiggy').value) || 0;
     const zomato = parseFloat(document.getElementById('saleZomato').value) || 0;
     
-    // এক্সপেন্স পুনরায় ক্যালকুলেট করা
-    let totalAllExp = 0;
-    currentDayExpenses.forEach(exp => { totalAllExp += exp.amount; });
+    let cashExp = 0;
+    currentDayExpenses.forEach(exp => { 
+        if(exp.payment_source === 'CASH') cashExp += exp.amount;
+    });
     
-    const netClosingBalance = cashSale - totalAllExp;
+    const closingCashBalance = opening + cashSale - cashExp;
 
     // ১. ব্যালেন্স সেভ
     const { error: balError } = await _supabase.from('daily_balances').upsert({ 
         user_id: currentUser.id, 
         report_date: date, 
         opening_balance: opening, 
-        closing_balance: netClosingBalance 
+        closing_balance: closingCashBalance 
     }, { onConflict: 'user_id, report_date' });
 
-    if(balError) return alert("Error: " + balError.message);
+    if(balError) {
+        console.error("Balance Save Error:", balError);
+        return alert("Error saving balance: " + balError.message);
+    }
 
     // ২. সেলস সেভ
     const types = [
@@ -157,38 +161,46 @@ async function saveSales() {
     ];
 
     for(let item of types) {
-        await _supabase.from('sales').upsert({ 
+        const { error: saleError } = await _supabase.from('sales').upsert({ 
             user_id: currentUser.id, 
             report_date: date, 
             sale_type: item.t, 
             amount: item.val 
         }, { onConflict: 'user_id, report_date, sale_type' });
+
+        if(saleError) {
+            console.error(`Sale Save Error (${item.t}):`, saleError);
+            return alert(`Error saving ${item.t} sale: ` + saleError.message);
+        }
     }
     
-    alert("Data Updated Successfully!");
-    // ডাটাবেস থেকে পুনরায় লোড করার বদলে সরাসরি ক্যালকুলেশন কল করা যাতে ০ না হয়
+    alert("Data Updated Successfully! Tomorrow's Opening: ₹" + closingCashBalance.toLocaleString('en-IN'));
     updateCalculations();
 }
 
 function getReportData() {
     const date = document.getElementById('date').value;
+    const opening = parseFloat(document.getElementById('openingBal').value) || 0;
     const cashSale = parseFloat(document.getElementById('saleCash').value) || 0;
+    let cashExp = 0;
+    currentDayExpenses.forEach(exp => { if(exp.payment_source === 'CASH') cashExp += exp.amount; });
+    
     let totalAllExp = 0;
     currentDayExpenses.forEach(exp => { totalAllExp += exp.amount; });
-    
+
     return {
         date: date,
-        opening: document.getElementById('openingBal').value,
+        opening: opening.toLocaleString('en-IN'),
         cashSale: cashSale.toLocaleString('en-IN'),
         totalExp: totalAllExp.toLocaleString('en-IN'),
-        netBalance: (cashSale - totalAllExp).toLocaleString('en-IN'),
-        totalSaleAll: document.getElementById('totalSale').innerText
+        closingCash: (opening + cashSale - cashExp).toLocaleString('en-IN'),
+        netBalance: (cashSale - totalAllExp).toLocaleString('en-IN')
     };
 }
 
 function shareDailyReportText() {
     const data = getReportData();
-    let msg = `*📊 DAILY BUSINESS SUMMARY*\n🏢 *${restaurantName}*\n📅 *Date:* ${data.date}\n----------------------------\n💰 *Total Sale (All):* ${data.totalSaleAll}\n📉 *Total Expense (All):* ₹${data.totalExp}\n----------------------------\n✅ *NET BALANCE:* ₹${data.netBalance}`;
+    let msg = `*📊 DAILY BUSINESS SUMMARY*\n🏢 *${restaurantName}*\n📅 *Date:* ${data.date}\n----------------------------\n🏠 *Opening Cash:* ₹${data.opening}\n💵 *Cash Sale:* ₹${data.cashSale}\n📉 *Total Expense:* ₹${data.totalExp}\n----------------------------\n👛 *CLOSING CASH:* ₹${data.closingCash}\n✅ *NET BALANCE:* ₹${data.netBalance}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
@@ -197,7 +209,7 @@ async function shareDailyReportImage() {
     document.getElementById('repRestroName').innerText = restaurantName;
     document.getElementById('repDate').innerText = data.date;
     document.getElementById('repOpening').innerText = `₹${data.opening}`;
-    document.getElementById('repTotalSale').innerText = data.totalSaleAll;
+    document.getElementById('repCashSale').innerText = `₹${data.cashSale}`;
     document.getElementById('repExpenses').innerText = `₹${data.totalExp}`;
     document.getElementById('repClosing').innerText = `₹${data.netBalance}`;
 
