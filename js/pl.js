@@ -25,12 +25,11 @@ window.onload = async () => {
 async function loadCategories() {
     const { data } = await _supabase.from('pl_categories').select('*').eq('user_id', currentUser.id);
     
-    // যদি ডাটাবেস একদম খালি থাকে, তবে ডিফল্ট কিছু ক্যাটাগরি যোগ করা (শুধুমাত্র প্রথমবার)
     if (!data || data.length === 0) {
         const defaults = [
             { name: 'Cash Sale (Monthly)', type: 'REVENUE', is_special: false },
-            { name: 'Card / UPI Sale', type: 'REVENUE', is_special: true, special_key: 'CARD' },
-            { name: 'Online (Swiggy/Zomato)', type: 'REVENUE', is_special: true, special_key: 'ONLINE' },
+            { name: 'Card / UPI Sale', type: 'REVENUE', is_special: true, special_key: 'CARD', default_comm: 2 },
+            { name: 'Online (Swiggy/Zomato)', type: 'REVENUE', is_special: true, special_key: 'ONLINE', default_comm: 25 },
             { name: 'Stock Amount (Closing)', type: 'REVENUE', is_special: false },
             { name: 'Total Expenses (All)', type: 'EXPENSE', is_special: false },
             { name: 'Staff Salaries (Total Net)', type: 'EXPENSE', is_special: false },
@@ -54,12 +53,10 @@ function renderAllItems() {
     revList.innerHTML = '';
     expList.innerHTML = '';
 
-    // Render Revenue
     categories.REVENUE.forEach(cat => {
         revList.innerHTML += cat.is_special ? renderSpecialItem(cat) : renderNormalItem(cat);
     });
 
-    // Render Expenses
     categories.EXPENSE.forEach(cat => {
         expList.innerHTML += renderNormalItem(cat);
     });
@@ -78,14 +75,13 @@ function renderNormalItem(cat) {
 }
 
 function renderSpecialItem(cat) {
-    const isCard = cat.special_key === 'CARD';
-    const commDefault = isCard ? 2 : 25;
+    const commDefault = cat.default_comm || 0;
     return `
         <div class="pl-item-complex">
             <div class="main-row">
                 <span>${cat.name}</span>
                 <div class="item-controls">
-                    <input type="number" id="val-${cat.id}" value="0" oninput="calculatePL()" class="inline-input ${cat.type.toLowerCase()}-input special-base" data-id="${cat.id}" data-special="${cat.special_key}">
+                    <input type="number" id="val-${cat.id}" value="0" oninput="calculatePL()" class="inline-input ${cat.type.toLowerCase()}-input special-base" data-id="${cat.id}">
                     <button class="btn-del-item" onclick="deleteCategory('${cat.id}')"><i class="ri-delete-bin-line"></i></button>
                 </div>
             </div>
@@ -105,13 +101,10 @@ async function loadPLData() {
     const lastDay = new Date(year, monthNum, 0).getDate();
     const endDate = `${month}-${lastDay}`;
 
-    // অটো ডাটা ফেচিং (Sales & Expenses)
     const { data: sales } = await _supabase.from('sales').select('amount, sale_type').eq('user_id', currentUser.id).gte('report_date', startDate).lte('report_date', endDate);
     const { data: expenses } = await _supabase.from('expenses').select('amount').eq('user_id', currentUser.id).gte('report_date', startDate).lte('report_date', endDate);
     const { data: allStaff } = await _supabase.from('staff').select('id, basic_salary').eq('user_id', currentUser.id);
     const { data: salaryRecs } = await _supabase.from('salary_records').select('staff_id, net_salary').eq('user_id', currentUser.id).eq('month_year', month);
-
-    // সেভ করা ম্যানুয়াল ডাটা লোড
     const { data: savedData } = await _supabase.from('pl_monthly_data').select('*').eq('user_id', currentUser.id).eq('month_year', month).maybeSingle();
 
     let autoCash = 0, autoCard = 0, autoOnline = 0;
@@ -131,7 +124,6 @@ async function loadPLData() {
         });
     }
 
-    // ভ্যালুগুলো ইনপুট বক্সে বসানো
     categories.REVENUE.concat(categories.EXPENSE).forEach(cat => {
         const input = document.getElementById(`val-${cat.id}`);
         if(!input) return;
@@ -140,7 +132,6 @@ async function loadPLData() {
             input.value = savedData.values[cat.id];
             if(cat.is_special) document.getElementById(`comm-${cat.id}`).value = savedData.commissions[cat.id] || 0;
         } else {
-            // অটো ভ্যালু লজিক
             if(cat.name.includes('Cash Sale')) input.value = autoCash;
             else if(cat.special_key === 'CARD') input.value = autoCard;
             else if(cat.special_key === 'ONLINE') input.value = autoOnline;
@@ -208,7 +199,15 @@ async function saveMonthlyData() {
 function showAddModal(type) {
     document.getElementById('newCatType').value = type;
     document.getElementById('modalTitle').innerText = `Add New ${type}`;
+    document.getElementById('commSection').style.display = (type === 'REVENUE') ? 'block' : 'none';
+    document.getElementById('hasComm').checked = false;
+    document.getElementById('commInputGroup').style.display = 'none';
     document.getElementById('catModal').classList.remove('hidden');
+}
+
+function toggleCommInput() {
+    const isChecked = document.getElementById('hasComm').checked;
+    document.getElementById('commInputGroup').style.display = isChecked ? 'block' : 'none';
 }
 
 function closeModal() { document.getElementById('catModal').classList.add('hidden'); document.getElementById('newCatName').value = ''; }
@@ -216,9 +215,20 @@ function closeModal() { document.getElementById('catModal').classList.add('hidde
 async function saveCategory() {
     const name = document.getElementById('newCatName').value.trim();
     const type = document.getElementById('newCatType').value;
+    const isSpecial = document.getElementById('hasComm').checked;
+    const defaultComm = parseFloat(document.getElementById('defaultComm').value) || 0;
+
     if(!name) return alert("Name required");
 
-    await _supabase.from('pl_categories').insert({ user_id: currentUser.id, name, type });
+    await _supabase.from('pl_categories').insert({ 
+        user_id: currentUser.id, 
+        name, 
+        type, 
+        is_special: isSpecial,
+        default_comm: defaultComm,
+        special_key: isSpecial ? 'CUSTOM' : null
+    });
+    
     closeModal();
     await loadCategories();
     await loadPLData();
@@ -239,12 +249,11 @@ async function generatePLImage() {
     const tempContent = document.getElementById('tempContent');
     tempContent.innerHTML = document.getElementById('plCaptureArea').innerHTML;
 
-    // Remove delete buttons from image
     tempContent.querySelectorAll('.btn-del-item, .btn-add-cat').forEach(b => b.remove());
     
-    // Convert inputs to text
     tempContent.querySelectorAll('input').forEach(input => {
-        const val = document.getElementById(input.id).value;
+        const originalInput = document.getElementById(input.id);
+        const val = originalInput ? originalInput.value : 0;
         const span = document.createElement('b');
         span.innerText = input.classList.contains('special-comm') ? val + '%' : `₹${parseFloat(val).toLocaleString('en-IN')}`;
         input.parentNode.replaceChild(span, input);
