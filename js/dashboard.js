@@ -70,25 +70,17 @@ function updateDisplayDate(dateStr) {
 async function loadData() {
     const date = document.getElementById('date').value;
     
-    const { data: currentDayBal } = await _supabase.from('daily_balances')
-        .select('opening_balance')
+    // আগের দিনের ক্লোজিং ব্যালেন্স খুঁজে বের করা (এটিই আজকের ওপেনিং হবে)
+    const { data: lastEntry } = await _supabase.from('daily_balances')
+        .select('closing_balance')
         .eq('user_id', currentUser.id)
-        .eq('report_date', date)
+        .lt('report_date', date)
+        .order('report_date', { ascending: false })
+        .limit(1)
         .maybeSingle();
-    
-    if(currentDayBal) {
-        document.getElementById('openingBal').value = currentDayBal.opening_balance;
-    } else {
-        const { data: lastEntry } = await _supabase.from('daily_balances')
-            .select('closing_balance')
-            .eq('user_id', currentUser.id)
-            .lt('report_date', date)
-            .order('report_date', { ascending: false })
-            .limit(1)
-            .maybeSingle();
 
-        document.getElementById('openingBal').value = lastEntry ? lastEntry.closing_balance : 0;
-    }
+    const calculatedOpening = lastEntry ? lastEntry.closing_balance : 0;
+    document.getElementById('openingBal').value = calculatedOpening;
 
     const { data: sales } = await _supabase.from('sales').select('*').eq('user_id', currentUser.id).eq('report_date', date);
     ['saleCash', 'saleCard', 'saleSwiggy', 'saleZomato'].forEach(id => document.getElementById(id).value = 0);
@@ -124,17 +116,13 @@ function updateCalculations() {
     const totalSaleAll = cashSale + cardSale + swiggy + zomato;
     document.getElementById('totalSale').innerText = `₹${totalSaleAll.toLocaleString('en-IN')}`;
 
-    let cashExp = 0;
-    let dueExp = 0;
-    let ownerExp = 0;
-
+    let cashExp = 0, dueExp = 0, ownerExp = 0;
     currentDayExpenses.forEach(exp => { 
         if(exp.payment_source === 'CASH') cashExp += exp.amount;
         else if(exp.payment_source === 'DUE') dueExp += exp.amount;
         else if(exp.payment_source === 'OWNER') ownerExp += exp.amount;
     });
 
-    // Update Expense Breakdown
     document.getElementById('detCashExp').innerText = `₹${cashExp.toLocaleString('en-IN')}`;
     document.getElementById('detDueExp').innerText = `₹${dueExp.toLocaleString('en-IN')}`;
     document.getElementById('detOwnerExp').innerText = `₹${ownerExp.toLocaleString('en-IN')}`;
@@ -142,12 +130,10 @@ function updateCalculations() {
     const totalAllExp = cashExp + dueExp + ownerExp;
     document.getElementById('totalExpAll').innerText = `₹${totalAllExp.toLocaleString('en-IN')}`;
     
-    // আজকের নেট ব্যালেন্স (Today's Profit/Loss)
     const netBalanceToday = cashSale - totalAllExp;
     const netBalEl = document.getElementById('netBalanceToday');
     netBalEl.innerText = `₹${netBalanceToday.toLocaleString('en-IN')}`;
     
-    // ফাইনাল ক্লোজিং ব্যালেন্স = Opening + Today's Net
     const finalClosingBalance = opening + netBalanceToday;
     document.getElementById('closingCashText').innerText = `Final Closing Balance: ₹${finalClosingBalance.toLocaleString('en-IN')}`;
     
@@ -161,13 +147,13 @@ function triggerAutoSave() {
 
     clearTimeout(autoSaveTimeout);
     autoSaveTimeout = setTimeout(async () => {
-        await saveSales(true);
+        await saveSales();
         indicator.style.display = 'flex';
         setTimeout(() => indicator.style.display = 'none', 2000);
     }, 1000);
 }
 
-async function saveSales(isAuto = false) {
+async function saveSales() {
     const date = document.getElementById('date').value;
     const opening = parseFloat(document.getElementById('openingBal').value) || 0;
     const cashSale = parseFloat(document.getElementById('saleCash').value) || 0;
@@ -175,30 +161,18 @@ async function saveSales(isAuto = false) {
     const swiggy = parseFloat(document.getElementById('saleSwiggy').value) || 0;
     const zomato = parseFloat(document.getElementById('saleZomato').value) || 0;
     
-    // মোট খরচ ক্যালকুলেট করা
     let totalAllExp = 0;
     currentDayExpenses.forEach(exp => { totalAllExp += exp.amount; });
-    
-    // আজকের নেট লাভ/ক্ষতি
     const netBalanceToday = cashSale - totalAllExp;
-    
-    // ফাইনাল ক্লোজিং ব্যালেন্স = Opening + Today's Net
     const finalClosingBalance = opening + netBalanceToday;
 
-    // ১. ব্যালেন্স সেভ
-    const { error: balError } = await _supabase.from('daily_balances').upsert({ 
+    await _supabase.from('daily_balances').upsert({ 
         user_id: currentUser.id, 
         report_date: date, 
         opening_balance: opening, 
         closing_balance: finalClosingBalance 
     }, { onConflict: 'user_id, report_date' });
 
-    if(balError) {
-        console.error("Balance Save Error:", balError);
-        return alert("Error saving balance: " + balError.message);
-    }
-
-    // ২. সেলস সেভ
     const types = [
         {t:'CASH', val: cashSale}, 
         {t:'CARD', val: cardSale}, 
@@ -207,40 +181,13 @@ async function saveSales(isAuto = false) {
     ];
 
     for(let item of types) {
-        const { error: saleError } = await _supabase.from('sales').upsert({ 
+        await _supabase.from('sales').upsert({ 
             user_id: currentUser.id, 
             report_date: date, 
             sale_type: item.t, 
             amount: item.val 
         }, { onConflict: 'user_id, report_date, sale_type' });
-
-        if(saleError) {
-            console.error(`Sale Save Error (${item.t}):`, saleError);
-            return alert(`Error saving ${item.t} sale: ` + saleError.message);
-        }
     }
-    
-    if(!isAuto) alert("Data Saved Successfully!");
-    loadData();
-}
-
-function getReportData() {
-    const date = document.getElementById('date').value;
-    const opening = parseFloat(document.getElementById('openingBal').value) || 0;
-    const cashSale = parseFloat(document.getElementById('saleCash').value) || 0;
-    let totalAllExp = 0;
-    currentDayExpenses.forEach(exp => { totalAllExp += exp.amount; });
-    
-    const netToday = cashSale - totalAllExp;
-
-    return {
-        date: date,
-        opening: opening.toLocaleString('en-IN'),
-        cashSale: cashSale.toLocaleString('en-IN'),
-        totalExp: totalAllExp.toLocaleString('en-IN'),
-        netToday: netToday.toLocaleString('en-IN'),
-        finalClosing: (opening + netToday).toLocaleString('en-IN')
-    };
 }
 
 function shareDailyReportText() {
