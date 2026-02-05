@@ -18,28 +18,91 @@
     <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
     <style>
         .danger-zone {
-            margin-top: 50px;
+            margin-top: 40px;
             padding: 25px;
             border: 2px dashed #ef4444;
             border-radius: 20px;
             background: #fff1f1;
+            max-width: 800px;
         }
-        .danger-zone h3 { color: #ef4444; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
-        .danger-zone p { font-size: 0.9rem; color: #7f1d1d; margin-bottom: 20px; }
-        .btn-reset {
-            background: #ef4444;
-            color: white;
-            border: none;
-            padding: 14px 25px;
+        .danger-header { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; color: #ef4444; }
+        .danger-header h3 { margin: 0; font-size: 1.2rem; }
+        
+        .danger-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+        }
+
+        .danger-item {
+            background: white;
+            padding: 15px 20px;
             border-radius: 12px;
-            font-weight: 700;
-            cursor: pointer;
-            transition: 0.3s;
+            border: 1px solid #fecaca;
             display: flex;
+            justify-content: space-between;
             align-items: center;
-            gap: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.02);
         }
-        .btn-reset:hover { background: #b91c1c; transform: translateY(-2px); box-shadow: 0 5px 15px rgba(239, 68, 68, 0.3); }
+        .danger-item span { font-weight: 700; color: #7f1d1d; font-size: 0.9rem; }
+        
+        .btn-del-specific {
+            background: #ef4444; color: white; border: none;
+            padding: 10px 20px; border-radius: 8px; font-weight: 700;
+            cursor: pointer; font-size: 0.85rem; transition: 0.2s;
+            min-width: 80px;
+        }
+        .btn-del-specific:hover { background: #b91c1c; transform: translateY(-1px); }
+
+        .danger-item.full-width {
+            grid-column: 1 / -1;
+            background: #fee2e2;
+            border-color: #ef4444;
+            flex-direction: column;
+            gap: 10px;
+            text-align: center;
+            padding: 20px;
+        }
+        .danger-item.full-width span { font-size: 1rem; text-transform: uppercase; letter-spacing: 1px; }
+        .danger-item.full-width button {
+            width: 100%;
+            background: #b91c1c;
+            padding: 12px;
+            font-size: 1rem;
+        }
+
+        .pwd-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(3px);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 3000; display: none;
+        }
+        .pwd-card {
+            background: white; padding: 30px; border-radius: 20px;
+            width: 90%; max-width: 350px; text-align: center;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+        .pwd-card h3 { margin-top: 0; color: #1e293b; }
+        .pwd-input {
+            width: 100%; padding: 12px; margin: 20px 0;
+            border: 2px solid #e2e8f0; border-radius: 10px;
+            font-size: 1.5rem; text-align: center; letter-spacing: 8px; font-weight: 800;
+            color: #ef4444;
+        }
+        .pwd-input:focus { border-color: #ef4444; outline: none; }
+        
+        .pwd-actions { display: flex; gap: 10px; }
+        .btn-cancel-pwd { flex: 1; padding: 12px; background: #f1f5f9; border: none; border-radius: 10px; font-weight: 700; cursor: pointer; color: #64748b; }
+        .btn-confirm-pwd { flex: 1; padding: 12px; background: #ef4444; color: white; border: none; border-radius: 10px; font-weight: 700; cursor: pointer; }
+
+        @media (min-width: 768px) {
+            .danger-grid { grid-template-columns: 1fr 1fr; gap: 20px; }
+            .danger-item.full-width { flex-direction: row; text-align: left; }
+            .danger-item.full-width button { width: auto; padding: 10px 30px; }
+        }
     </style>
 </head>
 <body>
@@ -89,7 +152,7 @@
             </div>
         </div>
 
-        <div class="glass-card" style="max-width: 500px;">
+        <div class="glass-card" style="max-width: 800px;">
             <div class="card-header">
                 <i class="ri-store-2-line"></i>
                 <h3>Restaurant Profile</h3>
@@ -105,20 +168,66 @@
             <button class="btn-update" onclick="saveSettings()">Save Changes</button>
         </div>
 
-        <!-- Danger Zone: Reset All Data -->
-        <div class="danger-zone" style="max-width: 500px;">
-            <h3><i class="ri-error-warning-line"></i> Danger Zone</h3>
-            <p>এক ক্লিকে আপনার সব ডাটা (Sales, Expenses, Vendors, Staff, History) চিরতরে মুছে ফেলুন। এই কাজটি আর ফিরিয়ে আনা সম্ভব হবে না।</p>
-            <button class="btn-reset" onclick="resetAllData()">
-                <i class="ri-delete-bin-7-line"></i> Reset All Data
-            </button>
+        <!-- Danger Zone -->
+        <div class="danger-zone" style="max-width: 800px;">
+            <div class="danger-header">
+                <i class="ri-error-warning-line" style="font-size: 1.5rem;"></i>
+                <h3>Danger Zone (Reset Data)</h3>
+            </div>
+            <p style="margin-bottom: 20px; color: #7f1d1d; font-size: 0.9rem;">সতর্কতা: নিচের বাটনগুলো ব্যবহার করলে ডাটা চিরতরে মুছে যাবে। ডিলিট করার জন্য পাসওয়ার্ড প্রয়োজন।</p>
+            
+            <div class="danger-grid">
+                <div class="danger-item">
+                    <span>Sales & Cash Tally</span>
+                    <button class="btn-del-specific" onclick="requestDelete('SALES')">Delete</button>
+                </div>
+                <div class="danger-item">
+                    <span>All Expenses</span>
+                    <button class="btn-del-specific" onclick="requestDelete('EXPENSES')">Delete</button>
+                </div>
+                <div class="danger-item">
+                    <span>Vendors & Ledger</span>
+                    <button class="btn-del-specific" onclick="requestDelete('VENDORS')">Delete</button>
+                </div>
+                <div class="danger-item">
+                    <span>Owner Ledger</span>
+                    <button class="btn-del-specific" onclick="requestDelete('OWNER')">Delete</button>
+                </div>
+                <div class="danger-item">
+                    <span>Staff & Salary</span>
+                    <button class="btn-del-specific" onclick="requestDelete('STAFF')">Delete</button>
+                </div>
+                <div class="danger-item">
+                    <span>Profit & Loss Data</span>
+                    <button class="btn-del-specific" onclick="requestDelete('PL')">Delete</button>
+                </div>
+                <div class="danger-item full-width">
+                    <span><i class="ri-alarm-warning-line"></i> RESET EVERYTHING (DANGEROUS)</span>
+                    <button class="btn-del-specific" onclick="requestDelete('ALL')" style="background: #991b1b;">RESET ALL DATA</button>
+                </div>
+            </div>
         </div>
     </main>
+
+    <!-- Password Modal -->
+    <div id="pwdModal" class="pwd-overlay">
+        <div class="pwd-card">
+            <i class="ri-lock-password-line" style="font-size: 3rem; color: #ef4444; margin-bottom: 10px;"></i>
+            <h3>Enter Password</h3>
+            <p style="font-size: 0.85rem; color: #64748b;">To confirm deletion, enter the security code.</p>
+            <input type="password" id="deletePassword" class="pwd-input" placeholder="****" maxlength="4">
+            <div class="pwd-actions">
+                <button class="btn-cancel-pwd" onclick="closePwdModal()">Cancel</button>
+                <button class="btn-confirm-pwd" onclick="confirmDelete()">Confirm</button>
+            </div>
+        </div>
+    </div>
 
     <script src="js/config.js"></script>
     <script src="js/hamburger.js"></script>
     <script>
         let currentUser = null;
+        let targetCategory = null;
         
         window.onload = async () => {
             const session = await checkAuth(true);
@@ -154,36 +263,63 @@
             }
         }
 
-        async function resetAllData() {
-            const confirm1 = confirm("আপনি কি নিশ্চিত যে আপনি সব ডাটা মুছে ফেলতে চান?");
-            if(!confirm1) return;
+        function requestDelete(category) {
+            targetCategory = category;
+            document.getElementById('deletePassword').value = '';
+            document.getElementById('pwdModal').style.display = 'flex';
+            document.getElementById('deletePassword').focus();
+        }
 
-            const confirm2 = confirm("সতর্কবার্তা: সব সেলস, এক্সপেন্স, ভেন্ডর এবং স্টাফ রেকর্ড মুছে যাবে। আপনি কি সত্যিই এটি করতে চান?");
-            if(!confirm2) return;
+        function closePwdModal() {
+            document.getElementById('pwdModal').style.display = 'none';
+            targetCategory = null;
+        }
 
-            const tables = [
-                'sales', 
-                'expenses', 
-                'daily_balances', 
-                'vendors', 
-                'vendor_ledger', 
-                'owner_ledger', 
-                'staff', 
-                'salary_records', 
-                'cash_tally', 
-                'pl_monthly_data', 
-                'expense_categories'
-            ];
+        async function confirmDelete() {
+            const pwd = document.getElementById('deletePassword').value;
+            
+            if (pwd !== '1997') {
+                alert("❌ Wrong Password! Access Denied.");
+                return;
+            }
 
+            closePwdModal();
+            
             try {
-                for (const table of tables) {
-                    const { error } = await _supabase.from(table).delete().eq('user_id', currentUser.id);
-                    if(error) console.error(`Error deleting from ${table}:`, error.message);
+                if (targetCategory === 'SALES' || targetCategory === 'ALL') {
+                    await _supabase.from('sales').delete().eq('user_id', currentUser.id);
+                    await _supabase.from('daily_balances').delete().eq('user_id', currentUser.id);
+                    await _supabase.from('cash_tally').delete().eq('user_id', currentUser.id);
                 }
-                alert("সব ডাটা সফলভাবে মুছে ফেলা হয়েছে!");
-                window.location.href = 'dashboard.html';
+
+                if (targetCategory === 'EXPENSES' || targetCategory === 'ALL') {
+                    await _supabase.from('expenses').delete().eq('user_id', currentUser.id);
+                }
+
+                if (targetCategory === 'VENDORS' || targetCategory === 'ALL') {
+                    await _supabase.from('vendor_ledger').delete().eq('user_id', currentUser.id);
+                    await _supabase.from('vendors').delete().eq('user_id', currentUser.id);
+                }
+
+                if (targetCategory === 'OWNER' || targetCategory === 'ALL') {
+                    await _supabase.from('owner_ledger').delete().eq('user_id', currentUser.id);
+                }
+
+                if (targetCategory === 'STAFF' || targetCategory === 'ALL') {
+                    await _supabase.from('salary_records').delete().eq('user_id', currentUser.id);
+                    await _supabase.from('staff').delete().eq('user_id', currentUser.id);
+                }
+
+                if (targetCategory === 'PL' || targetCategory === 'ALL') {
+                    await _supabase.from('pl_monthly_data').delete().eq('user_id', currentUser.id);
+                }
+
+                alert("✅ Data deleted successfully!");
+                if (targetCategory === 'ALL') window.location.href = 'dashboard.html';
+                else location.reload();
+
             } catch (err) {
-                alert("ডাটা মুছতে সমস্যা হয়েছে। আবার চেষ্টা করুন।");
+                alert("Error deleting data: " + err.message);
                 console.error(err);
             }
         }
