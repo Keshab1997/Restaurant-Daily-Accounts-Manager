@@ -10,6 +10,28 @@
     <link rel="stylesheet" href="css/expense-entry.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
+    <style>
+        .save-status {
+            font-size: 0.8rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 30px;
+            height: 30px;
+        }
+        .status-saving { color: #f59e0b; animation: spin 1s linear infinite; }
+        .status-saved { color: #10b981; }
+        .status-error { color: #ef4444; cursor: pointer; }
+        .status-local { color: #64748b; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        .action-bar { display: none; }
+        .btn-clear-local {
+            background: #fee2e2; color: #ef4444; border: 1px solid #fecaca;
+            padding: 8px 15px; border-radius: 8px; font-weight: 600; cursor: pointer;
+            margin-left: 10px; font-size: 0.85rem;
+        }
+    </style>
 </head>
 <body>
     <div class="hamburger-trigger" onclick="toggleSidebar()"><i class="ri-menu-2-line"></i></div>
@@ -40,11 +62,11 @@
         <div class="top-bar">
             <div class="page-title">
                 <h1>Bulk Expense Entry 📝</h1>
-                <p>Enter multiple expenses with auto-fill support</p>
+                <p>Auto-saves to device first, then cloud.</p>
             </div>
             <div class="accounting-date">
                 <label>Cash Date:</label>
-                <input type="date" id="accDate">
+                <input type="date" id="accDate" onchange="updateAllRowsDate()">
             </div>
         </div>
 
@@ -61,6 +83,7 @@
                             <th width="110">Amount</th>
                             <th width="120">Status</th>
                             <th width="110">Partial</th>
+                            <th width="40">Sync</th>
                             <th width="40"></th>
                         </tr>
                     </thead>
@@ -68,16 +91,17 @@
                 </table>
             </div>
             <div class="table-footer">
-                <button class="btn-add-row" onclick="addRow()"><i class="ri-add-line"></i> Add Row</button>
+                <div>
+                    <button class="btn-add-row" onclick="addNewRow()"><i class="ri-add-line"></i> Add Row</button>
+                    <button class="btn-clear-local" onclick="clearLocalStorage()"><i class="ri-brush-line"></i> Clear Form</button>
+                </div>
                 <div class="total-summary">
                     <span>Total: <strong id="grandTotal">₹0</strong></span>
                 </div>
             </div>
         </div>
 
-        <div class="action-bar">
-            <button class="btn-save-all" onclick="saveAllExpenses()"><i class="ri-save-3-line"></i> Save All Entries</button>
-        </div>
+
     </main>
 
     <datalist id="vendorSuggestions"></datalist>
