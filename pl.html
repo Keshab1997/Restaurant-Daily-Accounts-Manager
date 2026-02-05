@@ -5,18 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/2727/2727313.png">
     <title>Profit & Loss - RestroManager</title>
-    <!-- PWA Meta Tags -->
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#2563eb">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2727/2727313.png">
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/hamburger.css">
     <link rel="stylesheet" href="css/pl.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
+    <style>
+        .btn-del-item {
+            background: none; border: none; color: #94a3b8; cursor: pointer;
+            font-size: 1.1rem; transition: 0.2s; padding: 5px;
+        }
+        .btn-del-item:hover { color: #ef4444; }
+        .pl-item, .pl-item-complex { position: relative; }
+        .item-controls { display: flex; align-items: center; gap: 10px; }
+    </style>
 </head>
 <body>
     <div class="hamburger-trigger" onclick="toggleSidebar()"><i class="ri-menu-2-line"></i></div>
@@ -57,48 +60,19 @@
         </div>
 
         <div class="pl-grid" id="plCaptureArea">
-            <!-- Sales Side -->
+            <!-- Revenue Side -->
             <div class="glass-card pl-card">
-                <div class="card-header"><i class="ri-arrow-up-circle-line text-green"></i> <h3>Total Revenue (Sales)</h3></div>
-                <div class="pl-list">
-                    <div class="pl-item">
-                        <span>Cash Sale (Monthly)</span> 
-                        <input type="number" id="valCashSale" value="0" oninput="calculatePL()" class="inline-input">
-                    </div>
-                    
-                    <div class="pl-item-complex">
-                        <div class="main-row">
-                            <span>Card / UPI Sale</span> 
-                            <input type="number" id="valCardSale" value="0" oninput="calculatePL()" class="inline-input">
-                        </div>
-                        <div class="sub-row">
-                            <label>Comm. %</label>
-                            <input type="number" id="cardComm" value="2" oninput="calculatePL()">
-                            <small id="cardNet">Net: ₹0</small>
-                        </div>
-                    </div>
-
-                    <div class="pl-item-complex">
-                        <div class="main-row">
-                            <span>Online (Swiggy/Zomato)</span> 
-                            <input type="number" id="valOnlineSale" value="0" oninput="calculatePL()" class="inline-input">
-                        </div>
-                        <div class="sub-row">
-                            <label>Comm. %</label>
-                            <input type="number" id="onlineComm" value="25" oninput="calculatePL()">
-                            <small id="onlineNet">Net: ₹0</small>
-                        </div>
-                    </div>
-
-                    <div class="pl-item">
-                        <span>Stock Amount (Closing)</span>
-                        <input type="number" id="stockAmt" value="0" oninput="calculatePL()" class="inline-input">
-                    </div>
-
-                    <div class="pl-total-box green">
-                        <span>TOTAL REVENUE</span>
-                        <h2 id="totalRevenue">₹0</h2>
-                    </div>
+                <div class="card-header">
+                    <i class="ri-arrow-up-circle-line text-green"></i> 
+                    <h3>Total Revenue (Sales)</h3>
+                    <button class="btn-add-cat" onclick="showAddModal('REVENUE')"><i class="ri-add-line"></i></button>
+                </div>
+                <div class="pl-list" id="revenueList">
+                    <!-- Dynamic Revenue Items -->
+                </div>
+                <div class="pl-total-box green">
+                    <span>TOTAL REVENUE</span>
+                    <h2 id="totalRevenue">₹0</h2>
                 </div>
             </div>
 
@@ -107,35 +81,14 @@
                 <div class="card-header">
                     <i class="ri-arrow-down-circle-line text-red"></i> 
                     <h3>Total Expenses</h3>
-                    <button class="btn-add-cat" onclick="showAddCategory()"><i class="ri-add-line"></i></button>
+                    <button class="btn-add-cat" onclick="showAddModal('EXPENSE')"><i class="ri-add-line"></i></button>
                 </div>
-                <div class="pl-list">
-                    <div class="pl-item">
-                        <span>Total Expenses (All)</span> 
-                        <input type="number" id="valCashExp" value="0" oninput="calculatePL()" class="inline-input">
-                    </div>
-                    <div class="pl-item">
-                        <span>Staff Salaries (Total Net)</span> 
-                        <input type="number" id="valSalary" value="0" oninput="calculatePL()" class="inline-input">
-                    </div>
-                    
-                    <div class="pl-item">
-                        <span>Shop Rent</span>
-                        <input type="number" id="expRent" value="0" oninput="calculatePL()" class="inline-input">
-                    </div>
-                    
-                    <div class="pl-item">
-                        <span>GST / Taxes</span>
-                        <input type="number" id="expGST" value="0" oninput="calculatePL()" class="inline-input">
-                    </div>
-
-                    <!-- Dynamic Custom Expenses -->
-                    <div id="customExpensesList"></div>
-
-                    <div class="pl-total-box red">
-                        <span>TOTAL EXPENSES</span>
-                        <h2 id="totalExpenses">₹0</h2>
-                    </div>
+                <div class="pl-list" id="expenseList">
+                    <!-- Dynamic Expense Items -->
+                </div>
+                <div class="pl-total-box red">
+                    <span>TOTAL EXPENSES</span>
+                    <h2 id="totalExpenses">₹0</h2>
                 </div>
             </div>
         </div>
@@ -149,15 +102,19 @@
         </div>
     </main>
 
-    <!-- Modal for adding custom expense category -->
+    <!-- Modal for adding custom category -->
     <div id="catModal" class="modal-overlay hidden">
         <div class="modal-card">
             <div class="modal-header">
-                <h3><i class="ri-add-box-line"></i> Add Expense Category</h3>
+                <h3 id="modalTitle">Add Category</h3>
                 <button class="btn-close-modal" onclick="closeModal()"><i class="ri-close-line"></i></button>
             </div>
             <div class="modal-body">
-                <div class="input-group"><label>Category Name</label><input type="text" id="newCatName" placeholder="e.g. Electricity Bill"></div>
+                <input type="hidden" id="newCatType">
+                <div class="input-group">
+                    <label>Category Name</label>
+                    <input type="text" id="newCatName" placeholder="e.g. Electricity Bill / Extra Sale">
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn-cancel" onclick="closeModal()">Cancel</button>

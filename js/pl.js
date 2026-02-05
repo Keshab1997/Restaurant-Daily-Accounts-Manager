@@ -1,5 +1,5 @@
 let currentUser = null;
-let customCategories = [];
+let categories = { REVENUE: [], EXPENSE: [] };
 let restaurantName = "RestroManager";
 let signatureName = "Authorized Person";
 
@@ -11,11 +11,10 @@ window.onload = async () => {
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     document.getElementById('plMonth').value = currentMonth;
 
-    // Load Profile Settings
     const { data: profile } = await _supabase.from('profiles').select('*').eq('id', currentUser.id).maybeSingle();
     if(profile) {
         restaurantName = profile.restaurant_name || "RestroManager";
-        signatureName = profile.authorized_signature || profile.restaurant_name || "Authorized Person";
+        signatureName = profile.authorized_signature || restaurantName;
         document.getElementById('sideNavName').innerText = restaurantName;
     }
 
@@ -24,151 +23,155 @@ window.onload = async () => {
 };
 
 async function loadCategories() {
-    const { data } = await _supabase.from('expense_categories').select('*').eq('user_id', currentUser.id);
-    customCategories = data || [];
-    renderCustomInputs();
+    const { data } = await _supabase.from('pl_categories').select('*').eq('user_id', currentUser.id);
+    
+    // যদি ডাটাবেস একদম খালি থাকে, তবে ডিফল্ট কিছু ক্যাটাগরি যোগ করা (শুধুমাত্র প্রথমবার)
+    if (!data || data.length === 0) {
+        const defaults = [
+            { name: 'Cash Sale (Monthly)', type: 'REVENUE', is_special: false },
+            { name: 'Card / UPI Sale', type: 'REVENUE', is_special: true, special_key: 'CARD' },
+            { name: 'Online (Swiggy/Zomato)', type: 'REVENUE', is_special: true, special_key: 'ONLINE' },
+            { name: 'Stock Amount (Closing)', type: 'REVENUE', is_special: false },
+            { name: 'Total Expenses (All)', type: 'EXPENSE', is_special: false },
+            { name: 'Staff Salaries (Total Net)', type: 'EXPENSE', is_special: false },
+            { name: 'Shop Rent', type: 'EXPENSE', is_special: false },
+            { name: 'GST / Taxes', type: 'EXPENSE', is_special: false }
+        ];
+        for (let d of defaults) {
+            await _supabase.from('pl_categories').insert({ ...d, user_id: currentUser.id });
+        }
+        return loadCategories();
+    }
+
+    categories.REVENUE = data.filter(c => c.type === 'REVENUE');
+    categories.EXPENSE = data.filter(c => c.type === 'EXPENSE');
+    renderAllItems();
 }
 
-function renderCustomInputs() {
-    const container = document.getElementById('customExpensesList');
-    container.innerHTML = '';
-    customCategories.forEach(cat => {
-        container.innerHTML += `
-            <div class="pl-item">
-                <span>${cat.name}</span>
-                <input type="number" id="custom-${cat.id}" value="0" oninput="calculatePL()" class="inline-input custom-exp-val" data-id="${cat.id}">
-            </div>
-        `;
+function renderAllItems() {
+    const revList = document.getElementById('revenueList');
+    const expList = document.getElementById('expenseList');
+    revList.innerHTML = '';
+    expList.innerHTML = '';
+
+    // Render Revenue
+    categories.REVENUE.forEach(cat => {
+        revList.innerHTML += cat.is_special ? renderSpecialItem(cat) : renderNormalItem(cat);
+    });
+
+    // Render Expenses
+    categories.EXPENSE.forEach(cat => {
+        expList.innerHTML += renderNormalItem(cat);
     });
 }
 
+function renderNormalItem(cat) {
+    return `
+        <div class="pl-item">
+            <span>${cat.name}</span>
+            <div class="item-controls">
+                <input type="number" id="val-${cat.id}" value="0" oninput="calculatePL()" class="inline-input ${cat.type.toLowerCase()}-input" data-id="${cat.id}">
+                <button class="btn-del-item" onclick="deleteCategory('${cat.id}')"><i class="ri-delete-bin-line"></i></button>
+            </div>
+        </div>
+    `;
+}
+
+function renderSpecialItem(cat) {
+    const isCard = cat.special_key === 'CARD';
+    const commDefault = isCard ? 2 : 25;
+    return `
+        <div class="pl-item-complex">
+            <div class="main-row">
+                <span>${cat.name}</span>
+                <div class="item-controls">
+                    <input type="number" id="val-${cat.id}" value="0" oninput="calculatePL()" class="inline-input ${cat.type.toLowerCase()}-input special-base" data-id="${cat.id}" data-special="${cat.special_key}">
+                    <button class="btn-del-item" onclick="deleteCategory('${cat.id}')"><i class="ri-delete-bin-line"></i></button>
+                </div>
+            </div>
+            <div class="sub-row">
+                <label>Comm. %</label>
+                <input type="number" id="comm-${cat.id}" value="${commDefault}" oninput="calculatePL()" class="special-comm">
+                <small id="net-${cat.id}">Net: ₹0</small>
+            </div>
+        </div>
+    `;
+}
+
 async function loadPLData() {
-    const month = document.getElementById('plMonth').value; // YYYY-MM
-    const year = month.split('-')[0];
-    const monthNum = month.split('-')[1];
-    
-    // তারিখের রেঞ্জ ঠিক করা (১ তারিখ থেকে মাসের শেষ তারিখ)
+    const month = document.getElementById('plMonth').value;
+    const [year, monthNum] = month.split('-');
     const startDate = `${month}-01`;
     const lastDay = new Date(year, monthNum, 0).getDate();
     const endDate = `${month}-${lastDay}`;
 
-    // ১. ডাটাবেস থেকে পুরো মাসের সেলস নিয়ে আসা
-    const { data: sales } = await _supabase.from('sales')
-        .select('amount, sale_type')
-        .eq('user_id', currentUser.id)
-        .gte('report_date', startDate)
-        .lte('report_date', endDate);
-
-    // ২. পুরো মাসের সব ধরনের খরচ (CASH + OWNER + DUE) ফেচ করা
-    const { data: expenses } = await _supabase.from('expenses')
-        .select('amount')
-        .eq('user_id', currentUser.id)
-        .gte('report_date', startDate)
-        .lte('report_date', endDate);
-
-    // ৩. সব স্টাফ এবং তাদের স্যালারি রেকর্ড ফেচ করা (স্মার্ট ক্যালকুলেশন)
+    // অটো ডাটা ফেচিং (Sales & Expenses)
+    const { data: sales } = await _supabase.from('sales').select('amount, sale_type').eq('user_id', currentUser.id).gte('report_date', startDate).lte('report_date', endDate);
+    const { data: expenses } = await _supabase.from('expenses').select('amount').eq('user_id', currentUser.id).gte('report_date', startDate).lte('report_date', endDate);
     const { data: allStaff } = await _supabase.from('staff').select('id, basic_salary').eq('user_id', currentUser.id);
     const { data: salaryRecs } = await _supabase.from('salary_records').select('staff_id, net_salary').eq('user_id', currentUser.id).eq('month_year', month);
 
-    // ৪. আগে সেভ করা ম্যানুয়াল ডেটা লোড করা
-    const { data: savedData } = await _supabase.from('pl_monthly_data')
-        .select('*')
-        .eq('user_id', currentUser.id)
-        .eq('month_year', month)
-        .maybeSingle();
+    // সেভ করা ম্যানুয়াল ডাটা লোড
+    const { data: savedData } = await _supabase.from('pl_monthly_data').select('*').eq('user_id', currentUser.id).eq('month_year', month).maybeSingle();
 
-    // অটো-ফেচ করা ভ্যালুগুলো ক্যালকুলেট করা
-    let autoCashSale = 0, autoCardSale = 0, autoOnlineSale = 0;
+    let autoCash = 0, autoCard = 0, autoOnline = 0;
     if(sales) {
         sales.forEach(s => {
-            if(s.sale_type === 'CASH') autoCashSale += s.amount;
-            else if(s.sale_type === 'CARD') autoCardSale += s.amount;
-            else if(s.sale_type === 'SWIGGY' || s.sale_type === 'ZOMATO') autoOnlineSale += s.amount;
+            if(s.sale_type === 'CASH') autoCash += s.amount;
+            else if(s.sale_type === 'CARD') autoCard += s.amount;
+            else autoOnline += s.amount;
         });
     }
-    // সব ধরনের খরচের যোগফল (Total Expense All)
     let autoTotalExp = expenses ? expenses.reduce((sum, e) => sum + e.amount, 0) : 0;
-    
-    // স্মার্ট স্যালারি ক্যালকুলেশন: রেকর্ড থাকলে net_salary, না থাকলে basic_salary
-    let autoSalaryExp = 0;
+    let autoSalary = 0;
     if(allStaff) {
-        allStaff.forEach(staff => {
-            const record = salaryRecs ? salaryRecs.find(r => r.staff_id === staff.id) : null;
-            if(record) {
-                autoSalaryExp += record.net_salary;
-            } else {
-                autoSalaryExp += staff.basic_salary;
-            }
+        allStaff.forEach(s => {
+            const rec = salaryRecs ? salaryRecs.find(r => r.staff_id === s.id) : null;
+            autoSalary += rec ? rec.net_salary : s.basic_salary;
         });
     }
 
-    // UI-তে ডাটা বসানো
-    if(savedData) {
-        document.getElementById('valCashSale').value = savedData.cash_sale_manual || autoCashSale;
-        document.getElementById('valCardSale').value = savedData.card_sale_manual || autoCardSale;
-        document.getElementById('valOnlineSale').value = savedData.online_sale_manual || autoOnlineSale;
-        
-        // এখানে সব খরচের যোগফল বসানো হচ্ছে
-        document.getElementById('valCashExp').value = autoTotalExp;
-        document.getElementById('valSalary').value = autoSalaryExp;
-        
-        document.getElementById('stockAmt').value = savedData.stock_amount || 0;
-        document.getElementById('cardComm').value = savedData.card_commission || 2;
-        document.getElementById('onlineComm').value = savedData.online_commission || 25;
-        document.getElementById('expRent').value = savedData.rent_amount || 0;
-        document.getElementById('expGST').value = savedData.gst_amount || 0;
-        
-        if(savedData.custom_values) {
-            Object.keys(savedData.custom_values).forEach(catId => {
-                const input = document.getElementById(`custom-${catId}`);
-                if(input) input.value = savedData.custom_values[catId];
-            });
+    // ভ্যালুগুলো ইনপুট বক্সে বসানো
+    categories.REVENUE.concat(categories.EXPENSE).forEach(cat => {
+        const input = document.getElementById(`val-${cat.id}`);
+        if(!input) return;
+
+        if(savedData && savedData.values && savedData.values[cat.id] !== undefined) {
+            input.value = savedData.values[cat.id];
+            if(cat.is_special) document.getElementById(`comm-${cat.id}`).value = savedData.commissions[cat.id] || 0;
+        } else {
+            // অটো ভ্যালু লজিক
+            if(cat.name.includes('Cash Sale')) input.value = autoCash;
+            else if(cat.special_key === 'CARD') input.value = autoCard;
+            else if(cat.special_key === 'ONLINE') input.value = autoOnline;
+            else if(cat.name.includes('Total Expenses')) input.value = autoTotalExp;
+            else if(cat.name.includes('Staff Salaries')) input.value = autoSalary;
+            else input.value = 0;
         }
-    } else {
-        document.getElementById('valCashSale').value = autoCashSale;
-        document.getElementById('valCardSale').value = autoCardSale;
-        document.getElementById('valOnlineSale').value = autoOnlineSale;
-        document.getElementById('valCashExp').value = autoTotalExp;
-        document.getElementById('valSalary').value = autoSalaryExp;
-        
-        document.getElementById('stockAmt').value = 0;
-        document.getElementById('expRent').value = 0;
-        document.getElementById('expGST').value = 0;
-        document.querySelectorAll('.custom-exp-val').forEach(i => i.value = 0);
-    }
+    });
 
     calculatePL();
 }
 
 function calculatePL() {
-    const cashSale = parseFloat(document.getElementById('valCashSale').value) || 0;
-    const cardSale = parseFloat(document.getElementById('valCardSale').value) || 0;
-    const onlineSale = parseFloat(document.getElementById('valOnlineSale').value) || 0;
-    
-    const cardComm = parseFloat(document.getElementById('cardComm').value) || 0;
-    const onlineComm = parseFloat(document.getElementById('onlineComm').value) || 0;
-    const stock = parseFloat(document.getElementById('stockAmt').value) || 0;
-
-    const cardNet = cardSale - (cardSale * cardComm / 100);
-    const onlineNet = onlineSale - (onlineSale * onlineComm / 100);
-
-    document.getElementById('cardNet').innerText = `Net: ₹${Math.round(cardNet).toLocaleString('en-IN')}`;
-    document.getElementById('onlineNet').innerText = `Net: ₹${Math.round(onlineNet).toLocaleString('en-IN')}`;
-
-    const totalRev = cashSale + cardNet + onlineNet + stock;
+    let totalRev = 0;
+    categories.REVENUE.forEach(cat => {
+        const base = parseFloat(document.getElementById(`val-${cat.id}`).value) || 0;
+        if(cat.is_special) {
+            const comm = parseFloat(document.getElementById(`comm-${cat.id}`).value) || 0;
+            const net = base - (base * comm / 100);
+            document.getElementById(`net-${cat.id}`).innerText = `Net: ₹${Math.round(net).toLocaleString('en-IN')}`;
+            totalRev += net;
+        } else {
+            totalRev += base;
+        }
+    });
     document.getElementById('totalRevenue').innerText = `₹${Math.round(totalRev).toLocaleString('en-IN')}`;
 
-    const cashExp = parseFloat(document.getElementById('valCashExp').value) || 0;
-    const salaryExp = parseFloat(document.getElementById('valSalary').value) || 0;
-    const rent = parseFloat(document.getElementById('expRent').value) || 0;
-    const gst = parseFloat(document.getElementById('expGST').value) || 0;
-
-    let customTotal = 0;
-    document.querySelectorAll('.custom-exp-val').forEach(input => {
-        customTotal += parseFloat(input.value) || 0;
+    let totalExp = 0;
+    categories.EXPENSE.forEach(cat => {
+        totalExp += parseFloat(document.getElementById(`val-${cat.id}`).value) || 0;
     });
-
-    const totalExp = cashExp + salaryExp + rent + gst + customTotal;
     document.getElementById('totalExpenses').innerText = `₹${Math.round(totalExp).toLocaleString('en-IN')}`;
 
     const final = totalRev - totalExp;
@@ -177,67 +180,73 @@ function calculatePL() {
     const label = document.getElementById('resultLabel');
 
     finalAmt.innerText = `₹${Math.abs(Math.round(final)).toLocaleString('en-IN')}`;
-    
-    if(final >= 0) {
-        finalBox.className = 'final-pl-box profit';
-        label.innerText = "NET PROFIT";
-    } else {
-        finalBox.className = 'final-pl-box loss';
-        label.innerText = "NET LOSS";
-    }
+    if(final >= 0) { finalBox.className = 'final-pl-box profit'; label.innerText = "NET PROFIT"; }
+    else { finalBox.className = 'final-pl-box loss'; label.innerText = "NET LOSS"; }
 }
 
 async function saveMonthlyData() {
     const month = document.getElementById('plMonth').value;
-    
-    const dataToSave = {
-        user_id: currentUser.id,
-        month_year: month,
-        cash_sale_manual: parseFloat(document.getElementById('valCashSale').value) || 0,
-        card_sale_manual: parseFloat(document.getElementById('valCardSale').value) || 0,
-        online_sale_manual: parseFloat(document.getElementById('valOnlineSale').value) || 0,
-        cash_exp_manual: parseFloat(document.getElementById('valCashExp').value) || 0,
-        salary_manual: parseFloat(document.getElementById('valSalary').value) || 0,
-        stock_amount: parseFloat(document.getElementById('stockAmt').value) || 0,
-        card_commission: parseFloat(document.getElementById('cardComm').value) || 0,
-        online_commission: parseFloat(document.getElementById('onlineComm').value) || 0,
-        rent_amount: parseFloat(document.getElementById('expRent').value) || 0,
-        gst_amount: parseFloat(document.getElementById('expGST').value) || 0,
-        custom_values: {}
-    };
+    const values = {};
+    const commissions = {};
 
-    document.querySelectorAll('.custom-exp-val').forEach(input => {
-        const catId = input.getAttribute('data-id');
-        dataToSave.custom_values[catId] = parseFloat(input.value) || 0;
+    categories.REVENUE.concat(categories.EXPENSE).forEach(cat => {
+        values[cat.id] = parseFloat(document.getElementById(`val-${cat.id}`).value) || 0;
+        if(cat.is_special) commissions[cat.id] = parseFloat(document.getElementById(`comm-${cat.id}`).value) || 0;
     });
 
-    const { error } = await _supabase.from('pl_monthly_data').upsert(dataToSave, { onConflict: 'user_id, month_year' });
+    const { error } = await _supabase.from('pl_monthly_data').upsert({
+        user_id: currentUser.id,
+        month_year: month,
+        values,
+        commissions
+    }, { onConflict: 'user_id, month_year' });
 
-    if(error) alert("Error saving: " + error.message);
-    else alert("✅ Monthly P&L Data Saved!");
+    if(error) alert("Error: " + error.message);
+    else alert("✅ Data Saved!");
+}
+
+function showAddModal(type) {
+    document.getElementById('newCatType').value = type;
+    document.getElementById('modalTitle').innerText = `Add New ${type}`;
+    document.getElementById('catModal').classList.remove('hidden');
+}
+
+function closeModal() { document.getElementById('catModal').classList.add('hidden'); document.getElementById('newCatName').value = ''; }
+
+async function saveCategory() {
+    const name = document.getElementById('newCatName').value.trim();
+    const type = document.getElementById('newCatType').value;
+    if(!name) return alert("Name required");
+
+    await _supabase.from('pl_categories').insert({ user_id: currentUser.id, name, type });
+    closeModal();
+    await loadCategories();
+    await loadPLData();
+}
+
+async function deleteCategory(id) {
+    if(!confirm("Are you sure you want to remove this item?")) return;
+    await _supabase.from('pl_categories').delete().eq('id', id);
+    await loadCategories();
+    await loadPLData();
 }
 
 async function generatePLImage() {
-    const monthInput = document.getElementById('plMonth').value;
-    const dateObj = new Date(monthInput + "-01");
-    const monthName = dateObj.toLocaleString('default', { month: 'long', year: 'numeric' });
-
     document.getElementById('tempRestroName').innerText = restaurantName;
-    document.getElementById('tempMonthTitle').innerText = monthName;
+    document.getElementById('tempMonthTitle').innerText = document.getElementById('plMonth').value;
     document.getElementById('tempSignature').innerText = signatureName;
 
     const tempContent = document.getElementById('tempContent');
     tempContent.innerHTML = document.getElementById('plCaptureArea').innerHTML;
 
-    // Convert inputs to text for image
+    // Remove delete buttons from image
+    tempContent.querySelectorAll('.btn-del-item, .btn-add-cat').forEach(b => b.remove());
+    
+    // Convert inputs to text
     tempContent.querySelectorAll('input').forEach(input => {
-        const originalInput = document.getElementById(input.id);
-        const val = originalInput ? originalInput.value : input.value;
+        const val = document.getElementById(input.id).value;
         const span = document.createElement('b');
-        if(input.id === 'cardComm' || input.id === 'onlineComm') span.innerText = val + '%';
-        else span.innerText = `₹${(parseFloat(val) || 0).toLocaleString('en-IN')}`;
-        span.style.fontSize = '1.1rem';
-        span.style.fontWeight = '800';
+        span.innerText = input.classList.contains('special-comm') ? val + '%' : `₹${parseFloat(val).toLocaleString('en-IN')}`;
         input.parentNode.replaceChild(span, input);
     });
 
@@ -245,37 +254,15 @@ async function generatePLImage() {
     const tempFinalBox = document.getElementById('tempFinalResult');
     tempFinalBox.style.background = isProfit ? '#d1fae5' : '#fee2e2';
     tempFinalBox.style.color = isProfit ? '#059669' : '#ef4444';
-    tempFinalBox.style.border = isProfit ? '2px solid #059669' : '2px solid #ef4444';
     document.getElementById('tempResultLabel').innerText = document.getElementById('resultLabel').innerText;
     document.getElementById('tempFinalAmount').innerText = document.getElementById('finalAmount').innerText;
 
     html2canvas(document.getElementById('plImageTemplate'), { scale: 2 }).then(canvas => {
         const link = document.createElement('a');
-        link.download = `PL_Report_${monthInput}.png`;
+        link.download = `PL_Report.png`;
         link.href = canvas.toDataURL();
         link.click();
-        
-        if (navigator.share) {
-            canvas.toBlob(blob => {
-                const file = new File([blob], "pl_report.png", { type: "image/png" });
-                navigator.share({ files: [file], title: 'Monthly P&L Report' }).catch(console.error);
-            });
-        }
     });
-}
-
-function showAddCategory() { document.getElementById('catModal').classList.remove('hidden'); }
-function closeModal() { 
-    document.getElementById('catModal').classList.add('hidden'); 
-    document.getElementById('newCatName').value = '';
-}
-
-async function saveCategory() {
-    const name = document.getElementById('newCatName').value.trim();
-    if(!name) return alert("Category name required");
-    await _supabase.from('expense_categories').insert({ user_id: currentUser.id, name });
-    closeModal();
-    await loadCategories();
 }
 
 async function logout() { await _supabase.auth.signOut(); window.location.href = 'index.html'; }
