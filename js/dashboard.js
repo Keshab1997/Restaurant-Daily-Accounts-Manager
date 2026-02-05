@@ -2,6 +2,7 @@ let currentUser = null;
 let restaurantName = "RestroManager";
 let signatureName = "Authorized Person";
 let currentDayExpenses = [];
+let autoSaveTimeout = null;
 
 window.onload = async () => {
     const session = await checkAuth(true);
@@ -26,8 +27,39 @@ window.onload = async () => {
         loadData();
     });
 
+    const inputs = ['openingBal', 'saleCash', 'saleCard', 'saleSwiggy', 'saleZomato'];
+    inputs.forEach((id, index) => {
+        const el = document.getElementById(id);
+        el.addEventListener('input', function() {
+            formatInput(this);
+            updateCalculations();
+            triggerAutoSave();
+        });
+        el.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const nextId = inputs[index + 1];
+                if (nextId) {
+                    const nextEl = document.getElementById(nextId);
+                    nextEl.focus();
+                    nextEl.select();
+                } else {
+                    this.blur();
+                }
+            }
+        });
+    });
+
     await loadData();
 };
+
+function formatInput(input) {
+    let val = input.value;
+    if (val.length > 1 && val.startsWith('0')) {
+        input.value = val.replace(/^0+/, '');
+    }
+    if (input.value === '') input.value = '0';
+}
 
 function updateDisplayDate(dateStr) {
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
@@ -123,7 +155,19 @@ function updateCalculations() {
     else netBalEl.style.color = "#059669";
 }
 
-async function saveSales() {
+function triggerAutoSave() {
+    const indicator = document.getElementById('autoSaveIndicator');
+    indicator.style.display = 'none';
+
+    clearTimeout(autoSaveTimeout);
+    autoSaveTimeout = setTimeout(async () => {
+        await saveSales(true);
+        indicator.style.display = 'flex';
+        setTimeout(() => indicator.style.display = 'none', 2000);
+    }, 1000);
+}
+
+async function saveSales(isAuto = false) {
     const date = document.getElementById('date').value;
     const opening = parseFloat(document.getElementById('openingBal').value) || 0;
     const cashSale = parseFloat(document.getElementById('saleCash').value) || 0;
@@ -176,7 +220,7 @@ async function saveSales() {
         }
     }
     
-    alert("Data Saved Successfully!");
+    if(!isAuto) alert("Data Saved Successfully!");
     loadData();
 }
 

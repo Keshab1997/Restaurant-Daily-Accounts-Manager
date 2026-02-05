@@ -31,6 +31,8 @@
         .sale-input-box label i { font-size: 1.1rem; color: #2563eb; }
         .sale-input-box input { width: 100%; border: none; font-size: 1.2rem; font-weight: 700; color: #1e293b; outline: none; }
 
+        .auto-save-status { font-size: 0.85rem; color: #10b981; font-weight: 700; display: none; align-items: center; gap: 5px; margin-top: 5px; }
+
         /* Comparison Section */
         .comparison-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; margin-bottom: 30px; }
         .comp-card { background: white; border-radius: 20px; padding: 0; overflow: hidden; border: 1px solid #e2e8f0; }
@@ -71,6 +73,7 @@
             <a href="expense-entry.html"><i class="ri-shopping-cart-2-line"></i> <span>Expense Entry</span></a>
             <a href="expense-history.html"><i class="ri-history-line"></i> <span>Expense History</span></a>
             <a href="tally.html"><i class="ri-money-dollar-box-line"></i> <span>Cash Tally</span></a>
+            <a href="tally-history.html"><i class="ri-calendar-check-line"></i> <span>Tally History</span></a>
             <a href="vendors.html"><i class="ri-store-2-line"></i> <span>Vendors</span></a>
             <a href="vendor-history.html"><i class="ri-file-list-3-line"></i> <span>Vendor History</span></a>
             <a href="owner.html"><i class="ri-user-star-line"></i> <span>Owner</span></a>
@@ -88,6 +91,7 @@
                 <div>
                     <h1 id="mainRestroName" style="font-size: 1.8rem; font-weight: 800; color: #1e293b; margin: 0;">Ichamotee Resturent</h1>
                     <p id="displayDate" style="color: #64748b; font-weight: 500; margin-top: 5px;">Loading...</p>
+                    <div id="autoSaveIndicator" class="auto-save-status"><i class="ri-checkbox-circle-line"></i> Saved to Cloud</div>
                 </div>
                 <div class="date-selector" style="background: #f1f5f9; padding: 10px 15px; border-radius: 12px; display: flex; align-items: center; gap: 10px;">
                     <i class="ri-calendar-line" style="color: #2563eb;"></i>
@@ -100,24 +104,24 @@
         <div class="entry-section">
             <div class="opening-card">
                 <label>Opening Balance</label>
-                <input type="number" id="openingBal" placeholder="0" oninput="updateCalculations()">
+                <input type="number" id="openingBal" placeholder="0">
             </div>
             <div class="sales-grid">
                 <div class="sale-input-box">
                     <label><i class="ri-money-dollar-circle-line"></i> Cash Sale</label>
-                    <input type="number" id="saleCash" placeholder="0" oninput="updateCalculations()">
+                    <input type="number" id="saleCash" placeholder="0">
                 </div>
                 <div class="sale-input-box">
                     <label><i class="ri-bank-card-line"></i> Card / UPI</label>
-                    <input type="number" id="saleCard" placeholder="0" oninput="updateCalculations()">
+                    <input type="number" id="saleCard" placeholder="0">
                 </div>
                 <div class="sale-input-box">
                     <label><i class="ri-EBike-2-line"></i> Swiggy</label>
-                    <input type="number" id="saleSwiggy" placeholder="0" oninput="updateCalculations()">
+                    <input type="number" id="saleSwiggy" placeholder="0">
                 </div>
                 <div class="sale-input-box">
                     <label><i class="ri-EBike-line"></i> Zomato</label>
-                    <input type="number" id="saleZomato" placeholder="0" oninput="updateCalculations()">
+                    <input type="number" id="saleZomato" placeholder="0">
                 </div>
             </div>
         </div>

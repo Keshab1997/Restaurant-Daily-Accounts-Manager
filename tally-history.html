@@ -4,10 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/2727/2727313.png">
-    <title>Bulk Expense Entry - RestroManager</title>
+    <title>Tally History - RestroManager</title>
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/hamburger.css">
-    <link rel="stylesheet" href="css/expense-entry.css">
+    <link rel="stylesheet" href="css/tally-history.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
 </head>
@@ -21,10 +21,10 @@
         </div>
         <nav class="sidebar-nav-links">
             <a href="dashboard.html"><i class="ri-home-4-line"></i> <span>Home</span></a>
-            <a href="expense-entry.html" class="active"><i class="ri-shopping-cart-2-line"></i> <span>Expense Entry</span></a>
+            <a href="expense-entry.html"><i class="ri-shopping-cart-2-line"></i> <span>Expense Entry</span></a>
             <a href="expense-history.html"><i class="ri-history-line"></i> <span>Expense History</span></a>
             <a href="tally.html"><i class="ri-money-dollar-box-line"></i> <span>Cash Tally</span></a>
-            <a href="tally-history.html"><i class="ri-calendar-check-line"></i> <span>Tally History</span></a>
+            <a href="tally-history.html" class="active"><i class="ri-calendar-check-line"></i> <span>Tally History</span></a>
             <a href="vendors.html"><i class="ri-store-2-line"></i> <span>Vendors</span></a>
             <a href="vendor-history.html"><i class="ri-file-list-3-line"></i> <span>Vendor History</span></a>
             <a href="owner.html"><i class="ri-user-star-line"></i> <span>Owner</span></a>
@@ -39,52 +39,49 @@
     <main class="main-content">
         <div class="top-bar">
             <div class="page-title">
-                <h1>Bulk Expense Entry 📝</h1>
-                <p>Enter multiple expenses with auto-fill support</p>
-            </div>
-            <div class="accounting-date">
-                <label>Cash Date:</label>
-                <input type="date" id="accDate">
+                <h1>Cash Tally History 📊</h1>
+                <p>View and search all your daily cash tally records</p>
             </div>
         </div>
 
-        <div class="glass-card excel-container">
-            <div class="table-wrapper">
-                <table class="excel-table" id="expenseTable">
-                    <thead>
-                        <tr>
-                            <th width="40">#</th>
-                            <th>Vendor Name</th>
-                            <th>Item / Category</th>
-                            <th width="140">Bill Date</th>
-                            <th width="90">Bill No</th>
-                            <th width="110">Amount</th>
-                            <th width="120">Status</th>
-                            <th width="110">Partial</th>
-                            <th width="40"></th>
-                        </tr>
-                    </thead>
-                    <tbody id="expenseBody"></tbody>
-                </table>
-            </div>
-            <div class="table-footer">
-                <button class="btn-add-row" onclick="addRow()"><i class="ri-add-line"></i> Add Row</button>
-                <div class="total-summary">
-                    <span>Total: <strong id="grandTotal">₹0</strong></span>
+        <div class="glass-card filter-section">
+            <div class="filter-grid">
+                <div class="search-box">
+                    <i class="ri-search-line"></i>
+                    <input type="text" id="searchTally" placeholder="Search by date (YYYY-MM-DD)..." oninput="filterTally()">
+                </div>
+                <div class="date-filter">
+                    <label>Select Month</label>
+                    <input type="month" id="filterMonth" onchange="loadFullHistory()">
                 </div>
             </div>
         </div>
 
-        <div class="action-bar">
-            <button class="btn-save-all" onclick="saveAllExpenses()"><i class="ri-save-3-line"></i> Save All Entries</button>
+        <div class="glass-card table-card">
+            <div class="table-wrapper">
+                <table class="history-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Physical Cash</th>
+                            <th>System Cash</th>
+                            <th>Difference</th>
+                            <th>Cumul. Shortage</th>
+                            <th>Status</th>
+                            <th width="80">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tallyHistoryBody"></tbody>
+                </table>
+            </div>
         </div>
-    </main>
 
-    <datalist id="vendorSuggestions"></datalist>
+        <div id="mobileTallyList" class="mobile-view"></div>
+    </main>
 
     <script src="js/config.js"></script>
     <script src="js/hamburger.js"></script>
-    <script src="js/expense-entry.js"></script>
+    <script src="js/tally-history.js"></script>
     <script src="js/shortcuts.js"></script>
 </body>
 </html>
