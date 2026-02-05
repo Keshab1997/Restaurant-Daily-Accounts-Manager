@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/2727/2727313.png">
+    <title>Owner History - RestroManager</title>
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/hamburger.css">
+    <link rel="stylesheet" href="css/owner-history.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
+</head>
+<body>
+    <div class="hamburger-trigger" onclick="toggleSidebar()"><i class="ri-menu-2-line"></i></div>
+
+    <div id="sidebarMenu" class="custom-sidebar">
+        <div class="sidebar-header">
+            <div class="nav-logo"><i class="ri-restaurant-2-line"></i><span>RestroManager</span></div>
+            <i class="ri-close-line close-sidebar" onclick="toggleSidebar()"></i>
+        </div>
+        <nav class="sidebar-nav-links">
+            <a href="dashboard.html"><i class="ri-home-4-line"></i> <span>Home</span></a>
+            <a href="expense-entry.html"><i class="ri-shopping-cart-2-line"></i> <span>Expense Entry</span></a>
+            <a href="expense-history.html"><i class="ri-history-line"></i> <span>Expense History</span></a>
+            <a href="tally.html"><i class="ri-money-dollar-box-line"></i> <span>Cash Tally</span></a>
+            <a href="tally-history.html"><i class="ri-calendar-check-line"></i> <span>Tally History</span></a>
+            <a href="vendors.html"><i class="ri-store-2-line"></i> <span>Vendors</span></a>
+            <a href="vendor-history.html"><i class="ri-file-list-3-line"></i> <span>Vendor History</span></a>
+            <a href="owner.html"><i class="ri-user-star-line"></i> <span>Owner</span></a>
+            <a href="owner-history.html" class="active"><i class="ri-file-list-3-line"></i> <span>Owner History</span></a>
+            <a href="salary.html"><i class="ri-contacts-book-line"></i> <span>Salary Sheet</span></a>
+            <a href="pl.html"><i class="ri-pie-chart-line"></i> <span>Profit & Loss</span></a>
+            <a href="settings.html"><i class="ri-settings-3-line"></i> <span>Settings</span></a>
+        </nav>
+        <div class="sidebar-bottom"><a onclick="logout()" class="logout-link"><i class="ri-logout-box-r-line"></i> <span>Logout</span></a></div>
+    </div>
+    <div id="menuOverlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+    <main class="main-content">
+        <div class="top-bar">
+            <div class="page-title">
+                <h1>Owner Transaction History 📜</h1>
+                <p>Detailed report of loans and handovers</p>
+            </div>
+            <button class="btn-export" onclick="exportToExcel()">
+                <i class="ri-file-excel-2-line"></i> Export CSV
+            </button>
+        </div>
+
+        <div class="glass-card filter-section">
+            <div class="filter-grid">
+                <div class="date-group">
+                    <label>From Date</label>
+                    <input type="date" id="fromDate" onchange="applyFilters()">
+                </div>
+                <div class="date-group">
+                    <label>To Date</label>
+                    <input type="date" id="toDate" onchange="applyFilters()">
+                </div>
+                <div class="type-group">
+                    <label>Transaction Type</label>
+                    <select id="typeFilter" onchange="applyFilters()">
+                        <option value="ALL">All Transactions</option>
+                        <option value="LOAN_TAKEN">Loan Taken (In)</option>
+                        <option value="CASH_HANDOVER">Cash Handover (Out)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="summary-bar">
+            <div class="sum-box red">
+                <span>Total Loan Taken</span>
+                <h3 id="sumLoan">₹0</h3>
+            </div>
+            <div class="sum-box green">
+                <span>Total Handover</span>
+                <h3 id="sumHandover">₹0</h3>
+            </div>
+            <div class="sum-box blue">
+                <span>Net Payable</span>
+                <h3 id="sumNet">₹0</h3>
+            </div>
+        </div>
+
+        <div class="glass-card table-card">
+            <div class="table-wrapper">
+                <table class="history-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Description / Reason</th>
+                            <th>Type</th>
+                            <th>Amount</th>
+                            <th width="80">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="mobileList" class="mobile-view"></div>
+    </main>
+
+    <script src="js/config.js"></script>
+    <script src="js/hamburger.js"></script>
+    <script src="js/owner-history.js"></script>
+</body>
+</html>
