@@ -186,6 +186,8 @@ async function addEntry() {
 
     if(!amount || billNo === "") return alert("Please enter amount and numeric Bill Number");
 
+    const { data: vendor } = await _supabase.from('vendors').select('name').eq('id', vendorId).single();
+
     // 1. Add to Vendor Ledger
     const { error } = await _supabase.from('vendor_ledger').insert({
         user_id: currentUser.id,
@@ -202,16 +204,56 @@ async function addEntry() {
         return;
     }
 
-    // 2. If Owner Payment, Add to Owner Ledger (Loan Taken)
-    if(type === 'PAYMENT_OWNER') {
-        const { data: vendor } = await _supabase.from('vendors').select('name').eq('id', vendorId).single();
-        await _supabase.from('owner_ledger').insert({
+    // 2. Expense Management (Prevent Double Entry)
+    if(type === 'BILL') {
+        await _supabase.from('expenses').insert({
             user_id: currentUser.id,
-            t_date: date,
-            t_type: 'LOAN_TAKEN',
+            report_date: date,
+            description: `${vendor.name} (${desc || 'Bill'})`,
             amount: amount,
-            description: `Paid to ${vendor.name} (Bill #${billNo})`
+            payment_source: 'DUE',
+            bill_no: billNo.toString()
         });
+    } 
+    else if(type === 'PAYMENT' || type === 'PAYMENT_OWNER') {
+        const source = (type === 'PAYMENT') ? 'CASH' : 'OWNER';
+        
+        // Add payment entry
+        await _supabase.from('expenses').insert({
+            user_id: currentUser.id,
+            report_date: date,
+            description: `${vendor.name} (Payment Bill #${billNo})`,
+            amount: amount,
+            payment_source: source,
+            bill_no: billNo.toString()
+        });
+
+        // Update or delete DUE entry
+        const { data: existingDue } = await _supabase.from('expenses')
+            .select('*')
+            .eq('user_id', currentUser.id)
+            .eq('bill_no', billNo.toString())
+            .eq('payment_source', 'DUE')
+            .maybeSingle();
+
+        if (existingDue) {
+            const remainingDue = existingDue.amount - amount;
+            if (remainingDue > 0) {
+                await _supabase.from('expenses').update({ amount: remainingDue }).eq('id', existingDue.id);
+            } else {
+                await _supabase.from('expenses').delete().eq('id', existingDue.id);
+            }
+        }
+
+        if(type === 'PAYMENT_OWNER') {
+            await _supabase.from('owner_ledger').insert({
+                user_id: currentUser.id,
+                t_date: date,
+                t_type: 'LOAN_TAKEN',
+                amount: amount,
+                description: `Paid to ${vendor.name} (Bill #${billNo})`
+            });
+        }
     }
 
     document.getElementById('entryAmount').value = '';
@@ -228,13 +270,51 @@ async function logout() {
 async function deleteEntry(id, type) {
     if(!confirm("Are you sure you want to delete this entry?")) return;
 
+    const { data: record } = await _supabase.from('vendor_ledger')
+        .select('*, vendors(name)')
+        .eq('id', id)
+        .single();
+
     const { error } = await _supabase.from('vendor_ledger').delete().eq('id', id);
 
     if(error) {
         alert("Error deleting: " + error.message);
     } else {
-        if(type === 'PAYMENT_OWNER') {
-            alert("⚠️ Note: This was an Owner Payment. Please manually delete the corresponding entry from the Owner Ledger page to keep balances correct.");
+        if(type === 'BILL') {
+            await _supabase.from('expenses').delete()
+                .eq('user_id', currentUser.id)
+                .eq('bill_no', record.bill_no)
+                .eq('payment_source', 'DUE');
+        } else if(type === 'PAYMENT' || type === 'PAYMENT_OWNER') {
+            const expDesc = `${record.vendors.name} (Payment Bill #${record.bill_no})`;
+            
+            await _supabase.from('expenses').delete()
+                .eq('user_id', currentUser.id)
+                .eq('report_date', record.t_date)
+                .eq('amount', record.amount)
+                .eq('description', expDesc);
+
+            // Restore DUE amount
+            const { data: existingDue } = await _supabase.from('expenses')
+                .select('*')
+                .eq('user_id', currentUser.id)
+                .eq('bill_no', record.bill_no)
+                .eq('payment_source', 'DUE')
+                .maybeSingle();
+
+            if (existingDue) {
+                await _supabase.from('expenses').update({
+                    amount: existingDue.amount + record.amount
+                }).eq('id', existingDue.id);
+            }
+
+            if(type === 'PAYMENT_OWNER') {
+                await _supabase.from('owner_ledger').delete()
+                    .eq('user_id', currentUser.id)
+                    .eq('t_date', record.t_date)
+                    .eq('amount', record.amount)
+                    .eq('t_type', 'LOAN_TAKEN');
+            }
         }
         loadDetails();
     }

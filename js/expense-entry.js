@@ -69,16 +69,19 @@ async function handleVendorChange(input) {
             row.querySelector('.v-bill-no').value = 1;
         }
 
-        // 2. Auto-fill Item/Category (Last used item)
-        const { data: lastExp } = await _supabase.from('expenses')
+        // 2. Auto-fill Item/Category (Smart Logic - Skip Payment entries)
+        const { data: recentExps } = await _supabase.from('expenses')
             .select('description')
             .ilike('description', `${name}%`)
             .order('created_at', { ascending: false })
-            .limit(1);
+            .limit(10);
 
-        if (lastExp && lastExp.length > 0) {
-            const match = lastExp[0].description.match(/\(([^)]+)\)/);
-            if (match) row.querySelector('.v-item').value = match[1];
+        if (recentExps && recentExps.length > 0) {
+            const validExp = recentExps.find(e => !e.description.toLowerCase().includes('payment'));
+            if (validExp) {
+                const match = validExp.description.match(/\(([^)]+)\)/);
+                if (match) row.querySelector('.v-item').value = match[1];
+            }
         }
     }
 }

@@ -155,7 +155,44 @@
         }
 
         async function deleteExp(id) {
-            if(!confirm("Delete this expense?")) return;
+            if(!confirm("Delete this expense? It will also be removed from Vendor Ledger if linked.")) return;
+
+            const { data: expRecord } = await _supabase.from('expenses')
+                .select('*')
+                .eq('id', id)
+                .single();
+
+            if (!expRecord) return;
+
+            if (expRecord.bill_no) {
+                const vendorName = expRecord.description.split(' (')[0];
+                const vendor = vendorsList.find(v => v.name.toLowerCase() === vendorName.toLowerCase());
+
+                if (vendor) {
+                    if(expRecord.payment_source === 'DUE') {
+                        await _supabase.from('vendor_ledger').delete()
+                            .eq('user_id', currentUser.id)
+                            .eq('vendor_id', vendor.id)
+                            .eq('bill_no', expRecord.bill_no)
+                            .eq('t_type', 'BILL');
+                    } else {
+                        await _supabase.from('vendor_ledger').delete()
+                            .eq('user_id', currentUser.id)
+                            .eq('vendor_id', vendor.id)
+                            .eq('bill_no', expRecord.bill_no)
+                            .eq('amount', expRecord.amount)
+                            .in('t_type', ['PAYMENT', 'PAYMENT_OWNER']);
+                    }
+                }
+            }
+
+            if (expRecord.payment_source === 'OWNER') {
+                await _supabase.from('owner_ledger').delete()
+                    .eq('user_id', currentUser.id)
+                    .eq('t_date', expRecord.report_date)
+                    .eq('amount', expRecord.amount);
+            }
+
             await _supabase.from('expenses').delete().eq('id', id);
             loadHistory();
         }
