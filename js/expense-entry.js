@@ -12,7 +12,7 @@ window.onload = async () => {
     document.getElementById('accDate').value = today;
 
     await fetchVendors();
-    loadFromLocalStorage(); // Load saved data first
+    loadFromLocalStorage(); 
 };
 
 async function fetchVendors() {
@@ -23,7 +23,6 @@ async function fetchVendors() {
     }
 }
 
-// Load data from LocalStorage on startup
 function loadFromLocalStorage() {
     const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
     const tbody = document.getElementById('expenseBody');
@@ -60,7 +59,9 @@ function addNewRow() {
         status: 'PAID',
         partial: '',
         ledgerId: null,
-        ownerId: null
+        ownerId: null,
+        dueExpenseId: null, // New: For Partial Due part
+        payLedgerId: null   // New: For Payment part in Ledger
     });
     saveToLocalStorage();
 }
@@ -71,12 +72,15 @@ function createRowHTML(data) {
     const tr = document.createElement('tr');
     tr.id = `row-${rowCount}`;
     
-    // Store DB IDs in attributes (Handle nulls correctly)
+    // Store DB IDs
     tr.setAttribute('data-expense-id', (data.id && data.id !== "null") ? data.id : '');
+    tr.setAttribute('data-due-expense-id', (data.dueExpenseId && data.dueExpenseId !== "null") ? data.dueExpenseId : '');
+    
     tr.setAttribute('data-ledger-id', (data.ledgerId && data.ledgerId !== "null") ? data.ledgerId : '');
+    tr.setAttribute('data-pay-ledger-id', (data.payLedgerId && data.payLedgerId !== "null") ? data.payLedgerId : '');
+    
     tr.setAttribute('data-owner-id', (data.ownerId && data.ownerId !== "null") ? data.ownerId : '');
 
-    // Determine icon based on sync status
     let iconHtml = '';
     if (data.id && data.id !== "null") iconHtml = '<i class="ri-checkbox-circle-line status-saved" title="Synced"></i>';
     else if (data.vendor && data.amount) iconHtml = '<i class="ri-cloud-off-line status-local" title="Saved Locally"></i>';
@@ -120,7 +124,9 @@ function saveToLocalStorage() {
     document.querySelectorAll('#expenseBody tr').forEach(tr => {
         rows.push({
             id: tr.getAttribute('data-expense-id') || null,
+            dueExpenseId: tr.getAttribute('data-due-expense-id') || null,
             ledgerId: tr.getAttribute('data-ledger-id') || null,
+            payLedgerId: tr.getAttribute('data-pay-ledger-id') || null,
             ownerId: tr.getAttribute('data-owner-id') || null,
             vendor: tr.querySelector('.v-name').value,
             item: tr.querySelector('.v-item').value,
@@ -168,17 +174,26 @@ async function syncRowToSupabase(id) {
     const fullDesc = itemName ? `${vendorName} (${itemName})` : vendorName;
     const vendor = vendorsList.find(v => v.name.toLowerCase() === vendorName.toLowerCase());
     
-    // FIX: Get IDs and ensure they are not empty strings
+    // Get IDs
     let expenseId = row.getAttribute('data-expense-id');
+    let dueExpenseId = row.getAttribute('data-due-expense-id');
     let ledgerId = row.getAttribute('data-ledger-id');
+    let payLedgerId = row.getAttribute('data-pay-ledger-id');
     let ownerId = row.getAttribute('data-owner-id');
 
+    // Clean IDs
     if (expenseId === "" || expenseId === "null") expenseId = null;
+    if (dueExpenseId === "" || dueExpenseId === "null") dueExpenseId = null;
     if (ledgerId === "" || ledgerId === "null") ledgerId = null;
+    if (payLedgerId === "" || payLedgerId === "null") payLedgerId = null;
     if (ownerId === "" || ownerId === "null") ownerId = null;
 
     try {
-        // 1. Sync Expense
+        // ============================================================
+        // 1. EXPENSES TABLE LOGIC
+        // ============================================================
+        
+        // 1.1 Main Expense Entry (Usually Cash/Owner/Due)
         let expData = {
             user_id: currentUser.id,
             report_date: accDate,
@@ -194,46 +209,94 @@ async function syncRowToSupabase(id) {
         }
         else if (status === 'DUE') expData.payment_source = 'DUE';
         else if (status === 'PARTIAL') {
+            // For Partial: Main entry is the CASH PAID part
             expData.payment_source = 'CASH'; 
             expData.amount = partialPaid;
             expData.description += " (Partial Paid)";
         }
 
-        // IMPORTANT: Only add ID to object if it exists. Otherwise let Supabase generate it.
         if (expenseId) expData.id = expenseId;
 
         let { data: expResult, error: expError } = await _supabase.from('expenses').upsert(expData).select().single();
-
         if (expError) throw expError;
-        if (expResult) {
-            row.setAttribute('data-expense-id', expResult.id);
-            saveToLocalStorage(); 
+        if (expResult) row.setAttribute('data-expense-id', expResult.id);
+
+        // 1.2 Secondary Expense Entry (Only for PARTIAL DUE)
+        if (status === 'PARTIAL') {
+            let dueAmount = amount - partialPaid;
+            let dueData = {
+                user_id: currentUser.id,
+                report_date: accDate,
+                description: `${fullDesc} (Partial Due)`,
+                amount: dueAmount,
+                payment_source: 'DUE',
+                bill_no: billNo
+            };
+            if (dueExpenseId) dueData.id = dueExpenseId;
+
+            let { data: dueResult, error: dueError } = await _supabase.from('expenses').upsert(dueData).select().single();
+            if (dueError) throw dueError;
+            if (dueResult) row.setAttribute('data-due-expense-id', dueResult.id);
+        } else {
+            // If status changed from PARTIAL to something else, delete the DUE entry
+            if (dueExpenseId) {
+                await _supabase.from('expenses').delete().eq('id', dueExpenseId);
+                row.setAttribute('data-due-expense-id', '');
+            }
         }
 
-        // 2. Sync Vendor Ledger
+        // ============================================================
+        // 2. VENDOR LEDGER LOGIC
+        // ============================================================
         if (vendor) {
-            let ledgerData = {
+            // 2.1 BILL Entry (Always record the full bill)
+            let billData = {
                 user_id: currentUser.id,
                 vendor_id: vendor.id,
                 t_date: billDate,
                 bill_no: billNo,
-                amount: amount,
+                amount: amount, // Full Bill Amount
                 description: `Bill for ${itemName || vendorName}`,
                 t_type: 'BILL'
             };
+            if (ledgerId) billData.id = ledgerId;
 
-            if (ledgerId) ledgerData.id = ledgerId;
+            let { data: billResult, error: billError } = await _supabase.from('vendor_ledger').upsert(billData).select().single();
+            if (billError) throw billError;
+            if (billResult) row.setAttribute('data-ledger-id', billResult.id);
 
-            let { data: ledResult, error: ledError } = await _supabase.from('vendor_ledger').upsert(ledgerData).select().single();
+            // 2.2 PAYMENT Entry (If Cash, Owner, or Partial)
+            if (status === 'PAID' || status === 'OWNER' || status === 'PARTIAL') {
+                let payAmount = (status === 'PARTIAL') ? partialPaid : amount;
+                let payDesc = (status === 'OWNER') ? `Paid by Owner` : `Cash Paid`;
+                if (status === 'PARTIAL') payDesc = `Partial Cash Paid`;
 
-            if (ledError) throw ledError;
-            if (ledResult) {
-                row.setAttribute('data-ledger-id', ledResult.id);
-                saveToLocalStorage();
+                let payData = {
+                    user_id: currentUser.id,
+                    vendor_id: vendor.id,
+                    t_date: accDate,
+                    bill_no: billNo,
+                    amount: payAmount,
+                    description: payDesc,
+                    t_type: (status === 'OWNER') ? 'PAYMENT_OWNER' : 'PAYMENT'
+                };
+                if (payLedgerId) payData.id = payLedgerId;
+
+                let { data: payResult, error: payError } = await _supabase.from('vendor_ledger').upsert(payData).select().single();
+                if (payError) throw payError;
+                if (payResult) row.setAttribute('data-pay-ledger-id', payResult.id);
+            } else {
+                // If status is DUE, there is no payment, so delete payment entry if exists
+                if (payLedgerId) {
+                    await _supabase.from('vendor_ledger').delete().eq('id', payLedgerId);
+                    row.setAttribute('data-pay-ledger-id', '');
+                }
             }
         }
 
-        // 3. Sync Owner Ledger
+        // ============================================================
+        // 3. OWNER LEDGER LOGIC
+        // ============================================================
         if (status === 'OWNER') {
             let ownerData = {
                 user_id: currentUser.id,
@@ -242,22 +305,17 @@ async function syncRowToSupabase(id) {
                 amount: amount,
                 description: `Paid for ${fullDesc}`
             };
-
             if (ownerId) ownerData.id = ownerId;
 
             let { data: ownResult, error: ownError } = await _supabase.from('owner_ledger').upsert(ownerData).select().single();
-
             if (ownError) throw ownError;
-            if (ownResult) {
-                row.setAttribute('data-owner-id', ownResult.id);
-                saveToLocalStorage();
-            }
+            if (ownResult) row.setAttribute('data-owner-id', ownResult.id);
         } else if (ownerId) {
             await _supabase.from('owner_ledger').delete().eq('id', ownerId);
             row.setAttribute('data-owner-id', '');
-            saveToLocalStorage();
         }
 
+        saveToLocalStorage();
         statusIcon.innerHTML = '<i class="ri-checkbox-circle-line status-saved"></i>';
 
     } catch (err) {
@@ -328,12 +386,16 @@ async function removeRow(id) {
     if (!row) return;
 
     let expenseId = row.getAttribute('data-expense-id');
+    let dueExpenseId = row.getAttribute('data-due-expense-id');
     let ledgerId = row.getAttribute('data-ledger-id');
+    let payLedgerId = row.getAttribute('data-pay-ledger-id');
     let ownerId = row.getAttribute('data-owner-id');
 
     if (confirm("Delete this row?")) {
         if (expenseId && expenseId !== "null") await _supabase.from('expenses').delete().eq('id', expenseId);
+        if (dueExpenseId && dueExpenseId !== "null") await _supabase.from('expenses').delete().eq('id', dueExpenseId);
         if (ledgerId && ledgerId !== "null") await _supabase.from('vendor_ledger').delete().eq('id', ledgerId);
+        if (payLedgerId && payLedgerId !== "null") await _supabase.from('vendor_ledger').delete().eq('id', payLedgerId);
         if (ownerId && ownerId !== "null") await _supabase.from('owner_ledger').delete().eq('id', ownerId);
         
         row.remove();
