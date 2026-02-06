@@ -153,6 +153,39 @@ function triggerAutoSave() {
     }, 1000);
 }
 
+async function manualSync() {
+    const btn = document.getElementById('syncBtn');
+    const icon = document.getElementById('syncIcon');
+    const text = btn.querySelector('span');
+
+    btn.disabled = true;
+    btn.classList.add('syncing');
+    icon.classList.add('spin');
+    text.innerText = 'Syncing...';
+
+    try {
+        await saveSales();
+        btn.classList.remove('syncing');
+        btn.classList.add('success');
+        icon.classList.remove('spin');
+        icon.className = 'ri-checkbox-circle-line';
+        text.innerText = 'Synced!';
+
+        setTimeout(() => {
+            btn.disabled = false;
+            btn.classList.remove('success');
+            icon.className = 'ri-refresh-line';
+            text.innerText = 'Sync';
+        }, 3000);
+    } catch (err) {
+        alert('Sync failed: ' + err.message);
+        btn.disabled = false;
+        btn.classList.remove('syncing');
+        icon.classList.remove('spin');
+        text.innerText = 'Sync';
+    }
+}
+
 async function saveSales() {
     const date = document.getElementById('date').value;
     const opening = parseFloat(document.getElementById('openingBal').value) || 0;

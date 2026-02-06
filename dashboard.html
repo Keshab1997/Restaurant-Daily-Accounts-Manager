@@ -32,6 +32,12 @@
         .sale-input-box input { width: 100%; border: none; font-size: 1.2rem; font-weight: 700; color: #1e293b; outline: none; }
 
         .auto-save-status { font-size: 0.85rem; color: #10b981; font-weight: 700; display: none; align-items: center; gap: 5px; margin-top: 5px; }
+        .btn-sync { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; padding: 10px 15px; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: 0.3s; font-size: 0.9rem; }
+        .btn-sync.syncing { background: #fff7ed; color: #ea580c; border-color: #fdba74; }
+        .btn-sync.success { background: #d1fae5; color: #059669; border-color: #34d399; }
+        .btn-sync i { font-size: 1.2rem; }
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
 
         /* Comparison Section */
         .comparison-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; margin-bottom: 30px; }
@@ -94,9 +100,14 @@
                     <p id="displayDate" style="color: #64748b; font-weight: 500; margin-top: 5px;">Loading...</p>
                     <div id="autoSaveIndicator" class="auto-save-status"><i class="ri-checkbox-circle-line"></i> Saved to Cloud</div>
                 </div>
-                <div class="date-selector" style="background: #f1f5f9; padding: 10px 15px; border-radius: 12px; display: flex; align-items: center; gap: 10px;">
-                    <i class="ri-calendar-line" style="color: #2563eb;"></i>
-                    <input type="date" id="date" style="background: transparent; border: none; font-weight: 700; color: #1e293b; outline: none;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <button id="syncBtn" class="btn-sync" onclick="manualSync()">
+                        <i class="ri-refresh-line" id="syncIcon"></i> <span>Sync</span>
+                    </button>
+                    <div class="date-selector" style="background: #f1f5f9; padding: 10px 15px; border-radius: 12px; display: flex; align-items: center; gap: 10px;">
+                        <i class="ri-calendar-line" style="color: #2563eb;"></i>
+                        <input type="date" id="date" style="background: transparent; border: none; font-weight: 700; color: #1e293b; outline: none;">
+                    </div>
                 </div>
             </div>
         </div>
