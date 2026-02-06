@@ -99,7 +99,7 @@
                 .select('*')
                 .eq('user_id', currentUser.id)
                 .eq('report_date', date)
-                .order('created_at', { ascending: false });
+                .order('created_at', { ascending: true });
 
             const tbody = document.getElementById('historyBody');
             const mobileList = document.getElementById('mobileHistoryList');
