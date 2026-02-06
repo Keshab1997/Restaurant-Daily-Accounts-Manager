@@ -25,15 +25,22 @@
         .status-error { color: #ef4444; cursor: pointer; }
         .status-local { color: #64748b; }
         @keyframes spin { 100% { transform: rotate(360deg); } }
-        .action-bar { display: none; }
         .btn-clear-local {
             background: #fee2e2; color: #ef4444; border: 1px solid #fecaca;
             padding: 8px 15px; border-radius: 8px; font-weight: 600; cursor: pointer;
             margin-left: 10px; font-size: 0.85rem;
         }
+        .loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255,255,255,0.8); display: none; align-items: center;
+            justify-content: center; z-index: 9999; font-weight: 700; color: #2563eb;
+        }
+        .v-partial-src { font-size: 0.75rem; padding: 4px 6px; margin-top: 4px; border: 1px solid #cbd5e1; border-radius: 4px; }
     </style>
 </head>
 <body>
+    <div id="loading" class="loading-overlay"><i class="ri-loader-4-line status-saving"></i> &nbsp; Loading...</div>
+    
     <div class="hamburger-trigger" onclick="toggleSidebar()"><i class="ri-menu-2-line"></i></div>
 
     <div id="sidebarMenu" class="custom-sidebar">
@@ -63,11 +70,11 @@
         <div class="top-bar">
             <div class="page-title">
                 <h1>Bulk Expense Entry 📝</h1>
-                <p>Auto-saves to device first, then cloud.</p>
+                <p>Select date to view/edit expenses.</p>
             </div>
             <div class="accounting-date">
                 <label>Cash Date:</label>
-                <input type="date" id="accDate" onchange="updateAllRowsDate()">
+                <input type="date" id="accDate" onchange="loadDataForDate()">
             </div>
         </div>
 
