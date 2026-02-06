@@ -139,11 +139,9 @@ function applyFilters() {
             if (l.t_type === 'BILL') {
                 periodBill += l.amount;
             } else if (l.t_type === 'PAYMENT') {
-                if (l.description && (l.description.includes('Owner') || l.description.includes('Owner Paid'))) {
-                    periodPaidOwner += l.amount;
-                } else {
-                    periodPaidCash += l.amount;
-                }
+                periodPaidCash += l.amount;
+            } else if (l.t_type === 'PAYMENT_OWNER') {
+                periodPaidOwner += l.amount;
             }
         });
 
@@ -152,7 +150,7 @@ function applyFilters() {
         let totalPaid = 0;
         v.ledger.forEach(l => {
             if (l.t_type === 'BILL') totalBill += l.amount;
-            else if (l.t_type === 'PAYMENT') totalPaid += l.amount;
+            else if (l.t_type === 'PAYMENT' || l.t_type === 'PAYMENT_OWNER') totalPaid += l.amount;
         });
 
         return {
@@ -191,16 +189,14 @@ function exportToExcel() {
         let periodBill = 0, periodPaidCash = 0, periodPaidOwner = 0;
         filteredLedger.forEach(l => {
             if (l.t_type === 'BILL') periodBill += l.amount;
-            else if (l.t_type === 'PAYMENT') {
-                if (l.description && l.description.includes('Owner')) periodPaidOwner += l.amount;
-                else periodPaidCash += l.amount;
-            }
+            else if (l.t_type === 'PAYMENT') periodPaidCash += l.amount;
+            else if (l.t_type === 'PAYMENT_OWNER') periodPaidOwner += l.amount;
         });
 
         let totalBill = v.opening_due, totalPaid = 0;
         v.ledger.forEach(l => {
             if (l.t_type === 'BILL') totalBill += l.amount;
-            else if (l.t_type === 'PAYMENT') totalPaid += l.amount;
+            else if (l.t_type === 'PAYMENT' || l.t_type === 'PAYMENT_OWNER') totalPaid += l.amount;
         });
 
         csv += `${v.name},${v.category},${v.lastDate},${periodBill},${periodPaidCash},${periodPaidOwner},${totalBill - totalPaid}\n`;
