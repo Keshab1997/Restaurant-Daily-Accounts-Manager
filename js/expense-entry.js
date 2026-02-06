@@ -1,5 +1,6 @@
 let currentUser = null;
 let vendorsList = [];
+let itemsList = [];
 let rowCount = 0;
 
 window.onload = async () => {
@@ -16,6 +17,22 @@ async function fetchVendors() {
     if(data) {
         vendorsList = data;
         document.getElementById('vendorSuggestions').innerHTML = data.map(v => `<option value="${v.name}">`).join('');
+    }
+    await fetchItems();
+}
+
+async function fetchItems() {
+    const { data } = await _supabase.from('expenses').select('description').eq('user_id', currentUser.id);
+    if(data) {
+        const items = new Set();
+        data.forEach(exp => {
+            if(exp.description && exp.description.includes('(')) {
+                const item = exp.description.match(/\(([^)]+)\)/)?.[1];
+                if(item) items.add(item.replace('Partial Paid by CASH', '').replace('Partial Paid by OWNER', '').replace('Partial Due', '').replace('Owner Paid', '').trim());
+            }
+        });
+        itemsList = Array.from(items).filter(i => i);
+        document.getElementById('itemSuggestions').innerHTML = itemsList.map(i => `<option value="${i}">`).join('');
     }
 }
 
@@ -118,7 +135,7 @@ function createRowHTML(data) {
     tr.innerHTML = `
         <td>${rowCount}</td>
         <td><input type="text" class="v-name" list="vendorSuggestions" value="${data.vendor || ''}" placeholder="Vendor" onchange="handleVendorChange(this)"></td>
-        <td><input type="text" class="v-item" value="${data.item || ''}" placeholder="Item"></td>
+        <td><input type="text" class="v-item" list="itemSuggestions" value="${data.item || ''}" placeholder="Item"></td>
         <td><input type="date" class="v-bill-date" value="${data.billDate || ''}"></td>
         <td><input type="number" class="v-bill-no" value="${data.billNo || ''}" placeholder="No"></td>
         <td><input type="number" class="v-amount" value="${data.amount || ''}" placeholder="0" oninput="calculateGrandTotal()"></td>
