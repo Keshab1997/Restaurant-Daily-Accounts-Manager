@@ -76,7 +76,7 @@ async function loadDataForDate() {
 
             for (const key in grouped) {
                 const item = grouped[key];
-                const vendor = vendorsList.find(v => v.name.toLowerCase() === item.vendorName.toLowerCase());
+                const vendor = vendorsList.find(v => v.name.trim().toLowerCase() === item.vendorName.trim().toLowerCase());
                 let billDate = item.report_date, ledgerId = null, payLedgerId = null, ownerId = null;
 
                 if (vendor && item.bill_no) {
@@ -137,7 +137,7 @@ function createRowHTML(data) {
         <td><input type="text" class="v-name" list="vendorSuggestions" value="${data.vendor || ''}" placeholder="Vendor" onchange="handleVendorChange(this)"></td>
         <td><input type="text" class="v-item" list="itemSuggestions" value="${data.item || ''}" placeholder="Item"></td>
         <td><input type="date" class="v-bill-date" value="${data.billDate || ''}"></td>
-        <td><input type="number" class="v-bill-no" value="${data.billNo || ''}" placeholder="No"></td>
+        <td><input type="number" class="v-bill-no" value="${data.billNo || ''}" placeholder="Auto" readonly></td>
         <td><input type="number" class="v-amount" value="${data.amount || ''}" placeholder="0" oninput="calculateGrandTotal()"></td>
         <td>
             <select class="v-status" onchange="handleStatusChange(this)">
@@ -198,10 +198,24 @@ async function syncRowToSupabase(id) {
 
     if (!vendorName || amount <= 0) return false;
 
+    const vendor = vendorsList.find(v => v.name.trim().toLowerCase() === vendorName.trim().toLowerCase());
+    if (!vendor) {
+        alert(`Vendor "${vendorName}" not found. Please add vendor first.`);
+        return false;
+    }
+
+    if (!row.getAttribute('data-expense-id')) {
+        const { data: existingBill } = await _supabase.from('vendor_ledger').select('id').eq('vendor_id', vendor.id).eq('bill_no', billNo).eq('t_type', 'BILL').maybeSingle();
+        if (existingBill) {
+            alert(`Error: Bill No ${billNo} already exists for ${vendorName}!`);
+            statusIcon.innerHTML = '<i class="ri-error-warning-line status-error"></i>';
+            return false;
+        }
+    }
+
     statusIcon.innerHTML = '<i class="ri-loader-4-line status-saving"></i>';
 
     const fullDesc = itemName ? `${vendorName} (${itemName})` : vendorName;
-    const vendor = vendorsList.find(v => v.name.toLowerCase() === vendorName.toLowerCase());
     let expenseId = row.getAttribute('data-expense-id') || null;
     let dueExpenseId = row.getAttribute('data-due-expense-id') || null;
     let ledgerId = row.getAttribute('data-ledger-id') || null;
@@ -270,10 +284,23 @@ async function syncRowToSupabase(id) {
 
 async function handleVendorChange(input) {
     const row = input.closest('tr');
-    const vendor = vendorsList.find(v => v.name.toLowerCase() === input.value.trim().toLowerCase());
+    const vendor = vendorsList.find(v => v.name.trim().toLowerCase() === input.value.trim().toLowerCase());
     if (vendor) {
+        if (row.getAttribute('data-expense-id')) return;
+        
         const { data: lastBill } = await _supabase.from('vendor_ledger').select('bill_no').eq('vendor_id', vendor.id).eq('t_type', 'BILL').order('bill_no', { ascending: false }).limit(1);
-        row.querySelector('.v-bill-no').value = lastBill?.[0] ? (parseInt(lastBill[0].bill_no) || 0) + 1 : 1;
+        let maxBillNo = lastBill?.[0] ? (parseInt(lastBill[0].bill_no) || 0) : 0;
+        
+        const rows = document.querySelectorAll('#expenseBody tr');
+        rows.forEach(r => {
+            const vName = r.querySelector('.v-name')?.value.trim().toLowerCase();
+            const billNo = parseInt(r.querySelector('.v-bill-no')?.value) || 0;
+            if (vName === input.value.trim().toLowerCase() && billNo > maxBillNo) {
+                maxBillNo = billNo;
+            }
+        });
+        
+        row.querySelector('.v-bill-no').value = maxBillNo + 1;
     }
 }
 
