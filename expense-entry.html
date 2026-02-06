@@ -23,8 +23,11 @@
         .status-saving { color: #f59e0b; animation: spin 1s linear infinite; }
         .status-saved { color: #10b981; }
         .status-error { color: #ef4444; cursor: pointer; }
-        .status-local { color: #64748b; }
+        .status-pending { color: #94a3b8; }
         @keyframes spin { 100% { transform: rotate(360deg); } }
+        .btn-save-all { background: #2563eb; color: white; border: none; padding: 10px 25px; border-radius: 10px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: 0.3s; }
+        .btn-save-all:hover { background: #1d4ed8; transform: translateY(-2px); }
+        .btn-save-all:disabled { background: #94a3b8; cursor: not-allowed; }
         .btn-clear-local {
             background: #fee2e2; color: #ef4444; border: 1px solid #fecaca;
             padding: 8px 15px; border-radius: 8px; font-weight: 600; cursor: pointer;
@@ -70,7 +73,7 @@
         <div class="top-bar">
             <div class="page-title">
                 <h1>Bulk Expense Entry 📝</h1>
-                <p>Select date to view/edit expenses.</p>
+                <p>Click "Save All" to update database.</p>
             </div>
             <div class="accounting-date">
                 <label>Cash Date:</label>
@@ -99,9 +102,9 @@
                 </table>
             </div>
             <div class="table-footer">
-                <div>
+                <div style="display: flex; gap: 10px;">
                     <button class="btn-add-row" onclick="addNewRow()"><i class="ri-add-line"></i> Add Row</button>
-                    <button class="btn-clear-local" onclick="clearLocalStorage()"><i class="ri-brush-line"></i> Clear Form</button>
+                    <button id="saveAllBtn" class="btn-save-all" onclick="saveAllRows()"><i class="ri-save-3-line"></i> Save All</button>
                 </div>
                 <div class="total-summary">
                     <span>Total: <strong id="grandTotal">₹0</strong></span>

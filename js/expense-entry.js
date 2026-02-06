@@ -1,7 +1,6 @@
 let currentUser = null;
 let vendorsList = [];
 let rowCount = 0;
-let saveTimers = {};
 
 window.onload = async () => {
     const session = await checkAuth(true);
@@ -110,17 +109,17 @@ function createRowHTML(data) {
     tr.setAttribute('data-owner-id', data.ownerId || '');
     tr.setAttribute('data-acc-date', data.accDate || document.getElementById('accDate').value);
 
-    let iconHtml = data.id ? '<i class="ri-checkbox-circle-line status-saved"></i>' : '<i class="ri-cloud-off-line status-local"></i>';
+    let iconHtml = data.id ? '<i class="ri-checkbox-circle-line status-saved"></i>' : '<i class="ri-cloud-off-line status-pending"></i>';
 
     tr.innerHTML = `
         <td>${rowCount}</td>
-        <td><input type="text" class="v-name" list="vendorSuggestions" value="${data.vendor || ''}" placeholder="Vendor" oninput="handleInput(${rowCount})" onchange="handleVendorChange(this)"></td>
-        <td><input type="text" class="v-item" value="${data.item || ''}" placeholder="Item" oninput="handleInput(${rowCount})"></td>
-        <td><input type="date" class="v-bill-date" value="${data.billDate || ''}" onchange="handleInput(${rowCount})"></td>
-        <td><input type="number" class="v-bill-no" value="${data.billNo || ''}" placeholder="No" oninput="handleInput(${rowCount})"></td>
-        <td><input type="number" class="v-amount" value="${data.amount || ''}" placeholder="0" oninput="handleInput(${rowCount})"></td>
+        <td><input type="text" class="v-name" list="vendorSuggestions" value="${data.vendor || ''}" placeholder="Vendor" onchange="handleVendorChange(this)"></td>
+        <td><input type="text" class="v-item" value="${data.item || ''}" placeholder="Item"></td>
+        <td><input type="date" class="v-bill-date" value="${data.billDate || ''}"></td>
+        <td><input type="number" class="v-bill-no" value="${data.billNo || ''}" placeholder="No"></td>
+        <td><input type="number" class="v-amount" value="${data.amount || ''}" placeholder="0" oninput="calculateGrandTotal()"></td>
         <td>
-            <select class="v-status" onchange="handleStatusChange(this); handleInput(${rowCount})">
+            <select class="v-status" onchange="handleStatusChange(this)">
                 <option value="PAID" ${data.status === 'PAID' ? 'selected' : ''}>CASH</option>
                 <option value="OWNER" ${data.status === 'OWNER' ? 'selected' : ''}>OWNER</option>
                 <option value="DUE" ${data.status === 'DUE' ? 'selected' : ''}>DUE</option>
@@ -128,8 +127,8 @@ function createRowHTML(data) {
             </select>
         </td>
         <td>
-            <input type="number" class="v-partial ${data.status === 'PARTIAL' ? '' : 'hidden'}" value="${data.partial || ''}" placeholder="Paid" ${data.status === 'PARTIAL' ? '' : 'disabled'} oninput="handleInput(${rowCount})">
-            <select class="v-partial-src ${data.status === 'PARTIAL' ? '' : 'hidden'}" onchange="handleInput(${rowCount})">
+            <input type="number" class="v-partial ${data.status === 'PARTIAL' ? '' : 'hidden'}" value="${data.partial || ''}" placeholder="Paid" ${data.status === 'PARTIAL' ? '' : 'disabled'}>
+            <select class="v-partial-src ${data.status === 'PARTIAL' ? '' : 'hidden'}">
                 <option value="CASH" ${data.partialSrc === 'CASH' ? 'selected' : ''}>CASH</option>
                 <option value="OWNER" ${data.partialSrc === 'OWNER' ? 'selected' : ''}>OWNER</option>
             </select>
@@ -141,18 +140,29 @@ function createRowHTML(data) {
     tbody.appendChild(tr);
 }
 
-function handleInput(id) { calculateGrandTotal(); triggerAutoSync(id); }
+async function saveAllRows() {
+    const saveBtn = document.getElementById('saveAllBtn');
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="ri-loader-4-line spin"></i> Saving...';
 
-function triggerAutoSync(id) {
-    const statusIcon = document.getElementById(`status-icon-${id}`);
-    statusIcon.innerHTML = '<i class="ri-loader-4-line status-saving"></i>';
-    if (saveTimers[id]) clearTimeout(saveTimers[id]);
-    saveTimers[id] = setTimeout(() => syncRowToSupabase(id), 1000);
+    const rows = document.querySelectorAll('#expenseBody tr');
+    let successCount = 0;
+
+    for (let row of rows) {
+        const id = row.id.split('-')[1];
+        const isSuccess = await syncRowToSupabase(id);
+        if (isSuccess) successCount++;
+    }
+
+    saveBtn.disabled = false;
+    saveBtn.innerHTML = '<i class="ri-save-3-line"></i> Save All';
+    
+    if (successCount > 0) alert(`Successfully saved ${successCount} entries!`);
 }
 
 async function syncRowToSupabase(id) {
     const row = document.getElementById(`row-${id}`);
-    if (!row) return;
+    if (!row) return false;
 
     const statusIcon = document.getElementById(`status-icon-${id}`);
     const vendorName = row.querySelector('.v-name').value.trim();
@@ -165,7 +175,9 @@ async function syncRowToSupabase(id) {
     const partialPaid = parseFloat(row.querySelector('.v-partial').value) || 0;
     const partialSrc = row.querySelector('.v-partial-src')?.value || 'CASH';
 
-    if (!vendorName || amount <= 0) { statusIcon.innerHTML = '<i class="ri-cloud-off-line status-local"></i>'; return; }
+    if (!vendorName || amount <= 0) return false;
+
+    statusIcon.innerHTML = '<i class="ri-loader-4-line status-saving"></i>';
 
     const fullDesc = itemName ? `${vendorName} (${itemName})` : vendorName;
     const vendor = vendorsList.find(v => v.name.toLowerCase() === vendorName.toLowerCase());
@@ -227,7 +239,12 @@ async function syncRowToSupabase(id) {
         }
 
         statusIcon.innerHTML = '<i class="ri-checkbox-circle-line status-saved"></i>';
-    } catch (err) { console.error(err); statusIcon.innerHTML = '<i class="ri-error-warning-line status-error"></i>'; }
+        return true;
+    } catch (err) { 
+        console.error(err); 
+        statusIcon.innerHTML = '<i class="ri-error-warning-line status-error"></i>';
+        return false;
+    }
 }
 
 async function handleVendorChange(input) {
@@ -236,7 +253,6 @@ async function handleVendorChange(input) {
     if (vendor) {
         const { data: lastBill } = await _supabase.from('vendor_ledger').select('bill_no').eq('vendor_id', vendor.id).eq('t_type', 'BILL').order('bill_no', { ascending: false }).limit(1);
         row.querySelector('.v-bill-no').value = lastBill?.[0] ? (parseInt(lastBill[0].bill_no) || 0) + 1 : 1;
-        handleInput(row.id.split('-')[1]);
     }
 }
 
