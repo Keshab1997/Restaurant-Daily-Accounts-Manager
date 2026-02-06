@@ -134,13 +134,13 @@ function createRowHTML(data) {
 
     tr.innerHTML = `
         <td>${rowCount}</td>
-        <td><input type="text" class="v-name" list="vendorSuggestions" value="${data.vendor || ''}" placeholder="Vendor" onchange="handleVendorChange(this)"></td>
-        <td><input type="text" class="v-item" list="itemSuggestions" value="${data.item || ''}" placeholder="Item"></td>
-        <td><input type="date" class="v-bill-date" value="${data.billDate || ''}"></td>
+        <td><input type="text" class="v-name" list="vendorSuggestions" value="${data.vendor || ''}" placeholder="Vendor" onchange="handleVendorChange(this)" oninput="validateVendor(this)"></td>
+        <td><input type="text" class="v-item" list="itemSuggestions" value="${data.item || ''}" placeholder="Item" ${data.id ? '' : 'disabled'}></td>
+        <td><input type="date" class="v-bill-date" value="${data.billDate || ''}" ${data.id ? '' : 'disabled'}></td>
         <td><input type="number" class="v-bill-no" value="${data.billNo || ''}" placeholder="Auto" readonly></td>
-        <td><input type="number" class="v-amount" value="${data.amount || ''}" placeholder="0" oninput="calculateGrandTotal()"></td>
+        <td><input type="number" class="v-amount" value="${data.amount || ''}" placeholder="0" oninput="calculateGrandTotal()" ${data.id ? '' : 'disabled'}></td>
         <td>
-            <select class="v-status" onchange="handleStatusChange(this)">
+            <select class="v-status" onchange="handleStatusChange(this)" ${data.id ? '' : 'disabled'}>
                 <option value="PAID" ${data.status === 'PAID' ? 'selected' : ''}>CASH</option>
                 <option value="OWNER" ${data.status === 'OWNER' ? 'selected' : ''}>OWNER</option>
                 <option value="DUE" ${data.status === 'DUE' ? 'selected' : ''}>DUE</option>
@@ -149,7 +149,7 @@ function createRowHTML(data) {
         </td>
         <td>
             <input type="number" class="v-partial ${data.status === 'PARTIAL' ? '' : 'hidden'}" value="${data.partial || ''}" placeholder="Paid" ${data.status === 'PARTIAL' ? '' : 'disabled'}>
-            <select class="v-partial-src ${data.status === 'PARTIAL' ? '' : 'hidden'}">
+            <select class="v-partial-src ${data.status === 'PARTIAL' ? '' : 'hidden'}" ${data.status === 'PARTIAL' ? '' : 'disabled'}>
                 <option value="CASH" ${data.partialSrc === 'CASH' ? 'selected' : ''}>CASH</option>
                 <option value="OWNER" ${data.partialSrc === 'OWNER' ? 'selected' : ''}>OWNER</option>
             </select>
@@ -301,7 +301,35 @@ async function handleVendorChange(input) {
         });
         
         row.querySelector('.v-bill-no').value = maxBillNo + 1;
+        unlockRow(row);
+    } else {
+        lockRow(row);
     }
+}
+
+function validateVendor(input) {
+    const row = input.closest('tr');
+    const vendor = vendorsList.find(v => v.name.trim().toLowerCase() === input.value.trim().toLowerCase());
+    if (!vendor && input.value.trim() !== '') {
+        lockRow(row);
+    }
+}
+
+function unlockRow(row) {
+    row.querySelector('.v-item').disabled = false;
+    row.querySelector('.v-bill-date').disabled = false;
+    row.querySelector('.v-amount').disabled = false;
+    row.querySelector('.v-status').disabled = false;
+}
+
+function lockRow(row) {
+    if (row.getAttribute('data-expense-id')) return;
+    row.querySelector('.v-item').disabled = true;
+    row.querySelector('.v-bill-date').disabled = true;
+    row.querySelector('.v-amount').disabled = true;
+    row.querySelector('.v-status').disabled = true;
+    row.querySelector('.v-partial').disabled = true;
+    row.querySelector('.v-partial-src').disabled = true;
 }
 
 function handleStatusChange(select) {

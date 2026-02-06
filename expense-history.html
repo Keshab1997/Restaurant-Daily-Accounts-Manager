@@ -10,6 +10,34 @@
     <link rel="stylesheet" href="css/expense-history.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
+    <style>
+        .footnote-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: #fffbeb;
+            border-left: 5px solid #f59e0b;
+            border-radius: 10px;
+            display: none;
+        }
+        .footnote-section h4 {
+            margin: 0 0 10px 0;
+            font-size: 0.9rem;
+            color: #92400e;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .footnote-item {
+            font-size: 0.85rem;
+            color: #78350f;
+            margin-bottom: 6px;
+            line-height: 1.5;
+            font-weight: 500;
+        }
+        .footnote-item i { color: #f59e0b; }
+    </style>
 </head>
 <body>
     <div class="hamburger-trigger" onclick="toggleSidebar()"><i class="ri-menu-2-line"></i></div>
@@ -48,7 +76,6 @@
             </div>
         </div>
 
-        <!-- Desktop Table View -->
         <div class="glass-card desktop-view">
             <div class="table-wrapper">
                 <table class="history-table">
@@ -64,7 +91,7 @@
                     <tbody id="historyBody"></tbody>
                     <tfoot>
                         <tr class="total-row">
-                            <td colspan="3">TOTAL EXPENSE</td>
+                            <td colspan="3">TOTAL CASH EXPENSE</td>
                             <td id="historyTotal" colspan="2">₹0</td>
                         </tr>
                     </tfoot>
@@ -72,8 +99,12 @@
             </div>
         </div>
 
-        <!-- Mobile Card View -->
         <div id="mobileHistoryList" class="mobile-view"></div>
+
+        <div id="auditFootnotes" class="footnote-section">
+            <h4><i class="ri-information-line"></i> Audit Notes (বকেয়া ও পেমেন্ট তথ্য)</h4>
+            <div id="footnoteList"></div>
+        </div>
     </main>
 
     <script src="js/config.js"></script>
@@ -95,22 +126,33 @@
 
         async function loadHistory() {
             const date = document.getElementById('historyDate').value;
-            const { data } = await _supabase.from('expenses')
+            
+            const { data: expenses } = await _supabase.from('expenses')
                 .select('*')
                 .eq('user_id', currentUser.id)
                 .eq('report_date', date)
+                .in('payment_source', ['CASH', 'OWNER'])
                 .order('created_at', { ascending: true });
+
+            const { data: allLedger } = await _supabase.from('vendor_ledger')
+                .select('*, vendors(name)')
+                .eq('user_id', currentUser.id);
 
             const tbody = document.getElementById('historyBody');
             const mobileList = document.getElementById('mobileHistoryList');
+            const footNoteList = document.getElementById('footnoteList');
+            const auditSection = document.getElementById('auditFootnotes');
+            
             tbody.innerHTML = '';
             mobileList.innerHTML = '';
+            footNoteList.innerHTML = '';
+            auditSection.style.display = 'none';
             let total = 0;
 
-            if(data && data.length > 0) {
-                data.forEach((exp, index) => {
+            if(expenses && expenses.length > 0) {
+                expenses.forEach((exp, index) => {
                     total += exp.amount;
-                    const sourceClass = exp.payment_source === 'CASH' ? 'text-green' : (exp.payment_source === 'OWNER' ? 'text-blue' : 'text-red');
+                    const sourceClass = exp.payment_source === 'CASH' ? 'text-green' : 'text-blue';
                     
                     const vendorName = exp.description.split(' (')[0];
                     const vendor = vendorsList.find(v => v.name.toLowerCase() === vendorName.toLowerCase());
@@ -149,51 +191,40 @@
                     `;
                 });
             } else {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">No expenses found.</td></tr>';
-                mobileList.innerHTML = '<p style="text-align:center; padding:40px; color:#94a3b8;">No expenses found for this date.</p>';
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">No cash expenses found.</td></tr>';
             }
             document.getElementById('historyTotal').innerText = `₹${total.toLocaleString('en-IN')}`;
+
+            if(allLedger) {
+                let notes = [];
+
+                const todayBills = allLedger.filter(l => l.t_date === date && l.t_type === 'BILL');
+                todayBills.forEach(bill => {
+                    const payment = allLedger.find(l => l.vendor_id === bill.vendor_id && l.bill_no === bill.bill_no && l.t_date > date && (l.t_type === 'PAYMENT' || l.t_type === 'PAYMENT_OWNER'));
+                    if(payment) {
+                        notes.push(`* দ্রষ্টব্য: এই তারিখের <b>${bill.vendors.name}</b> - <b>₹${bill.amount}</b>/- বিলটি পরবর্তী তারিখে (<b>${payment.t_date}</b>) পরিশোধ করা হয়েছে, তাই এটি আজকের ক্যাশ তালিকা থেকে বাদ দেওয়া হয়েছে।`);
+                    }
+                });
+
+                const todayPayments = allLedger.filter(l => l.t_date === date && (l.t_type === 'PAYMENT' || l.t_type === 'PAYMENT_OWNER'));
+                todayPayments.forEach(pay => {
+                    const bill = allLedger.find(l => l.vendor_id === pay.vendor_id && l.bill_no === pay.bill_no && l.t_date < date && l.t_type === 'BILL');
+                    if(bill) {
+                        notes.push(`* দ্রষ্টব্য: আজকের মোট খরচের সাথে <b>${bill.vendors.name}</b>-এর <b>${bill.t_date}</b> তারিখের বকেয়া বিলের (Bill #${pay.bill_no}) <b>₹${pay.amount}</b>/- পেমেন্ট যুক্ত করা হয়েছে।`);
+                    }
+                });
+
+                if(notes.length > 0) {
+                    auditSection.style.display = 'block';
+                    notes.forEach(note => {
+                        footNoteList.innerHTML += `<div class="footnote-item"><i class="ri-arrow-right-s-fill"></i> ${note}</div>`;
+                    });
+                }
+            }
         }
 
         async function deleteExp(id) {
-            if(!confirm("Delete this expense? It will also be removed from Vendor Ledger if linked.")) return;
-
-            const { data: expRecord } = await _supabase.from('expenses')
-                .select('*')
-                .eq('id', id)
-                .single();
-
-            if (!expRecord) return;
-
-            if (expRecord.bill_no) {
-                const vendorName = expRecord.description.split(' (')[0];
-                const vendor = vendorsList.find(v => v.name.toLowerCase() === vendorName.toLowerCase());
-
-                if (vendor) {
-                    if(expRecord.payment_source === 'DUE') {
-                        await _supabase.from('vendor_ledger').delete()
-                            .eq('user_id', currentUser.id)
-                            .eq('vendor_id', vendor.id)
-                            .eq('bill_no', expRecord.bill_no)
-                            .eq('t_type', 'BILL');
-                    } else {
-                        await _supabase.from('vendor_ledger').delete()
-                            .eq('user_id', currentUser.id)
-                            .eq('vendor_id', vendor.id)
-                            .eq('bill_no', expRecord.bill_no)
-                            .eq('amount', expRecord.amount)
-                            .in('t_type', ['PAYMENT', 'PAYMENT_OWNER']);
-                    }
-                }
-            }
-
-            if (expRecord.payment_source === 'OWNER') {
-                await _supabase.from('owner_ledger').delete()
-                    .eq('user_id', currentUser.id)
-                    .eq('t_date', expRecord.report_date)
-                    .eq('amount', expRecord.amount);
-            }
-
+            if(!confirm("Delete this expense?")) return;
             await _supabase.from('expenses').delete().eq('id', id);
             loadHistory();
         }
