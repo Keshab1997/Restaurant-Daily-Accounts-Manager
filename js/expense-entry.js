@@ -33,33 +33,37 @@ async function loadDataForDate() {
         if (expenses && expenses.length > 0) {
             const grouped = {};
             expenses.forEach(exp => {
-                const key = exp.bill_no || `no-bill-${exp.id}`;
-                if (!grouped[key]) {
-                    grouped[key] = { ...exp, partial: 0, partialSrc: 'CASH', dueExpenseId: null };
+                const rawDesc = exp.description || "";
+                const vendorPart = rawDesc.split(' (')[0];
+                const itemPart = rawDesc.includes('(') ? rawDesc.match(/\(([^)]+)\)/)[1] : "";
+                const cleanItem = itemPart.replace("Partial Paid by CASH", "").replace("Partial Paid by OWNER", "").replace("Partial Due", "").replace("Owner Paid", "").trim();
+                const groupKey = `${vendorPart}-${cleanItem}-${exp.bill_no || 'no-bill'}`;
+
+                if (!grouped[groupKey]) {
+                    grouped[groupKey] = { ...exp, vendorName: vendorPart, itemName: cleanItem, partial: 0, partialSrc: 'CASH', dueExpenseId: null };
                 } else {
                     if (exp.payment_source === 'CASH' || exp.payment_source === 'OWNER') {
-                        grouped[key].partial = exp.amount;
-                        grouped[key].partialSrc = exp.payment_source;
-                        grouped[key].dueExpenseId = grouped[key].id;
-                        grouped[key].id = exp.id;
-                        grouped[key].amount += exp.amount;
+                        grouped[groupKey].partial = exp.amount;
+                        grouped[groupKey].partialSrc = exp.payment_source;
+                        grouped[groupKey].dueExpenseId = grouped[groupKey].id;
+                        grouped[groupKey].id = exp.id;
+                        grouped[groupKey].amount += exp.amount;
                     } else {
-                        grouped[key].partial = grouped[key].amount;
-                        grouped[key].amount += exp.amount;
-                        grouped[key].dueExpenseId = exp.id;
+                        grouped[groupKey].partial = grouped[groupKey].amount;
+                        grouped[groupKey].amount += exp.amount;
+                        grouped[groupKey].dueExpenseId = exp.id;
                     }
-                    grouped[key].payment_source = 'PARTIAL';
+                    grouped[groupKey].payment_source = 'PARTIAL';
                 }
             });
 
             for (const key in grouped) {
                 const item = grouped[key];
-                const vendorName = item.description.split(' (')[0];
-                const vendor = vendorsList.find(v => v.name.toLowerCase() === vendorName.toLowerCase());
+                const vendor = vendorsList.find(v => v.name.toLowerCase() === item.vendorName.toLowerCase());
                 let billDate = item.report_date, ledgerId = null, payLedgerId = null, ownerId = null;
 
                 if (vendor && item.bill_no) {
-                    const { data: ledger } = await _supabase.from('vendor_ledger').select('*').eq('vendor_id', vendor.id).eq('bill_no', item.bill_no);
+                    const { data: ledger } = await _supabase.from('vendor_ledger').select('*').eq('vendor_id', vendor.id).eq('bill_no', item.bill_no).limit(5);
                     if (ledger) {
                         const billRec = ledger.find(l => l.t_type === 'BILL');
                         const payRec = ledger.find(l => l.t_type.startsWith('PAYMENT'));
@@ -69,12 +73,12 @@ async function loadDataForDate() {
                 }
 
                 if (item.partialSrc === 'OWNER' || item.payment_source === 'OWNER') {
-                    const { data: ownerRec } = await _supabase.from('owner_ledger').select('id').eq('user_id', currentUser.id).eq('t_date', item.report_date).limit(1).maybeSingle();
+                    const { data: ownerRec } = await _supabase.from('owner_ledger').select('id').eq('user_id', currentUser.id).eq('t_date', item.report_date).eq('amount', item.partial || item.amount).limit(1).maybeSingle();
                     if (ownerRec) ownerId = ownerRec.id;
                 }
 
                 createRowHTML({
-                    id: item.id, vendor: vendorName, item: item.description.includes('(') ? item.description.match(/\(([^)]+)\)/)?.[1] || '' : '',
+                    id: item.id, vendor: item.vendorName, item: item.itemName,
                     billDate, accDate: item.report_date, billNo: item.bill_no, amount: item.amount, status: item.payment_source,
                     partial: item.partial, partialSrc: item.partialSrc, dueExpenseId: item.dueExpenseId, ledgerId, payLedgerId, ownerId
                 });
