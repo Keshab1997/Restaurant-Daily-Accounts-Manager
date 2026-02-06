@@ -1,4 +1,4 @@
-const CACHE_NAME = 'restro-manager-v39';
+const CACHE_NAME = 'restro-manager-v40';
 const ASSETS = [
   '/',
   '/index.html',
