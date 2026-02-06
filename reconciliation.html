@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Daily Reconciliation - RestroManager</title>
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/hamburger.css">
+    <link rel="stylesheet" href="css/reconciliation.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
+</head>
+<body>
+    <div class="hamburger-trigger" onclick="toggleSidebar()"><i class="ri-menu-2-line"></i></div>
+    <div id="sidebarMenu" class="custom-sidebar">
+        <div class="sidebar-header">
+            <div class="nav-logo"><i class="ri-restaurant-2-line"></i><span id="sideNavName">RestroManager</span></div>
+            <i class="ri-close-line close-sidebar" onclick="toggleSidebar()"></i>
+        </div>
+        <nav class="sidebar-nav-links">
+            <a href="dashboard.html"><i class="ri-home-4-line"></i> <span>Home</span></a>
+            <a href="reconciliation.html" class="active"><i class="ri-scales-3-line"></i> <span>Reconciliation</span></a>
+            <a href="expense-entry.html"><i class="ri-shopping-cart-2-line"></i> <span>Expense Entry</span></a>
+            <a href="tally.html"><i class="ri-money-dollar-box-line"></i> <span>Cash Tally</span></a>
+            <a href="vendors.html"><i class="ri-store-2-line"></i> <span>Vendors</span></a>
+            <a href="owner.html"><i class="ri-user-star-line"></i> <span>Owner</span></a>
+            <a href="settings.html"><i class="ri-settings-3-line"></i> <span>Settings</span></a>
+        </nav>
+        <div class="sidebar-bottom"><a onclick="logout()" class="logout-link"><i class="ri-logout-box-r-line"></i> <span>Logout</span></a></div>
+    </div>
+    <div id="menuOverlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+    <main class="main-content">
+        <div class="top-bar">
+            <div class="page-title">
+                <h1>Reconciliation Report ⚖️</h1>
+                <p>Match cash flow with dues & loans</p>
+            </div>
+            <div class="date-range-box">
+                <div class="d-group">
+                    <label>From</label>
+                    <input type="date" id="fromDate">
+                </div>
+                <div class="d-group">
+                    <label>To</label>
+                    <input type="date" id="toDate">
+                </div>
+                <button class="btn-go" onclick="calculateReconciliation()">
+                    <i class="ri-search-line"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="recon-grid">
+            <div class="glass-card side-card">
+                <div class="card-header">
+                    <i class="ri-wallet-3-line text-blue"></i>
+                    <h3>Side A (Cash Flow)</h3>
+                </div>
+                <div class="calc-row">
+                    <span>Physical Cash (To Date)</span>
+                    <strong id="phyCash">₹0</strong>
+                </div>
+                <div class="calc-row">
+                    <span>Closing Balance (To Date)</span>
+                    <strong id="closeBal">₹0</strong>
+                </div>
+                <div class="calc-divider"></div>
+                <div class="calc-result">
+                    <small>Physical - Closing</small>
+                    <h2 id="sideA_Total">₹0</h2>
+                </div>
+            </div>
+
+            <div class="glass-card side-card">
+                <div class="card-header">
+                    <i class="ri-hand-coin-line text-warning"></i>
+                    <h3>Side B (Liabilities)</h3>
+                </div>
+                <div class="calc-row">
+                    <span>Total Vendor Due (Period)</span>
+                    <strong id="vendorDue">₹0</strong>
+                </div>
+                <div class="calc-row">
+                    <span>Total Owner Loan (Period)</span>
+                    <strong id="ownerLoan">₹0</strong>
+                </div>
+                <div class="calc-divider"></div>
+                <div class="calc-result">
+                    <small>Total Due + Loan</small>
+                    <h2 id="sideB_Total">₹0</h2>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-card status-card" id="statusCard">
+            <div class="status-icon" id="statusIcon">
+                <i class="ri-loader-4-line spin"></i>
+            </div>
+            <div class="status-info">
+                <h1 id="statusTitle">Calculating...</h1>
+                <p id="statusDesc">Fetching data for selected range.</p>
+            </div>
+            <div class="status-amount" id="diffAmount">₹0</div>
+        </div>
+    </main>
+
+    <script src="js/config.js"></script>
+    <script src="js/hamburger.js"></script>
+    <script src="js/reconciliation.js"></script>
+</body>
+</html>

@@ -70,7 +70,6 @@ function updateDisplayDate(dateStr) {
 async function loadData() {
     const date = document.getElementById('date').value;
     
-    // আগের দিনের ক্লোজিং ব্যালেন্স খুঁজে বের করা (এটিই আজকের ওপেনিং হবে)
     const { data: lastEntry } = await _supabase.from('daily_balances')
         .select('closing_balance')
         .eq('user_id', currentUser.id)
@@ -79,7 +78,19 @@ async function loadData() {
         .limit(1)
         .maybeSingle();
 
-    const calculatedOpening = lastEntry ? lastEntry.closing_balance : 0;
+    const { data: todayEntry } = await _supabase.from('daily_balances')
+        .select('opening_balance')
+        .eq('user_id', currentUser.id)
+        .eq('report_date', date)
+        .maybeSingle();
+
+    let calculatedOpening = 0;
+    if (todayEntry) {
+        calculatedOpening = todayEntry.opening_balance;
+    } else {
+        calculatedOpening = lastEntry ? lastEntry.closing_balance : 0;
+    }
+
     document.getElementById('openingBal').value = calculatedOpening;
 
     const { data: sales } = await _supabase.from('sales').select('*').eq('user_id', currentUser.id).eq('report_date', date);
@@ -98,6 +109,7 @@ async function loadData() {
     currentDayExpenses = expenses || [];
     
     updateCalculations();
+    await saveSales(true);
 }
 
 function updateCalculations() {
@@ -107,7 +119,6 @@ function updateCalculations() {
     const swiggy = parseFloat(document.getElementById('saleSwiggy').value) || 0;
     const zomato = parseFloat(document.getElementById('saleZomato').value) || 0;
 
-    // Update Revenue Breakdown
     document.getElementById('detCashSale').innerText = `₹${cashSale.toLocaleString('en-IN')}`;
     document.getElementById('detCardSale').innerText = `₹${cardSale.toLocaleString('en-IN')}`;
     document.getElementById('detSwiggy').innerText = `₹${swiggy.toLocaleString('en-IN')}`;
@@ -186,7 +197,7 @@ async function manualSync() {
     }
 }
 
-async function saveSales() {
+async function saveSales(silent = false) {
     const date = document.getElementById('date').value;
     const opening = parseFloat(document.getElementById('openingBal').value) || 0;
     const cashSale = parseFloat(document.getElementById('saleCash').value) || 0;
@@ -194,10 +205,13 @@ async function saveSales() {
     const swiggy = parseFloat(document.getElementById('saleSwiggy').value) || 0;
     const zomato = parseFloat(document.getElementById('saleZomato').value) || 0;
     
-    let totalAllExp = 0;
-    currentDayExpenses.forEach(exp => { totalAllExp += exp.amount; });
-    const netBalanceToday = cashSale - totalAllExp;
-    const finalClosingBalance = opening + netBalanceToday;
+    let cashExpOnly = 0;
+    currentDayExpenses.forEach(exp => { 
+        if(exp.payment_source === 'CASH') cashExpOnly += exp.amount;
+    });
+
+    const netCashFlow = cashSale - cashExpOnly;
+    const finalClosingBalance = opening + netCashFlow;
 
     await _supabase.from('daily_balances').upsert({ 
         user_id: currentUser.id, 
@@ -269,7 +283,6 @@ function shareDailyReportText() {
 async function shareDailyReportImage() {
     const template = document.getElementById('dailyReportTemplate');
     
-    // Update template values before capturing
     document.getElementById('repRestroName').innerText = restaurantName;
     document.getElementById('repDate').innerText = document.getElementById('date').value;
     document.getElementById('repOpening').innerText = `₹${document.getElementById('openingBal').value}`;
