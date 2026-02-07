@@ -227,12 +227,20 @@ async function saveSales(silent = false) {
     ];
 
     for(let item of types) {
-        await _supabase.from('sales').upsert({ 
-            user_id: currentUser.id, 
-            report_date: date, 
-            sale_type: item.t, 
-            amount: item.val 
-        }, { onConflict: 'user_id, report_date, sale_type' });
+        if(item.val > 0) {
+            await _supabase.from('sales').upsert({ 
+                user_id: currentUser.id, 
+                report_date: date, 
+                sale_type: item.t, 
+                amount: item.val 
+            }, { onConflict: 'user_id, report_date, sale_type' });
+        } else {
+            await _supabase.from('sales')
+                .delete()
+                .eq('user_id', currentUser.id)
+                .eq('report_date', date)
+                .eq('sale_type', item.t);
+        }
     }
 }
 
