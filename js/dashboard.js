@@ -124,18 +124,20 @@ function updateCalculations() {
     const totalSaleAll = cashSale + cardSale + swiggy + zomato;
     document.getElementById('totalSale').innerText = `₹${totalSaleAll.toLocaleString('en-IN')}`;
 
-    let cashExp = 0, dueExp = 0, ownerExp = 0;
+    let cashExp = 0, dueExp = 0, ownerExp = 0, otherExp = 0;
     currentDayExpenses.forEach(exp => { 
         if(exp.payment_source === 'CASH') cashExp += exp.amount;
         else if(exp.payment_source === 'DUE') dueExp += exp.amount;
         else if(exp.payment_source === 'OWNER') ownerExp += exp.amount;
+        else otherExp += exp.amount;
     });
 
     document.getElementById('detCashExp').innerText = `₹${cashExp.toLocaleString('en-IN')}`;
     document.getElementById('detDueExp').innerText = `₹${dueExp.toLocaleString('en-IN')}`;
     document.getElementById('detOwnerExp').innerText = `₹${ownerExp.toLocaleString('en-IN')}`;
+    document.getElementById('detOtherExp').innerText = `₹${otherExp.toLocaleString('en-IN')}`;
 
-    const totalAllExp = cashExp + dueExp + ownerExp;
+    const totalAllExp = cashExp + dueExp + ownerExp + otherExp;
     document.getElementById('totalExpAll').innerText = `₹${totalAllExp.toLocaleString('en-IN')}`;
     
     // Net Profit/Loss = Total Revenue - Total Expense
