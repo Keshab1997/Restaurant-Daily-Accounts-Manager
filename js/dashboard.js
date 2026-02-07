@@ -70,17 +70,25 @@ function updateDisplayDate(dateStr) {
 async function loadData() {
     const date = document.getElementById('date').value;
     
-    // Always fetch previous day's closing balance as opening
-    const { data: lastEntry } = await _supabase.from('daily_balances')
-        .select('closing_balance')
+    const { data: todayEntry } = await _supabase.from('daily_balances')
+        .select('opening_balance')
         .eq('user_id', currentUser.id)
-        .lt('report_date', date)
-        .order('report_date', { ascending: false })
-        .limit(1)
+        .eq('report_date', date)
         .maybeSingle();
 
-    const calculatedOpening = lastEntry ? lastEntry.closing_balance : 0;
-    document.getElementById('openingBal').value = calculatedOpening;
+    if (todayEntry) {
+        document.getElementById('openingBal').value = todayEntry.opening_balance;
+    } else {
+        const { data: lastEntry } = await _supabase.from('daily_balances')
+            .select('closing_balance')
+            .eq('user_id', currentUser.id)
+            .lt('report_date', date)
+            .order('report_date', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        document.getElementById('openingBal').value = lastEntry ? lastEntry.closing_balance : 0;
+    }
 
     const { data: sales } = await _supabase.from('sales').select('*').eq('user_id', currentUser.id).eq('report_date', date);
     ['saleCash', 'saleCard', 'saleSwiggy', 'saleZomato'].forEach(id => document.getElementById(id).value = 0);
@@ -130,14 +138,16 @@ function updateCalculations() {
     const totalAllExp = cashExp + dueExp + ownerExp;
     document.getElementById('totalExpAll').innerText = `₹${totalAllExp.toLocaleString('en-IN')}`;
     
-    const netBalanceToday = cashSale - totalAllExp;
+    // Net Profit/Loss = Total Revenue - Total Expense
+    const netProfitLoss = totalSaleAll - totalAllExp;
     const netBalEl = document.getElementById('netBalanceToday');
-    netBalEl.innerText = `₹${netBalanceToday.toLocaleString('en-IN')}`;
+    netBalEl.innerText = `₹${netProfitLoss.toLocaleString('en-IN')}`;
     
-    const finalClosingBalance = opening + netBalanceToday;
+    // Final Closing Balance = Opening Balance + Net Profit/Loss
+    const finalClosingBalance = opening + netProfitLoss;
     document.getElementById('closingCashText').innerText = `Final Closing Balance: ₹${finalClosingBalance.toLocaleString('en-IN')}`;
     
-    if(netBalanceToday < 0) netBalEl.style.color = "#ef4444"; 
+    if(netProfitLoss < 0) netBalEl.style.color = "#ef4444"; 
     else netBalEl.style.color = "#059669";
 }
 
@@ -194,13 +204,13 @@ async function saveSales(silent = false) {
     const swiggy = parseFloat(document.getElementById('saleSwiggy').value) || 0;
     const zomato = parseFloat(document.getElementById('saleZomato').value) || 0;
     
-    let cashExpOnly = 0;
-    currentDayExpenses.forEach(exp => { 
-        if(exp.payment_source === 'CASH') cashExpOnly += exp.amount;
-    });
+    const totalRevenue = cashSale + cardSale + swiggy + zomato;
+    
+    let totalExpenses = 0;
+    currentDayExpenses.forEach(exp => totalExpenses += exp.amount);
 
-    const netCashFlow = cashSale - cashExpOnly;
-    const finalClosingBalance = opening + netCashFlow;
+    const netProfitLoss = totalRevenue - totalExpenses;
+    const finalClosingBalance = opening + netProfitLoss;
 
     await _supabase.from('daily_balances').upsert({ 
         user_id: currentUser.id, 
