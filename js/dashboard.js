@@ -140,16 +140,16 @@ function updateCalculations() {
     const totalAllExp = cashExp + dueExp + ownerExp + otherExp;
     document.getElementById('totalExpAll').innerText = `₹${totalAllExp.toLocaleString('en-IN')}`;
     
-    // Net Profit/Loss = Total Revenue - Total Expense
-    const netProfitLoss = totalSaleAll - totalAllExp;
+    // Net Balance = Cash Sale - Cash Expenses
+    const netCashFlow = cashSale - cashExp;
     const netBalEl = document.getElementById('netBalanceToday');
-    netBalEl.innerText = `₹${netProfitLoss.toLocaleString('en-IN')}`;
+    netBalEl.innerText = `₹${netCashFlow.toLocaleString('en-IN')}`;
     
-    // Final Closing Balance = Opening Balance + Net Profit/Loss
-    const finalClosingBalance = opening + netProfitLoss;
+    // Final Closing Balance = Opening Balance + Net Cash Flow
+    const finalClosingBalance = opening + netCashFlow;
     document.getElementById('closingCashText').innerText = `Final Closing Balance: ₹${finalClosingBalance.toLocaleString('en-IN')}`;
     
-    if(netProfitLoss < 0) netBalEl.style.color = "#ef4444"; 
+    if(netCashFlow < 0) netBalEl.style.color = "#ef4444"; 
     else netBalEl.style.color = "#059669";
 }
 
@@ -206,13 +206,13 @@ async function saveSales(silent = false) {
     const swiggy = parseFloat(document.getElementById('saleSwiggy').value) || 0;
     const zomato = parseFloat(document.getElementById('saleZomato').value) || 0;
     
-    const totalRevenue = cashSale + cardSale + swiggy + zomato;
-    
-    let totalExpenses = 0;
-    currentDayExpenses.forEach(exp => totalExpenses += exp.amount);
+    let cashExpOnly = 0;
+    currentDayExpenses.forEach(exp => { 
+        if(exp.payment_source === 'CASH') cashExpOnly += exp.amount;
+    });
 
-    const netProfitLoss = totalRevenue - totalExpenses;
-    const finalClosingBalance = opening + netProfitLoss;
+    const netCashFlow = cashSale - cashExpOnly;
+    const finalClosingBalance = opening + netCashFlow;
 
     await _supabase.from('daily_balances').upsert({ 
         user_id: currentUser.id, 
