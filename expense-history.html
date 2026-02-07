@@ -92,7 +92,7 @@
                     <tbody id="historyBody"></tbody>
                     <tfoot>
                         <tr class="total-row">
-                            <td colspan="3">TOTAL CASH EXPENSE</td>
+                            <td colspan="3">TOTAL EXPENSE (ALL)</td>
                             <td id="historyTotal" colspan="2">₹0</td>
                         </tr>
                     </tfoot>
@@ -132,7 +132,6 @@
                 .select('*')
                 .eq('user_id', currentUser.id)
                 .eq('report_date', date)
-                .in('payment_source', ['CASH', 'OWNER'])
                 .order('created_at', { ascending: true });
 
             const { data: allLedger } = await _supabase.from('vendor_ledger')
@@ -153,7 +152,7 @@
             if(expenses && expenses.length > 0) {
                 expenses.forEach((exp, index) => {
                     total += exp.amount;
-                    const sourceClass = exp.payment_source === 'CASH' ? 'text-green' : 'text-blue';
+                    const sourceClass = exp.payment_source === 'CASH' ? 'text-green' : (exp.payment_source === 'DUE' ? 'text-red' : 'text-blue');
                     
                     const vendorName = exp.description.split(' (')[0];
                     const vendor = vendorsList.find(v => v.name.toLowerCase() === vendorName.toLowerCase());
@@ -192,7 +191,7 @@
                     `;
                 });
             } else {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">No cash expenses found.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">No expenses found.</td></tr>';
             }
             document.getElementById('historyTotal').innerText = `₹${total.toLocaleString('en-IN')}`;
 

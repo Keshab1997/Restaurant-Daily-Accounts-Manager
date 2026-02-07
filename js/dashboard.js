@@ -70,6 +70,7 @@ function updateDisplayDate(dateStr) {
 async function loadData() {
     const date = document.getElementById('date').value;
     
+    // Always fetch previous day's closing balance as opening
     const { data: lastEntry } = await _supabase.from('daily_balances')
         .select('closing_balance')
         .eq('user_id', currentUser.id)
@@ -78,19 +79,7 @@ async function loadData() {
         .limit(1)
         .maybeSingle();
 
-    const { data: todayEntry } = await _supabase.from('daily_balances')
-        .select('opening_balance')
-        .eq('user_id', currentUser.id)
-        .eq('report_date', date)
-        .maybeSingle();
-
-    let calculatedOpening = 0;
-    if (todayEntry) {
-        calculatedOpening = todayEntry.opening_balance;
-    } else {
-        calculatedOpening = lastEntry ? lastEntry.closing_balance : 0;
-    }
-
+    const calculatedOpening = lastEntry ? lastEntry.closing_balance : 0;
     document.getElementById('openingBal').value = calculatedOpening;
 
     const { data: sales } = await _supabase.from('sales').select('*').eq('user_id', currentUser.id).eq('report_date', date);
