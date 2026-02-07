@@ -140,8 +140,8 @@ function updateCalculations() {
     const totalAllExp = cashExp + dueExp + ownerExp + otherExp;
     document.getElementById('totalExpAll').innerText = `₹${totalAllExp.toLocaleString('en-IN')}`;
     
-    // Net Balance = Cash Sale - Cash Expenses
-    const netCashFlow = cashSale - cashExp;
+    // Net Balance = Cash Sale - TOTAL EXPENSES
+    const netCashFlow = cashSale - totalAllExp;
     const netBalEl = document.getElementById('netBalanceToday');
     netBalEl.innerText = `₹${netCashFlow.toLocaleString('en-IN')}`;
     
@@ -206,12 +206,10 @@ async function saveSales(silent = false) {
     const swiggy = parseFloat(document.getElementById('saleSwiggy').value) || 0;
     const zomato = parseFloat(document.getElementById('saleZomato').value) || 0;
     
-    let cashExpOnly = 0;
-    currentDayExpenses.forEach(exp => { 
-        if(exp.payment_source === 'CASH') cashExpOnly += exp.amount;
-    });
+    let totalExpenses = 0;
+    currentDayExpenses.forEach(exp => totalExpenses += exp.amount);
 
-    const netCashFlow = cashSale - cashExpOnly;
+    const netCashFlow = cashSale - totalExpenses;
     const finalClosingBalance = opening + netCashFlow;
 
     await _supabase.from('daily_balances').upsert({ 
