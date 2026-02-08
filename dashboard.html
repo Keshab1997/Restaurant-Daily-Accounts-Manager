@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Restaurant Daily Accounts Manager - Track sales, expenses, and manage your restaurant's daily cash flow">
     <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/2727/2727313.png">
     <title>Dashboard - Ichamotee Resturent</title>
     <link rel="manifest" href="manifest.json">
@@ -67,12 +68,12 @@
     </style>
 </head>
 <body>
-    <div class="hamburger-trigger" onclick="toggleSidebar()"><i class="ri-menu-2-line"></i></div>
+    <div class="hamburger-trigger" onclick="toggleSidebar()" role="button" aria-label="Open navigation menu" aria-expanded="false" tabindex="0" onkeypress="if(event.key==='Enter')toggleSidebar()"><i class="ri-menu-2-line" aria-hidden="true"></i></div>
 
     <div id="sidebarMenu" class="custom-sidebar">
         <div class="sidebar-header">
             <div class="nav-logo"><i class="ri-restaurant-2-line"></i><span id="sideNavName">RestroManager</span></div>
-            <i class="ri-close-line close-sidebar" onclick="toggleSidebar()"></i>
+            <i class="ri-close-line close-sidebar" onclick="toggleSidebar()" role="button" aria-label="Close navigation menu" tabindex="0" onkeypress="if(event.key==='Enter')toggleSidebar()"></i>
         </div>
         <nav class="sidebar-nav-links">
             <a href="dashboard.html" class="active"><i class="ri-home-4-line"></i> <span>Home</span></a>
@@ -89,7 +90,7 @@
             <a href="pl.html"><i class="ri-pie-chart-line"></i> <span>Profit & Loss</span></a>
             <a href="settings.html"><i class="ri-settings-3-line"></i> <span>Settings</span></a>
         </nav>
-        <div class="sidebar-bottom"><a onclick="logout()" class="logout-link"><i class="ri-logout-box-r-line"></i> <span>Logout</span></a></div>
+        <div class="sidebar-bottom"><a onclick="logout()" class="logout-link" role="button" tabindex="0" onkeypress="if(event.key==='Enter')logout()"><i class="ri-logout-box-r-line"></i> <span>Logout</span></a></div>
     </div>
     <div id="menuOverlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
 
@@ -102,12 +103,12 @@
                     <div id="autoSaveIndicator" class="auto-save-status"><i class="ri-checkbox-circle-line"></i> Saved to Cloud</div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <button id="syncBtn" class="btn-sync" onclick="manualSync()">
-                        <i class="ri-refresh-line" id="syncIcon"></i> <span>Sync</span>
+                    <button id="syncBtn" class="btn-sync" onclick="manualSync()" aria-label="Sync data to cloud">
+                        <i class="ri-refresh-line" id="syncIcon" aria-hidden="true"></i> <span>Sync</span>
                     </button>
                     <div class="date-selector" style="background: #f1f5f9; padding: 10px 15px; border-radius: 12px; display: flex; align-items: center; gap: 10px;">
-                        <i class="ri-calendar-line" style="color: #2563eb;"></i>
-                        <input type="date" id="date" style="background: transparent; border: none; font-weight: 700; color: #1e293b; outline: none;">
+                        <i class="ri-calendar-line" style="color: #2563eb;" aria-hidden="true"></i>
+                        <input type="date" id="date" style="background: transparent; border: none; font-weight: 700; color: #1e293b; outline: none;" aria-label="Select date">
                     </div>
                 </div>
             </div>
@@ -116,25 +117,25 @@
         <!-- Sales Entry Section -->
         <div class="entry-section">
             <div class="opening-card">
-                <label>Opening Balance</label>
-                <input type="number" id="openingBal" placeholder="0">
+                <label for="openingBal">Opening Balance</label>
+                <input type="number" id="openingBal" placeholder="0" aria-label="Opening balance amount">
             </div>
             <div class="sales-grid">
                 <div class="sale-input-box">
-                    <label><i class="ri-money-dollar-circle-line"></i> Cash Sale</label>
-                    <input type="number" id="saleCash" placeholder="0">
+                    <label for="saleCash"><i class="ri-money-dollar-circle-line" aria-hidden="true"></i> Cash Sale</label>
+                    <input type="number" id="saleCash" placeholder="0" aria-label="Cash sale amount">
                 </div>
                 <div class="sale-input-box">
-                    <label><i class="ri-bank-card-line"></i> Card / UPI</label>
-                    <input type="number" id="saleCard" placeholder="0">
+                    <label for="saleCard"><i class="ri-bank-card-line" aria-hidden="true"></i> Card / UPI</label>
+                    <input type="number" id="saleCard" placeholder="0" aria-label="Card and UPI sale amount">
                 </div>
                 <div class="sale-input-box">
-                    <label><i class="ri-EBike-2-line"></i> Swiggy</label>
-                    <input type="number" id="saleSwiggy" placeholder="0">
+                    <label for="saleSwiggy"><i class="ri-EBike-2-line" aria-hidden="true"></i> Swiggy</label>
+                    <input type="number" id="saleSwiggy" placeholder="0" aria-label="Swiggy orders amount">
                 </div>
                 <div class="sale-input-box">
-                    <label><i class="ri-EBike-line"></i> Zomato</label>
-                    <input type="number" id="saleZomato" placeholder="0">
+                    <label for="saleZomato"><i class="ri-EBike-line" aria-hidden="true"></i> Zomato</label>
+                    <input type="number" id="saleZomato" placeholder="0" aria-label="Zomato orders amount">
                 </div>
             </div>
         </div>
@@ -186,11 +187,11 @@
         </div>
 
         <div class="report-actions" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 50px;">
-            <button class="btn-text-report" onclick="shareDailyReportText()" style="padding: 15px; background: #1e293b; color: white; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;">
-                <i class="ri-chat-poll-line"></i> Send Text Report
+            <button class="btn-text-report" onclick="shareDailyReportText()" aria-label="Send daily report as text" style="padding: 15px; background: #1e293b; color: white; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;">
+                <i class="ri-chat-poll-line" aria-hidden="true"></i> Send Text Report
             </button>
-            <button class="btn-image-report" onclick="shareDailyReportImage()" style="padding: 15px; background: #2563eb; color: white; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;">
-                <i class="ri-image-line"></i> Share Image Report
+            <button class="btn-image-report" onclick="shareDailyReportImage()" aria-label="Share daily report as image" style="padding: 15px; background: #2563eb; color: white; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;">
+                <i class="ri-image-line" aria-hidden="true"></i> Share Image Report
             </button>
         </div>
     </main>
@@ -198,7 +199,7 @@
     <!-- Hidden Image Template -->
     <div id="dailyReportTemplate" style="width: 600px; padding: 50px; background: #ffffff; position: absolute; left: -9999px; font-family: 'Inter', sans-serif; color: #1e293b;">
         <div style="text-align: center; border-bottom: 3px solid #2563eb; padding-bottom: 20px; margin-bottom: 30px;">
-            <h1 id="repRestroName" style="color: #1e293b; margin: 0; font-size: 32px; text-transform: uppercase;">Restaurant Name</h1>
+            <h2 id="repRestroName" style="color: #1e293b; margin: 0; font-size: 32px; text-transform: uppercase;">Restaurant Name</h2>
             <h3 id="repDate" style="margin: 10px 0; color: #64748b; font-size: 20px;">2026-02-04</h3>
             <p style="margin: 0; font-weight: 700; color: #2563eb;">DAILY BUSINESS STATEMENT</p>
         </div>
@@ -210,7 +211,7 @@
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px;">
             <div>
-                <h4 style="border-bottom: 2px solid #eff6ff; padding-bottom: 5px; color: #2563eb;">REVENUE</h4>
+                <h2 style="border-bottom: 2px solid #eff6ff; padding-bottom: 5px; color: #2563eb; font-size: 1rem;">REVENUE</h2>
                 <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f1f5f9;"><span>Cash Sale:</span><span id="repCashSale">₹0</span></div>
                 <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f1f5f9;"><span>Card/UPI:</span><span id="repCardSale">₹0</span></div>
                 <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f1f5f9;"><span>Swiggy:</span><span id="repSwiggy">₹0</span></div>
@@ -218,7 +219,7 @@
                 <div style="display: flex; justify-content: space-between; margin-top: 10px; font-weight: 800; color: #2563eb;"><span>TOTAL SALE:</span><span id="repTotalSale">₹0</span></div>
             </div>
             <div>
-                <h4 style="border-bottom: 2px solid #fff1f1; padding-bottom: 5px; color: #ef4444;">EXPENSES</h4>
+                <h2 style="border-bottom: 2px solid #fff1f1; padding-bottom: 5px; color: #ef4444; font-size: 1rem;">EXPENSES</h2>
                 <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f1f5f9;"><span>Cash Exp:</span><span id="repCashExp">₹0</span></div>
                 <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f1f5f9;"><span>Due (Baki):</span><span id="repDueExp">₹0</span></div>
                 <div style="display: flex; justify-content: space-between; padding: 8px 0;"><span>Paid by Owner:</span><span id="repOwnerExp">₹0</span></div>
@@ -228,7 +229,7 @@
 
         <div style="padding: 25px; background: #f1f5f9; border-radius: 20px; text-align: center; border: 1px solid #cbd5e1;">
             <p style="margin: 0; font-size: 14px; font-weight: 700; color: #64748b;">FINAL CLOSING BALANCE</p>
-            <h1 id="repClosing" style="margin: 10px 0; font-size: 42px; font-weight: 900; color: #1e293b;">₹0</h1>
+            <h2 id="repClosing" style="margin: 10px 0; font-size: 42px; font-weight: 900; color: #1e293b;">₹0</h2>
         </div>
 
         <div style="margin-top: 50px; display: flex; justify-content: space-between; align-items: flex-end;">

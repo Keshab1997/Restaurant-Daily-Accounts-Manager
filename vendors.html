@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Vendor Management - Manage suppliers and track vendor dues for your restaurant">
     <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/2727/2727313.png">
     <title>Vendors - RestroManager</title>
     <!-- PWA Meta Tags -->
@@ -68,8 +69,8 @@
                     <h1>Vendor Management 🚚</h1>
                     <p>Manage your suppliers and their dues</p>
                 </div>
-                <button class="btn-add-new" onclick="showAddVendorModal()">
-                    <i class="ri-add-line"></i> Add New Vendor
+                <button class="btn-add-new" onclick="showAddVendorModal()" aria-label="Add new vendor">
+                    <i class="ri-add-line" aria-hidden="true"></i> Add New Vendor
                 </button>
             </div>
 
@@ -81,34 +82,34 @@
         <div class="modal-card">
             <div class="modal-header">
                 <h3><i class="ri-user-add-line"></i> Add New Vendor</h3>
-                <button class="btn-close" onclick="closeModal()"><i class="ri-close-line"></i></button>
+                <button class="btn-close" onclick="closeModal()" aria-label="Close modal"><i class="ri-close-line" aria-hidden="true"></i></button>
             </div>
             <div class="modal-body">
                 <div class="input-group">
-                    <label>Vendor Name</label>
+                    <label for="vName">Vendor Name</label>
                     <div class="input-wrapper">
-                        <i class="ri-store-2-line"></i>
-                        <input type="text" id="vName" placeholder="e.g. Rahim Chicken Center">
+                        <i class="ri-store-2-line" aria-hidden="true"></i>
+                        <input type="text" id="vName" placeholder="e.g. Rahim Chicken Center" aria-label="Vendor name">
                     </div>
                 </div>
                 <div class="input-group">
-                    <label>Phone Number</label>
+                    <label for="vPhone">Phone Number</label>
                     <div class="input-wrapper">
-                        <i class="ri-phone-line"></i>
-                        <input type="text" id="vPhone" placeholder="e.g. 9876543210">
+                        <i class="ri-phone-line" aria-hidden="true"></i>
+                        <input type="text" id="vPhone" placeholder="e.g. 9876543210" aria-label="Phone number">
                     </div>
                 </div>
                 <div class="input-group">
-                    <label>Opening Due Amount (Baki)</label>
+                    <label for="vOpen">Opening Due Amount (Baki)</label>
                     <div class="input-wrapper">
-                        <i class="ri-money-dollar-circle-line"></i>
-                        <input type="number" id="vOpen" placeholder="₹ 0.00">
+                        <i class="ri-money-dollar-circle-line" aria-hidden="true"></i>
+                        <input type="number" id="vOpen" placeholder="₹ 0.00" aria-label="Opening due amount">
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn-cancel" onclick="closeModal()">Cancel</button>
-                <button class="btn-save" onclick="addVendor()">Save Vendor</button>
+                <button class="btn-cancel" onclick="closeModal()" aria-label="Cancel">Cancel</button>
+                <button class="btn-save" onclick="addVendor()" aria-label="Save vendor">Save Vendor</button>
             </div>
         </div>
     </div>

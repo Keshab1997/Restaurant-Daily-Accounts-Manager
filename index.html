@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Restaurant Daily Accounts Manager - Manage your restaurant's daily sales, expenses, and cash flow efficiently">
     <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/2727/2727313.png">
     <title>Login - RestroManager</title>
     <!-- PWA Meta Tags -->
@@ -23,14 +24,14 @@
             <form id="signupForm">
                 <h1>Sign up</h1>
                 <div class="input-group">
-                    <i class="ri-mail-line"></i>
-                    <input type="email" id="signupEmail" placeholder="Email" required>
+                    <i class="ri-mail-line" aria-hidden="true"></i>
+                    <input type="email" id="signupEmail" placeholder="Email" required aria-label="Email address">
                 </div>
                 <div class="input-group">
-                    <i class="ri-lock-line"></i>
-                    <input type="password" id="signupPassword" placeholder="Password" required>
+                    <i class="ri-lock-line" aria-hidden="true"></i>
+                    <input type="password" id="signupPassword" placeholder="Password" required aria-label="Password">
                 </div>
-                <button type="button" onclick="signup()">Register</button>
+                <button type="button" onclick="signup()" aria-label="Register new account">Register</button>
                 <p class="mobile-toggle">Already have an account? <span onclick="toggleForm()">Login</span></p>
             </form>
         </div>
@@ -40,15 +41,15 @@
             <form id="loginForm">
                 <h1>Login</h1>
                 <div class="input-group">
-                    <i class="ri-mail-line"></i>
-                    <input type="email" id="loginEmail" placeholder="Email" required>
+                    <i class="ri-mail-line" aria-hidden="true"></i>
+                    <input type="email" id="loginEmail" placeholder="Email" required aria-label="Email address">
                 </div>
                 <div class="input-group">
-                    <i class="ri-lock-line"></i>
-                    <input type="password" id="loginPassword" placeholder="Password" required>
+                    <i class="ri-lock-line" aria-hidden="true"></i>
+                    <input type="password" id="loginPassword" placeholder="Password" required aria-label="Password">
                 </div>
-                <a href="#" class="forgot">Forgot your password?</a>
-                <button type="button" onclick="login()">Login</button>
+                <a href="#" class="forgot" aria-label="Forgot password">Forgot your password?</a>
+                <button type="button" onclick="login()" aria-label="Login to account">Login</button>
                 <p class="mobile-toggle">Don't have an account? <span onclick="toggleForm()">Sign Up</span></p>
             </form>
         </div>
@@ -60,14 +61,14 @@
                     <div class="glass-effect">
                         <h1>Welcome Back!</h1>
                         <p>Enter your personal details to use all of site features</p>
-                        <button class="hidden" id="loginBtn">Login</button>
+                        <button class="hidden" id="loginBtn" aria-label="Switch to login form">Login</button>
                     </div>
                 </div>
                 <div class="toggle-panel toggle-right">
                     <div class="glass-effect">
                         <h1>Hello, Friend!</h1>
                         <p>Register with your personal details to use all of site features</p>
-                        <button class="hidden" id="registerBtn">Create an account</button>
+                        <button class="hidden" id="registerBtn" aria-label="Switch to registration form">Create an account</button>
                     </div>
                 </div>
             </div>

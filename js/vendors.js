@@ -28,9 +28,9 @@ async function loadVendors() {
             const due = totalBill - totalPaid;
 
             list.innerHTML += `
-                <div class="vendor-card" onclick="location.href='vendor-details.html?id=${v.id}'">
+                <div class="vendor-card" onclick="location.href='vendor-details.html?id=${v.id}'" role="button" tabindex="0" onkeypress="if(event.key==='Enter')location.href='vendor-details.html?id=${v.id}'" aria-label="View ${v.name} details">
                     <h3>${v.name}</h3>
-                    <p>Due: ₹${due}</p>
+                    <p>Due: ₹${due.toLocaleString('en-IN')}</p>
                 </div>
             `;
         }

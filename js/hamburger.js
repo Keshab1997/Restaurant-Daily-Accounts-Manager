@@ -6,10 +6,16 @@
 function toggleSidebar() {
     const sidebar = document.getElementById('sidebarMenu');
     const overlay = document.getElementById('menuOverlay');
+    const trigger = document.querySelector('.hamburger-trigger');
     
     if (sidebar && overlay) {
-        sidebar.classList.toggle('active');
+        const isActive = sidebar.classList.toggle('active');
         overlay.classList.toggle('active');
+        
+        // Update ARIA attributes
+        if (trigger) {
+            trigger.setAttribute('aria-expanded', isActive);
+        }
     }
 }
 
