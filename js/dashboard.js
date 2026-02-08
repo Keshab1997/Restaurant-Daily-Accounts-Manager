@@ -70,25 +70,16 @@ function updateDisplayDate(dateStr) {
 async function loadData() {
     const date = document.getElementById('date').value;
     
-    const { data: todayEntry } = await _supabase.from('daily_balances')
-        .select('opening_balance')
+    // Always fetch previous day's closing balance
+    const { data: lastEntry } = await _supabase.from('daily_balances')
+        .select('closing_balance')
         .eq('user_id', currentUser.id)
-        .eq('report_date', date)
+        .lt('report_date', date)
+        .order('report_date', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
-    if (todayEntry) {
-        document.getElementById('openingBal').value = todayEntry.opening_balance;
-    } else {
-        const { data: lastEntry } = await _supabase.from('daily_balances')
-            .select('closing_balance')
-            .eq('user_id', currentUser.id)
-            .lt('report_date', date)
-            .order('report_date', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-        document.getElementById('openingBal').value = lastEntry ? lastEntry.closing_balance : 0;
-    }
+    document.getElementById('openingBal').value = lastEntry ? lastEntry.closing_balance : 0;
 
     const { data: sales } = await _supabase.from('sales').select('*').eq('user_id', currentUser.id).eq('report_date', date);
     ['saleCash', 'saleCard', 'saleSwiggy', 'saleZomato'].forEach(id => document.getElementById(id).value = 0);
