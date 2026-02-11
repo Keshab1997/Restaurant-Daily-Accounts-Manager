@@ -311,13 +311,14 @@ async function deleteEntry(id, type) {
         } else if(type === 'PAYMENT' || type === 'PAYMENT_OWNER') {
             const expDesc = `${record.vendors.name} (Payment Bill #${record.bill_no})`;
             
+            // Delete payment entry from expenses
             await _supabase.from('expenses').delete()
                 .eq('user_id', currentUser.id)
                 .eq('report_date', record.t_date)
                 .eq('amount', record.amount)
                 .eq('description', expDesc);
 
-            // Restore DUE amount
+            // Restore or create DUE entry
             const { data: existingDue } = await _supabase.from('expenses')
                 .select('*')
                 .eq('user_id', currentUser.id)
@@ -326,9 +327,20 @@ async function deleteEntry(id, type) {
                 .maybeSingle();
 
             if (existingDue) {
+                // DUE entry exists - increase the amount
                 await _supabase.from('expenses').update({
                     amount: existingDue.amount + record.amount
                 }).eq('id', existingDue.id);
+            } else {
+                // No DUE entry - create new one
+                await _supabase.from('expenses').insert({
+                    user_id: currentUser.id,
+                    report_date: record.t_date,
+                    description: `${record.vendors.name} (Restored Due from Payment Delete)`,
+                    amount: record.amount,
+                    payment_source: 'DUE',
+                    bill_no: record.bill_no
+                });
             }
 
             if(type === 'PAYMENT_OWNER') {
