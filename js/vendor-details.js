@@ -228,20 +228,31 @@ async function addEntry() {
             bill_no: billNo.toString()
         });
 
-        // Update or delete DUE entry
-        const { data: existingDue } = await _supabase.from('expenses')
+        // Update or delete DUE entry (including PARTIAL entries)
+        const { data: dueEntries } = await _supabase.from('expenses')
             .select('*')
             .eq('user_id', currentUser.id)
             .eq('bill_no', billNo.toString())
             .eq('payment_source', 'DUE')
-            .maybeSingle();
+            .order('created_at', { ascending: true });
 
-        if (existingDue) {
-            const remainingDue = existingDue.amount - amount;
-            if (remainingDue > 0) {
-                await _supabase.from('expenses').update({ amount: remainingDue }).eq('id', existingDue.id);
-            } else {
-                await _supabase.from('expenses').delete().eq('id', existingDue.id);
+        if (dueEntries && dueEntries.length > 0) {
+            let remainingPayment = amount;
+            
+            for (const dueEntry of dueEntries) {
+                if (remainingPayment <= 0) break;
+                
+                if (dueEntry.amount <= remainingPayment) {
+                    // Full payment of this DUE entry - delete it
+                    await _supabase.from('expenses').delete().eq('id', dueEntry.id);
+                    remainingPayment -= dueEntry.amount;
+                } else {
+                    // Partial payment of this DUE entry - update remaining
+                    await _supabase.from('expenses').update({ 
+                        amount: dueEntry.amount - remainingPayment 
+                    }).eq('id', dueEntry.id);
+                    remainingPayment = 0;
+                }
             }
         }
 
