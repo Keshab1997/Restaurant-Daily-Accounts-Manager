@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cleanup DUE Entries</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Cleanup Orphan DUE Entries</h1>
+    <button onclick="cleanupDueEntries()">Run Cleanup</button>
+    <div id="result"></div>
+
+    <script src="js/config.js"></script>
+    <script>
+        async function cleanupDueEntries() {
+            const session = await checkAuth(true);
+            const userId = session.user.id;
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Processing...';
+
+            // Get all DUE entries
+            const { data: dueEntries } = await _supabase.from('expenses')
+                .select('*')
+                .eq('user_id', userId)
+                .eq('payment_source', 'DUE');
+
+            if (!dueEntries || dueEntries.length === 0) {
+                resultDiv.innerHTML = 'No DUE entries found.';
+                return;
+            }
+
+            let cleaned = 0;
+            for (const due of dueEntries) {
+                if (!due.bill_no) continue;
+
+                // Check if there are payments for this bill
+                const { data: payments } = await _supabase.from('expenses')
+                    .select('amount')
+                    .eq('user_id', userId)
+                    .eq('bill_no', due.bill_no)
+                    .in('payment_source', ['CASH', 'OWNER'])
+                    .ilike('description', '%Payment Bill%');
+
+                if (payments && payments.length > 0) {
+                    const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+                    
+                    if (totalPaid >= due.amount) {
+                        // Full payment - delete DUE entry
+                        await _supabase.from('expenses').delete().eq('id', due.id);
+                        cleaned++;
+                        resultDiv.innerHTML += `<br>Deleted DUE entry: ${due.description} (₹${due.amount})`;
+                    } else if (totalPaid > 0) {
+                        // Partial payment - update DUE amount
+                        const remaining = due.amount - totalPaid;
+                        await _supabase.from('expenses').update({ amount: remaining }).eq('id', due.id);
+                        resultDiv.innerHTML += `<br>Updated DUE entry: ${due.description} (₹${due.amount} → ₹${remaining})`;
+                    }
+                }
+            }
+
+            resultDiv.innerHTML += `<br><br><strong>Cleanup complete! ${cleaned} entries processed.</strong>`;
+        }
+    </script>
+</body>
+</html>

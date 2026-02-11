@@ -228,6 +228,8 @@ async function addEntry() {
             bill_no: billNo.toString()
         });
 
+        console.log('Payment added. Now checking for DUE entries with bill_no:', billNo);
+
         // Update or delete DUE entry (including PARTIAL entries)
         const { data: dueEntries } = await _supabase.from('expenses')
             .select('*')
@@ -236,24 +238,34 @@ async function addEntry() {
             .eq('payment_source', 'DUE')
             .order('created_at', { ascending: true });
 
+        console.log('Found DUE entries:', dueEntries);
+
         if (dueEntries && dueEntries.length > 0) {
             let remainingPayment = amount;
             
             for (const dueEntry of dueEntries) {
                 if (remainingPayment <= 0) break;
                 
+                console.log(`Processing DUE entry: ₹${dueEntry.amount}, Remaining payment: ₹${remainingPayment}`);
+                
                 if (dueEntry.amount <= remainingPayment) {
                     // Full payment of this DUE entry - delete it
+                    console.log(`Deleting DUE entry ID: ${dueEntry.id}`);
                     await _supabase.from('expenses').delete().eq('id', dueEntry.id);
                     remainingPayment -= dueEntry.amount;
                 } else {
                     // Partial payment of this DUE entry - update remaining
+                    const newAmount = dueEntry.amount - remainingPayment;
+                    console.log(`Updating DUE entry ID: ${dueEntry.id} from ₹${dueEntry.amount} to ₹${newAmount}`);
                     await _supabase.from('expenses').update({ 
-                        amount: dueEntry.amount - remainingPayment 
+                        amount: newAmount
                     }).eq('id', dueEntry.id);
                     remainingPayment = 0;
                 }
             }
+            console.log('DUE entries processing complete');
+        } else {
+            console.log('No DUE entries found for bill_no:', billNo);
         }
 
         if(type === 'PAYMENT_OWNER') {
