@@ -11,7 +11,12 @@ window.onload = async () => {
     document.getElementById('fromDate').value = firstDay;
     document.getElementById('toDate').value = today;
 
-    loadVendorHistory();
+    await loadVendorHistory();
+    
+    // Auto-refresh every 30 seconds to catch vendor name updates
+    setInterval(async () => {
+        await loadVendorHistory();
+    }, 30000);
 };
 
 async function loadVendorHistory() {
