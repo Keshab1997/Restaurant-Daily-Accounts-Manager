@@ -119,7 +119,7 @@ async function deleteEntry(id) {
     if (!confirm("Are you sure you want to delete this record?")) return;
 
     const { error } = await _supabase.from('owner_ledger').delete().eq('id', id);
-    if (error) alert("Error deleting: " + error.message);
+    if (error) showToast("Error deleting: " + error.message, "error");
     else loadOwnerHistory();
 }
 

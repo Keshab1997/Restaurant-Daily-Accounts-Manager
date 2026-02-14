@@ -65,3 +65,63 @@ body { background: var(--bg-main); color: var(--text-dark); }
 @media (max-width: 600px) {
     .main-content { padding: 15px; padding-bottom: 100px; }
 }
+
+/* Toast Notification Styles */
+.toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: white;
+    padding: 16px 20px;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    z-index: 10000;
+    transform: translateX(400px);
+    transition: transform 0.3s ease;
+}
+
+.toast.show {
+    transform: translateX(0);
+}
+
+.toast i {
+    font-size: 1.5rem;
+}
+
+.toast-success {
+    border-left: 4px solid var(--success);
+}
+
+.toast-success i {
+    color: var(--success);
+}
+
+.toast-error {
+    border-left: 4px solid var(--danger);
+}
+
+.toast-error i {
+    color: var(--danger);
+}
+
+.toast-info {
+    border-left: 4px solid var(--primary);
+}
+
+.toast-info i {
+    color: var(--primary);
+}
+
+@media (max-width: 600px) {
+    .toast {
+        top: 10px;
+        right: 10px;
+        left: 10px;
+        font-size: 0.9rem;
+    }
+}

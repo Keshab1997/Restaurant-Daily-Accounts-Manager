@@ -178,7 +178,7 @@ async function saveAllRows() {
     saveBtn.disabled = false;
     saveBtn.innerHTML = '<i class="ri-save-3-line"></i> Save All';
     
-    if (successCount > 0) alert(`Successfully saved ${successCount} entries!`);
+    if (successCount > 0) showToast(`Successfully saved ${successCount} entries!`, "success");
 }
 
 async function syncRowToSupabase(id) {
@@ -200,14 +200,14 @@ async function syncRowToSupabase(id) {
 
     const vendor = vendorsList.find(v => v.name.trim().toLowerCase() === vendorName.trim().toLowerCase());
     if (!vendor) {
-        alert(`Vendor "${vendorName}" not found. Please add vendor first.`);
+        showToast(`Vendor "${vendorName}" not found. Please add vendor first.`, "error");
         return false;
     }
 
     if (!row.getAttribute('data-expense-id')) {
         const { data: existingBill } = await _supabase.from('vendor_ledger').select('id').eq('vendor_id', vendor.id).eq('bill_no', billNo).eq('t_type', 'BILL').maybeSingle();
         if (existingBill) {
-            alert(`Error: Bill No ${billNo} already exists for ${vendorName}!`);
+            showToast(`Error: Bill No ${billNo} already exists for ${vendorName}!`, "error");
             statusIcon.innerHTML = '<i class="ri-error-warning-line status-error"></i>';
             return false;
         }

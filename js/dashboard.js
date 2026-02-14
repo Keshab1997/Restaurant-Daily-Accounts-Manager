@@ -181,7 +181,7 @@ async function manualSync() {
             text.innerText = 'Sync';
         }, 3000);
     } catch (err) {
-        alert('Sync failed: ' + err.message);
+        showToast('Sync failed: ' + err.message, "error");
         btn.disabled = false;
         btn.classList.remove('syncing');
         icon.classList.remove('spin');

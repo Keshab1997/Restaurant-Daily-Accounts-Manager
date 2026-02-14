@@ -192,8 +192,8 @@ async function saveMonthlyData() {
         commissions
     }, { onConflict: 'user_id, month_year' });
 
-    if(error) alert("Error: " + error.message);
-    else alert("✅ Data Saved!");
+    if(error) showToast("Error: " + error.message, "error");
+    else showToast("✅ Data Saved!", "success");
 }
 
 function showAddModal(type) {
@@ -218,7 +218,7 @@ async function saveCategory() {
     const isSpecial = document.getElementById('hasComm').checked;
     const defaultComm = parseFloat(document.getElementById('defaultComm').value) || 0;
 
-    if(!name) return alert("Name required");
+    if(!name) return showToast("Name required", "error");
 
     await _supabase.from('pl_categories').insert({ 
         user_id: currentUser.id, 

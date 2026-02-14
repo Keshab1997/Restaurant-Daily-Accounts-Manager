@@ -96,21 +96,24 @@
         async function login() {
             const email = document.getElementById('loginEmail').value;
             const pass = document.getElementById('loginPassword').value;
-            if(!email || !pass) return alert("Please fill all fields");
+            if(!email || !pass) return showToast("Please fill all fields", "error");
 
             const { error } = await _supabase.auth.signInWithPassword({ email, password: pass });
-            if (error) alert(error.message);
-            else window.location.href = 'dashboard.html';
+            if (error) showToast(error.message, "error");
+            else {
+                showToast("Login successful!", "success");
+                setTimeout(() => window.location.href = 'dashboard.html', 1000);
+            }
         }
 
         async function signup() {
             const email = document.getElementById('signupEmail').value;
             const pass = document.getElementById('signupPassword').value;
-            if(!email || !pass) return alert("Please fill all fields");
+            if(!email || !pass) return showToast("Please fill all fields", "error");
 
             const { error } = await _supabase.auth.signUp({ email, password: pass });
-            if (error) alert(error.message);
-            else alert("Registration successful! Please check your email (and Spam folder) for confirmation link.");
+            if (error) showToast(error.message, "error");
+            else showToast("Registration successful! Check your email.", "success");
         }
 
         checkAuth(false);

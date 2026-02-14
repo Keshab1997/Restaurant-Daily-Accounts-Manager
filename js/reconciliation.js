@@ -18,7 +18,7 @@ async function calculateReconciliation() {
     const fromDate = document.getElementById('fromDate').value;
     const toDate = document.getElementById('toDate').value;
     
-    if(!fromDate || !toDate) return alert("Please select both dates");
+    if(!fromDate || !toDate) return showToast("Please select both dates", "error");
 
     document.getElementById('statusTitle').innerText = "Calculating...";
     document.getElementById('statusIcon').innerHTML = '<i class="ri-loader-4-line spin"></i>';
@@ -107,7 +107,7 @@ async function calculateReconciliation() {
 
     } catch (err) {
         console.error(err);
-        alert("Error calculating reconciliation: " + err.message);
+        showToast("Error calculating reconciliation: " + err.message, "error");
     }
 }
 

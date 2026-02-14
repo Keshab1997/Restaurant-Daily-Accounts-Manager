@@ -47,7 +47,7 @@ async function addVendor() {
     const phone = document.getElementById('vPhone').value;
     const open = parseFloat(document.getElementById('vOpen').value) || 0;
 
-    if(!name) return alert("Name required");
+    if(!name) return showToast("Name required", "error");
 
     await _supabase.from('vendors').insert({
         user_id: currentUser.id,

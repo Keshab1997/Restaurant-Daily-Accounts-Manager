@@ -216,7 +216,7 @@ async function saveRow(staffId, isMobile = false) {
 async function deleteStaff(id) {
     if(!confirm("Are you sure you want to delete this staff?")) return;
     const { error } = await _supabase.from('staff').delete().eq('id', id);
-    if(error) alert(error.message);
+    if(error) showToast(error.message, "error");
     else loadStaff();
 }
 

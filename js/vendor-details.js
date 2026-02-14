@@ -184,7 +184,7 @@ async function addEntry() {
         billNo = document.getElementById('selectBillNo').value;
     }
 
-    if(!amount || billNo === "") return alert("Please enter amount and numeric Bill Number");
+    if(!amount || billNo === "") return showToast("Please enter amount and numeric Bill Number", "error");
 
     const { data: vendor } = await _supabase.from('vendors').select('name').eq('id', vendorId).single();
 
@@ -200,7 +200,7 @@ async function addEntry() {
     });
 
     if(error) {
-        alert("Error: " + error.message);
+        showToast("Error: " + error.message, "error");
         return;
     }
 
@@ -301,7 +301,7 @@ async function deleteEntry(id, type) {
     const { error } = await _supabase.from('vendor_ledger').delete().eq('id', id);
 
     if(error) {
-        alert("Error deleting: " + error.message);
+        showToast("Error deleting: " + error.message, "error");
     } else {
         if(type === 'BILL') {
             await _supabase.from('expenses').delete()

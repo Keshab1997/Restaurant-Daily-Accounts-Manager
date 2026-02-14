@@ -85,7 +85,7 @@ async function addOwnerTrans() {
     });
 
     if(error) {
-        alert("Error: " + error.message);
+        showToast("Error: " + error.message, "error");
     } else {
         document.getElementById('amount').value = '';
         document.getElementById('desc').value = '';
