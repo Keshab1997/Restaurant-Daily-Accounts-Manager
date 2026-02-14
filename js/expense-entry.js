@@ -284,22 +284,42 @@ async function syncRowToSupabase(id) {
 
 async function handleVendorChange(input) {
     const row = input.closest('tr');
-    const vendor = vendorsList.find(v => v.name.trim().toLowerCase() === input.value.trim().toLowerCase());
+    const vendorName = input.value.trim();
+    
+    const vendor = vendorsList.find(v => v.name.trim().toLowerCase() === vendorName.toLowerCase());
+    
     if (vendor) {
+        // যদি এই রো-তে আগে থেকেই ডাটা সেভ করা থাকে (Edit mode), তবে বিল নম্বর পরিবর্তন করব না
         if (row.getAttribute('data-expense-id')) return;
-        
-        const { data: lastBill } = await _supabase.from('vendor_ledger').select('bill_no').eq('vendor_id', vendor.id).eq('t_type', 'BILL').order('bill_no', { ascending: false }).limit(1);
-        let maxBillNo = lastBill?.[0] ? (parseInt(lastBill[0].bill_no) || 0) : 0;
-        
-        const rows = document.querySelectorAll('#expenseBody tr');
-        rows.forEach(r => {
-            const vName = r.querySelector('.v-name')?.value.trim().toLowerCase();
-            const billNo = parseInt(r.querySelector('.v-bill-no')?.value) || 0;
-            if (vName === input.value.trim().toLowerCase() && billNo > maxBillNo) {
-                maxBillNo = billNo;
+
+        // ১. ডাটাবেস থেকে ওই ভেন্ডরের সব বিল নম্বর নিয়ে আসা
+        const { data: allBills, error } = await _supabase.from('vendor_ledger')
+            .select('bill_no')
+            .eq('vendor_id', vendor.id);
+
+        let maxBillNo = 0;
+
+        if (allBills && allBills.length > 0) {
+            // স্ট্রিং থেকে নাম্বারে কনভার্ট করে সর্বোচ্চ নম্বরটি বের করা
+            maxBillNo = Math.max(...allBills.map(b => parseInt(b.bill_no) || 0));
+        }
+
+        // ২. বর্তমান স্ক্রিনে (UI) অন্য কোনো রো-তে একই ভেন্ডরের বিল নম্বর লেখা হয়েছে কিনা চেক করা
+        // এটি করা হয় যাতে একই সাথে ৫টি রো এন্ট্রি করলে নম্বরগুলো সিরিয়ালি বসে (যেমন: ১৩, ১৪, ১৫...)
+        const allRows = document.querySelectorAll('#expenseBody tr');
+        allRows.forEach(r => {
+            const vNameInput = r.querySelector('.v-name');
+            const bNoInput = r.querySelector('.v-bill-no');
+            
+            if (vNameInput && bNoInput && vNameInput.value.trim().toLowerCase() === vendorName.toLowerCase()) {
+                const currentInRow = parseInt(bNoInput.value) || 0;
+                if (currentInRow > maxBillNo) {
+                    maxBillNo = currentInRow;
+                }
             }
         });
-        
+
+        // সর্বোচ্চ নম্বরের সাথে ১ যোগ করে বসানো
         row.querySelector('.v-bill-no').value = maxBillNo + 1;
         unlockRow(row);
     } else {
