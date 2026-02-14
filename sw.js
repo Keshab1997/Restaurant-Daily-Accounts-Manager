@@ -1,4 +1,4 @@
-const CACHE_NAME = 'restro-manager-v45';
+const CACHE_NAME = 'restro-manager-v46';
 const ASSETS = [
   '/',
   '/index.html',
@@ -52,4 +52,11 @@ self.addEventListener('fetch', (e) => {
       return res || fetch(e.request);
     })
   );
+});
+
+// Handle skipWaiting message
+self.addEventListener('message', (event) => {
+  if (event.data === 'skipWaiting') {
+    self.skipWaiting();
+  }
 });

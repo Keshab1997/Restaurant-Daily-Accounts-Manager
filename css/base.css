@@ -125,3 +125,20 @@ body { background: var(--bg-main); color: var(--text-dark); }
         font-size: 0.9rem;
     }
 }
+
+.toast-btn {
+    background: white;
+    color: #2563eb;
+    border: none;
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-weight: 800;
+    font-size: 0.8rem;
+    margin-left: 10px;
+    cursor: pointer;
+    text-transform: uppercase;
+}
+
+.toast-btn:hover {
+    background: #f1f5f9;
+}

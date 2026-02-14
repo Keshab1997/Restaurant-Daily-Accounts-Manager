@@ -41,12 +41,56 @@ if (typeof document !== 'undefined') {
     });
 }
 
-// Register Service Worker for PWA
+// Service Worker Registration with Update Logic
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('Service Worker Registered'))
-            .catch(err => console.log('Service Worker Error', err));
+        navigator.serviceWorker.register('/sw.js').then(reg => {
+            console.log('Service Worker Registered');
+            
+            // Check for updates
+            reg.addEventListener('updatefound', () => {
+                const newWorker = reg.installing;
+                newWorker.addEventListener('statechange', () => {
+                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                        showUpdateToast(reg);
+                    }
+                });
+            });
+
+            // If update is already waiting
+            if (reg.waiting) {
+                showUpdateToast(reg);
+            }
+        }).catch(err => console.log('Service Worker Error', err));
+    });
+
+    // Reload page when new service worker takes control
+    let refreshing;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing) return;
+        window.location.reload();
+        refreshing = true;
+    });
+}
+
+// Show update notification
+function showUpdateToast(reg) {
+    const toast = document.createElement('div');
+    toast.className = 'toast toast-info show';
+    toast.style.pointerEvents = 'auto';
+    
+    toast.innerHTML = `
+        <i class="ri-refresh-line"></i>
+        <span>New version available!</span>
+        <button id="updateAppBtn" class="toast-btn">Update Now</button>
+    `;
+
+    document.body.appendChild(toast);
+
+    document.getElementById('updateAppBtn').addEventListener('click', () => {
+        if (reg.waiting) {
+            reg.waiting.postMessage('skipWaiting');
+        }
     });
 }
 
