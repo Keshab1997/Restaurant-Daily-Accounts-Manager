@@ -384,20 +384,33 @@ function editEntry(id, type, amount, billNo, date, desc) {
 }
 
 async function generateInvoiceImage() {
-    const element = document.getElementById('invoiceTemplate');
-    document.getElementById('invDate').innerText = "Date: " + new Date().toLocaleDateString('en-GB');
+    const btn = document.querySelector('.btn-share-pdf');
+    const originalContent = btn.innerHTML;
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ri-loader-4-line spin"></i> Generating...';
     
-    html2canvas(element, { 
-        scale: 2,
-        useCORS: true,
-        logging: false
-    }).then(canvas => {
+    showToast("Generating bill image, please wait...", "info");
+
+    try {
+        const element = document.getElementById('invoiceTemplate');
+        document.getElementById('invDate').innerText = "Date: " + new Date().toLocaleDateString('en-GB');
+        
+        const canvas = await html2canvas(element, { 
+            scale: 2,
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: "#ffffff"
+        });
+
         const link = document.createElement('a');
         const vendorName = document.getElementById('vNameTitle').innerText.replace(/\s+/g, '_');
         link.download = `Statement_${vendorName}_${new Date().getTime()}.png`;
         link.href = canvas.toDataURL("image/png");
         link.click();
         
+        showToast("Bill image generated successfully!", "success");
+
         if (navigator.share) {
             canvas.toBlob(blob => {
                 const file = new File([blob], "statement.png", { type: "image/png" });
@@ -408,5 +421,11 @@ async function generateInvoiceImage() {
                 }).catch(console.error);
             });
         }
-    });
+    } catch (error) {
+        console.error("Image generation error:", error);
+        showToast("Failed to generate image. Try again.", "error");
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalContent;
+    }
 }

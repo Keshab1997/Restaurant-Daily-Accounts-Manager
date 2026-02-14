@@ -67,6 +67,30 @@
             </div>
         </div>
 
+        <!-- Summary Bar -->
+        <div class="summary-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 30px;">
+            <!-- Total Basic -->
+            <div class="glass-card" style="padding: 15px; border-left: 5px solid #2563eb; display: flex; align-items: center; gap: 12px;">
+                <div style="background: #eff6ff; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #2563eb;"><i class="ri-money-dollar-circle-line" style="font-size: 1.3rem;"></i></div>
+                <div><p style="margin:0; font-size: 0.7rem; color: #64748b; font-weight: 700; text-transform: uppercase;">Total Basic</p><h3 id="summaryBasic" style="margin:0; font-size: 1.2rem;">₹0</h3></div>
+            </div>
+            <!-- Total Cut -->
+            <div class="glass-card" style="padding: 15px; border-left: 5px solid #ef4444; display: flex; align-items: center; gap: 12px;">
+                <div style="background: #fff1f1; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #ef4444;"><i class="ri-scissors-cut-line" style="font-size: 1.3rem;"></i></div>
+                <div><p style="margin:0; font-size: 0.7rem; color: #64748b; font-weight: 700; text-transform: uppercase;">Total Cut</p><h3 id="summaryCut" style="margin:0; font-size: 1.2rem;">₹0</h3></div>
+            </div>
+            <!-- Net Payable -->
+            <div class="glass-card" style="padding: 15px; border-left: 5px solid #64748b; display: flex; align-items: center; gap: 12px;">
+                <div style="background: #f1f5f9; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #64748b;"><i class="ri-bank-card-line" style="font-size: 1.3rem;"></i></div>
+                <div><p style="margin:0; font-size: 0.7rem; color: #64748b; font-weight: 700; text-transform: uppercase;">Net Payable</p><h3 id="summaryNet" style="margin:0; font-size: 1.2rem;">₹0</h3></div>
+            </div>
+            <!-- Total Paid (New) -->
+            <div class="glass-card" style="padding: 15px; border-left: 5px solid #10b981; display: flex; align-items: center; gap: 12px;">
+                <div style="background: #f0fdf4; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #10b981;"><i class="ri-checkbox-circle-line" style="font-size: 1.3rem;"></i></div>
+                <div><p style="margin:0; font-size: 0.7rem; color: #10b981; font-weight: 700; text-transform: uppercase;">Total Paid</p><h3 id="summaryPaid" style="margin:0; font-size: 1.2rem; color: #10b981;">₹0</h3></div>
+            </div>
+        </div>
+
         <div class="glass-card table-card">
             <div class="table-wrapper">
                 <table class="salary-table">

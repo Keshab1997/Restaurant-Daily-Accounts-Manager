@@ -96,6 +96,8 @@ function renderSpecialItem(cat) {
 
 async function loadPLData() {
     const month = document.getElementById('plMonth').value;
+    showToast(`Fetching data for ${month}...`, "info");
+    
     const [year, monthNum] = month.split('-');
     const startDate = `${month}-01`;
     const lastDay = new Date(year, monthNum, 0).getDate();
@@ -176,7 +178,13 @@ function calculatePL() {
 }
 
 async function saveMonthlyData() {
+    const btn = document.querySelector('.btn-save-pl');
+    const originalHTML = btn.innerHTML;
     const month = document.getElementById('plMonth').value;
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ri-loader-4-line spin"></i> Saving...';
+
     const values = {};
     const commissions = {};
 
@@ -185,15 +193,22 @@ async function saveMonthlyData() {
         if(cat.is_special) commissions[cat.id] = parseFloat(document.getElementById(`comm-${cat.id}`).value) || 0;
     });
 
-    const { error } = await _supabase.from('pl_monthly_data').upsert({
-        user_id: currentUser.id,
-        month_year: month,
-        values,
-        commissions
-    }, { onConflict: 'user_id, month_year' });
+    try {
+        const { error } = await _supabase.from('pl_monthly_data').upsert({
+            user_id: currentUser.id,
+            month_year: month,
+            values,
+            commissions
+        }, { onConflict: 'user_id, month_year' });
 
-    if(error) showToast("Error: " + error.message, "error");
-    else showToast("✅ Data Saved!", "success");
+        if(error) throw error;
+        showToast(`P&L data for ${month} saved successfully!`, "success");
+    } catch (error) {
+        showToast("Error: " + error.message, "error");
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalHTML;
+    }
 }
 
 function showAddModal(type) {
@@ -218,60 +233,87 @@ async function saveCategory() {
     const isSpecial = document.getElementById('hasComm').checked;
     const defaultComm = parseFloat(document.getElementById('defaultComm').value) || 0;
 
-    if(!name) return showToast("Name required", "error");
+    if(!name) return showToast("Category name is required", "error");
 
-    await _supabase.from('pl_categories').insert({ 
-        user_id: currentUser.id, 
-        name, 
-        type, 
-        is_special: isSpecial,
-        default_comm: defaultComm,
-        special_key: isSpecial ? 'CUSTOM' : null
-    });
-    
-    closeModal();
-    await loadCategories();
-    await loadPLData();
+    try {
+        await _supabase.from('pl_categories').insert({ 
+            user_id: currentUser.id, 
+            name, 
+            type, 
+            is_special: isSpecial,
+            default_comm: defaultComm,
+            special_key: isSpecial ? 'CUSTOM' : null
+        });
+        
+        showToast(`${type} category added!`, "success");
+        closeModal();
+        await loadCategories();
+        await loadPLData();
+    } catch (err) {
+        showToast("Failed to add category", "error");
+    }
 }
 
 async function deleteCategory(id) {
     if(!confirm("Are you sure you want to remove this item?")) return;
-    await _supabase.from('pl_categories').delete().eq('id', id);
-    await loadCategories();
-    await loadPLData();
+    
+    try {
+        await _supabase.from('pl_categories').delete().eq('id', id);
+        showToast("Category removed", "success");
+        await loadCategories();
+        await loadPLData();
+    } catch (err) {
+        showToast("Error deleting category", "error");
+    }
 }
 
 async function generatePLImage() {
-    document.getElementById('tempRestroName').innerText = restaurantName;
-    document.getElementById('tempMonthTitle').innerText = document.getElementById('plMonth').value;
-    document.getElementById('tempSignature').innerText = signatureName;
+    const btn = document.querySelector('.btn-share-pl');
+    const originalHTML = btn.innerHTML;
 
-    const tempContent = document.getElementById('tempContent');
-    tempContent.innerHTML = document.getElementById('plCaptureArea').innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ri-loader-4-line spin"></i> Generating...';
+    showToast("Generating monthly P&L report...", "info");
 
-    tempContent.querySelectorAll('.btn-del-item, .btn-add-cat').forEach(b => b.remove());
-    
-    tempContent.querySelectorAll('input').forEach(input => {
-        const originalInput = document.getElementById(input.id);
-        const val = originalInput ? originalInput.value : 0;
-        const span = document.createElement('b');
-        span.innerText = input.classList.contains('special-comm') ? val + '%' : `₹${parseFloat(val).toLocaleString('en-IN')}`;
-        input.parentNode.replaceChild(span, input);
-    });
+    try {
+        document.getElementById('tempRestroName').innerText = restaurantName;
+        document.getElementById('tempMonthTitle').innerText = document.getElementById('plMonth').value;
+        document.getElementById('tempSignature').innerText = signatureName;
 
-    const isProfit = document.getElementById('finalBox').classList.contains('profit');
-    const tempFinalBox = document.getElementById('tempFinalResult');
-    tempFinalBox.style.background = isProfit ? '#d1fae5' : '#fee2e2';
-    tempFinalBox.style.color = isProfit ? '#059669' : '#ef4444';
-    document.getElementById('tempResultLabel').innerText = document.getElementById('resultLabel').innerText;
-    document.getElementById('tempFinalAmount').innerText = document.getElementById('finalAmount').innerText;
+        const tempContent = document.getElementById('tempContent');
+        tempContent.innerHTML = document.getElementById('plCaptureArea').innerHTML;
 
-    html2canvas(document.getElementById('plImageTemplate'), { scale: 2 }).then(canvas => {
+        tempContent.querySelectorAll('.btn-del-item, .btn-add-cat').forEach(b => b.remove());
+        
+        tempContent.querySelectorAll('input').forEach(input => {
+            const originalInput = document.getElementById(input.id);
+            const val = originalInput ? originalInput.value : 0;
+            const span = document.createElement('b');
+            span.innerText = input.classList.contains('special-comm') ? val + '%' : `₹${parseFloat(val).toLocaleString('en-IN')}`;
+            input.parentNode.replaceChild(span, input);
+        });
+
+        const isProfit = document.getElementById('finalBox').classList.contains('profit');
+        const tempFinalBox = document.getElementById('tempFinalResult');
+        tempFinalBox.style.background = isProfit ? '#d1fae5' : '#fee2e2';
+        tempFinalBox.style.color = isProfit ? '#059669' : '#ef4444';
+        document.getElementById('tempResultLabel').innerText = document.getElementById('resultLabel').innerText;
+        document.getElementById('tempFinalAmount').innerText = document.getElementById('finalAmount').innerText;
+
+        const canvas = await html2canvas(document.getElementById('plImageTemplate'), { scale: 2 });
         const link = document.createElement('a');
         link.download = `PL_Report.png`;
         link.href = canvas.toDataURL();
         link.click();
-    });
+
+        showToast("P&L Report generated successfully!", "success");
+    } catch (err) {
+        console.error(err);
+        showToast("Failed to generate report image", "error");
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalHTML;
+    }
 }
 
 async function logout() { await _supabase.auth.signOut(); window.location.href = 'index.html'; }

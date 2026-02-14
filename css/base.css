@@ -142,3 +142,12 @@ body { background: var(--bg-main); color: var(--text-dark); }
 .toast-btn:hover {
     background: #f1f5f9;
 }
+
+.spin {
+    animation: spin 1s linear infinite;
+    display: inline-block;
+}
+
+@keyframes spin {
+    100% { transform: rotate(360deg); }
+}

@@ -173,6 +173,22 @@
 .due-amount { color: var(--danger); font-weight: 800; }
 .paid-amount { color: var(--success); font-weight: 700; }
 
+/* Paid by Owner column color */
+.paid-owner-val {
+    color: #4338ca !important;
+    font-weight: 800;
+}
+
+/* Spin animation for refresh button */
+.spin {
+    animation: spin 1s linear infinite;
+    display: inline-block;
+}
+
+@keyframes spin {
+    100% { transform: rotate(360deg); }
+}
+
 .btn-view {
     padding: 8px 16px;
     border-radius: 8px;

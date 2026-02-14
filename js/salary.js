@@ -34,6 +34,8 @@ async function loadStaff() {
 
 async function loadSalarySheet() {
     const month = document.getElementById('salaryMonth').value;
+    showToast(`Loading salary for ${month}...`, "info");
+    
     const { data } = await _supabase.from('salary_records').select('*').eq('user_id', currentUser.id).eq('month_year', month);
     salaryRecords = data || [];
     renderTable();
@@ -132,23 +134,40 @@ function updateRow(staffId, absent, basic, isMobile = false) {
     const cut = Math.round((basic / 30) * absent);
     const net = basic - cut;
     
+    // Instant color change logic
+    const statusSelect = document.getElementById(isMobile ? `status-mob-${staffId}` : `status-${staffId}`);
+    const statusVal = statusSelect.value;
+    
+    // Update class for instant color
+    statusSelect.className = `status-select ${statusVal.toLowerCase()}`;
+
     // Update UI
     if(isMobile) {
         const cutMob = document.getElementById(`cut-mob-${staffId}`);
         const netMob = document.getElementById(`net-mob-${staffId}`);
         if(cutMob) cutMob.innerText = `₹${cut.toLocaleString('en-IN')}`;
         if(netMob) netMob.innerText = `₹${net.toLocaleString('en-IN')}`;
-        // Sync Desktop input
+        // Sync Desktop
         const absDesk = document.getElementById(`absent-${staffId}`);
         if(absDesk) absDesk.value = absent;
+        const statusDesk = document.getElementById(`status-${staffId}`);
+        if(statusDesk) {
+            statusDesk.value = statusVal;
+            statusDesk.className = `status-select ${statusVal.toLowerCase()}`;
+        }
     } else {
         const cutEl = document.getElementById(`cut-${staffId}`);
         const netEl = document.getElementById(`net-${staffId}`);
         if(cutEl) cutEl.innerText = `₹${cut.toLocaleString('en-IN')}`;
         if(netEl) netEl.innerText = `₹${net.toLocaleString('en-IN')}`;
-        // Sync Mobile input
+        // Sync Mobile
         const absMob = document.getElementById(`absent-mob-${staffId}`);
         if(absMob) absMob.value = absent;
+        const statusMob = document.getElementById(`status-mob-${staffId}`);
+        if(statusMob) {
+            statusMob.value = statusVal;
+            statusMob.className = `status-select ${statusVal.toLowerCase()}`;
+        }
     }
 
     updateGrandTotals();
@@ -156,18 +175,38 @@ function updateRow(staffId, absent, basic, isMobile = false) {
 }
 
 function updateGrandTotals() {
-    let tBasic = 0, tCut = 0, tNet = 0;
+    let tBasic = 0, tCut = 0, tNet = 0, tPaid = 0;
+
     staffList.forEach(staff => {
-        const abs = parseFloat(document.getElementById(`absent-${staff.id}`).value) || 0;
-        const cut = Math.round((staff.basic_salary / 30) * abs);
-        const net = staff.basic_salary - cut;
-        tBasic += staff.basic_salary;
-        tCut += cut;
-        tNet += net;
+        const absInput = document.getElementById(`absent-${staff.id}`);
+        const statusSelect = document.getElementById(`status-${staff.id}`);
+        
+        if(absInput && statusSelect) {
+            const abs = parseFloat(absInput.value) || 0;
+            const status = statusSelect.value;
+            const cut = Math.round((staff.basic_salary / 30) * abs);
+            const net = staff.basic_salary - cut;
+
+            tBasic += staff.basic_salary;
+            tCut += cut;
+            tNet += net;
+
+            // Only add to Total Paid if status is PAID
+            if(status === 'PAID') {
+                tPaid += net;
+            }
+        }
     });
+
     document.getElementById('totalBasic').innerText = `₹${tBasic.toLocaleString('en-IN')}`;
     document.getElementById('totalCut').innerText = `₹${tCut.toLocaleString('en-IN')}`;
     document.getElementById('totalNet').innerText = `₹${tNet.toLocaleString('en-IN')}`;
+    
+    // Update summary bar
+    document.getElementById('summaryBasic').innerText = `₹${tBasic.toLocaleString('en-IN')}`;
+    document.getElementById('summaryCut').innerText = `₹${tCut.toLocaleString('en-IN')}`;
+    document.getElementById('summaryNet').innerText = `₹${tNet.toLocaleString('en-IN')}`;
+    document.getElementById('summaryPaid').innerText = `₹${tPaid.toLocaleString('en-IN')}`;
 }
 
 // Auto-save with debounce
@@ -199,17 +238,18 @@ async function saveRow(staffId, isMobile = false) {
     }, { onConflict: 'staff_id, month_year' });
 
     if(!error) {
-        // Show save feedback
         const statusEl = document.getElementById(isMobile ? `save-status-mob-${staffId}` : `save-status-${staffId}`);
         if(statusEl) {
             statusEl.style.display = 'inline';
             setTimeout(() => statusEl.style.display = 'none', 2000);
         }
-        // Update local records
         const idx = salaryRecords.findIndex(r => r.staff_id === staffId);
         const newRec = { staff_id: staffId, absent_days: absentVal, salary_cut: cut, net_salary: net, status: statusVal };
         if(idx > -1) salaryRecords[idx] = newRec;
         else salaryRecords.push(newRec);
+        showToast("Salary updated!", "success");
+    } else {
+        showToast("Error saving salary", "error");
     }
 }
 
@@ -217,7 +257,10 @@ async function deleteStaff(id) {
     if(!confirm("Are you sure you want to delete this staff?")) return;
     const { error } = await _supabase.from('staff').delete().eq('id', id);
     if(error) showToast(error.message, "error");
-    else loadStaff();
+    else {
+        showToast("Employee removed", "success");
+        loadStaff();
+    }
 }
 
 async function showHistoryModal() {
@@ -271,61 +314,82 @@ async function saveStaff() {
     const desig = document.getElementById('staffDesignation').value.trim();
     const basic = parseFloat(document.getElementById('staffBasic').value);
 
-    if(!name || !basic) return alert("Name and Basic Salary required");
+    if(!name || !basic) return showToast("Name and Basic Salary required", "error");
 
-    await _supabase.from('staff').insert({ user_id: currentUser.id, name, designation: desig, basic_salary: basic });
-    closeModal();
-    loadStaff();
+    const { error } = await _supabase.from('staff').insert({ user_id: currentUser.id, name, designation: desig, basic_salary: basic });
+    
+    if(error) showToast(error.message, "error");
+    else {
+        showToast("Staff added successfully!", "success");
+        closeModal();
+        loadStaff();
+    }
 }
 
 async function generateSalaryImage() {
-    const monthInput = document.getElementById('salaryMonth').value;
-    const dateObj = new Date(monthInput + "-01");
-    const monthName = dateObj.toLocaleString('default', { month: 'long' }).toUpperCase();
-    const year = dateObj.getFullYear();
+    const btn = document.querySelector('.btn-share');
+    const originalHTML = btn.innerHTML;
 
-    document.getElementById('tempRestroName').innerText = restaurantName;
-    document.getElementById('tempMonthTitle').innerText = `Salary Sheet For The Month Of ${monthName} ${year}`;
-    document.getElementById('tempSignature').innerText = signatureName;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ri-loader-4-line spin"></i> Generating...';
+    showToast("Preparing salary sheet image...", "info");
 
-    const tempBody = document.getElementById('tempTableBody');
-    tempBody.innerHTML = '';
-    let tBasic = 0, tCut = 0, tNet = 0;
+    try {
+        const monthInput = document.getElementById('salaryMonth').value;
+        const dateObj = new Date(monthInput + "-01");
+        const monthName = dateObj.toLocaleString('default', { month: 'long' }).toUpperCase();
+        const year = dateObj.getFullYear();
 
-    staffList.forEach((staff, index) => {
-        const abs = parseFloat(document.getElementById(`absent-${staff.id}`).value) || 0;
-        const status = document.getElementById(`status-${staff.id}`).value;
-        const cut = Math.round((staff.basic_salary / 30) * abs);
-        const net = staff.basic_salary - cut;
-        
-        tBasic += staff.basic_salary; tCut += cut; tNet += net;
-        const statusColor = status === 'PAID' ? '#059669' : '#ef4444';
+        document.getElementById('tempRestroName').innerText = restaurantName;
+        document.getElementById('tempMonthTitle').innerText = `Salary Sheet For The Month Of ${monthName} ${year}`;
+        document.getElementById('tempSignature').innerText = signatureName;
 
-        tempBody.innerHTML += `
-            <tr>
-                <td style="border: 1px solid #cbd5e1; padding: 10px; text-align:center;">${index + 1}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 10px;">${staff.name}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 10px;">${staff.designation || '-'}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 10px;">₹${staff.basic_salary.toLocaleString('en-IN')}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 10px; text-align:center;">${abs}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 10px;">₹${cut.toLocaleString('en-IN')}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 10px; font-weight:bold;">₹${net.toLocaleString('en-IN')}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 10px; text-align:center; font-weight:bold; color:${statusColor};">${status}</td>
-            </tr>
-        `;
-    });
+        const tempBody = document.getElementById('tempTableBody');
+        tempBody.innerHTML = '';
+        let tBasic = 0, tCut = 0, tNet = 0;
 
-    document.getElementById('tempTotalBasic').innerText = `₹${tBasic.toLocaleString('en-IN')}`;
-    document.getElementById('tempTotalCut').innerText = `₹${tCut.toLocaleString('en-IN')}`;
-    document.getElementById('tempTotalNet').innerText = `₹${tNet.toLocaleString('en-IN')}`;
+        staffList.forEach((staff, index) => {
+            const abs = parseFloat(document.getElementById(`absent-${staff.id}`).value) || 0;
+            const status = document.getElementById(`status-${staff.id}`).value;
+            const cut = Math.round((staff.basic_salary / 30) * abs);
+            const net = staff.basic_salary - cut;
+            
+            tBasic += staff.basic_salary; tCut += cut; tNet += net;
+            const statusColor = status === 'PAID' ? '#059669' : '#ef4444';
 
-    const element = document.getElementById('salaryImageTemplate');
-    html2canvas(element, { scale: 2 }).then(canvas => {
+            tempBody.innerHTML += `
+                <tr>
+                    <td style="border: 1px solid #cbd5e1; padding: 10px; text-align:center;">${index + 1}</td>
+                    <td style="border: 1px solid #cbd5e1; padding: 10px;">${staff.name}</td>
+                    <td style="border: 1px solid #cbd5e1; padding: 10px;">${staff.designation || '-'}</td>
+                    <td style="border: 1px solid #cbd5e1; padding: 10px;">₹${staff.basic_salary.toLocaleString('en-IN')}</td>
+                    <td style="border: 1px solid #cbd5e1; padding: 10px; text-align:center;">${abs}</td>
+                    <td style="border: 1px solid #cbd5e1; padding: 10px;">₹${cut.toLocaleString('en-IN')}</td>
+                    <td style="border: 1px solid #cbd5e1; padding: 10px; font-weight:bold;">₹${net.toLocaleString('en-IN')}</td>
+                    <td style="border: 1px solid #cbd5e1; padding: 10px; text-align:center; font-weight:bold; color:${statusColor};">${status}</td>
+                </tr>
+            `;
+        });
+
+        document.getElementById('tempTotalBasic').innerText = `₹${tBasic.toLocaleString('en-IN')}`;
+        document.getElementById('tempTotalCut').innerText = `₹${tCut.toLocaleString('en-IN')}`;
+        document.getElementById('tempTotalNet').innerText = `₹${tNet.toLocaleString('en-IN')}`;
+
+        const element = document.getElementById('salaryImageTemplate');
+        const canvas = await html2canvas(element, { scale: 2 });
         const link = document.createElement('a');
         link.download = `Salary_Sheet_${monthInput}.png`;
         link.href = canvas.toDataURL();
         link.click();
-    });
+
+        showToast("Salary sheet ready!", "success");
+    } catch (err) {
+        console.error(err);
+        showToast("Failed to generate image", "error");
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalHTML;
+    }
 }
 
 async function logout() { await _supabase.auth.signOut(); window.location.href = 'index.html'; }

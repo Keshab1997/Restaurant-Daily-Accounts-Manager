@@ -165,6 +165,8 @@ async function manualSync() {
     btn.classList.add('syncing');
     icon.classList.add('spin');
     text.innerText = 'Syncing...';
+    
+    showToast("Syncing data with cloud...", "info");
 
     try {
         await saveSales();
@@ -173,6 +175,8 @@ async function manualSync() {
         icon.classList.remove('spin');
         icon.className = 'ri-checkbox-circle-line';
         text.innerText = 'Synced!';
+        
+        showToast("Data synced successfully!", "success");
 
         setTimeout(() => {
             btn.disabled = false;
@@ -236,6 +240,8 @@ async function saveSales(silent = false) {
 }
 
 function shareDailyReportText() {
+    showToast("Opening WhatsApp...", "info");
+    
     const date = document.getElementById('date').value;
     const opening = document.getElementById('openingBal').value;
     const cashSale = document.getElementById('detCashSale').innerText;
@@ -279,32 +285,48 @@ function shareDailyReportText() {
 }
 
 async function shareDailyReportImage() {
-    const template = document.getElementById('dailyReportTemplate');
-    
-    document.getElementById('repRestroName').innerText = restaurantName;
-    document.getElementById('repDate').innerText = document.getElementById('date').value;
-    document.getElementById('repOpening').innerText = `₹${document.getElementById('openingBal').value}`;
-    
-    document.getElementById('repCashSale').innerText = document.getElementById('detCashSale').innerText;
-    document.getElementById('repCardSale').innerText = document.getElementById('detCardSale').innerText;
-    document.getElementById('repSwiggy').innerText = document.getElementById('detSwiggy').innerText;
-    document.getElementById('repZomato').innerText = document.getElementById('detZomato').innerText;
-    document.getElementById('repTotalSale').innerText = document.getElementById('totalSale').innerText;
+    const btn = document.querySelector('.btn-image-report');
+    const originalHTML = btn.innerHTML;
 
-    document.getElementById('repCashExp').innerText = document.getElementById('detCashExp').innerText;
-    document.getElementById('repDueExp').innerText = document.getElementById('detDueExp').innerText;
-    document.getElementById('repOwnerExp').innerText = document.getElementById('detOwnerExp').innerText;
-    document.getElementById('repTotalExp').innerText = document.getElementById('totalExpAll').innerText;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ri-loader-4-line spin"></i> Generating...';
+    showToast("Generating daily report image...", "info");
 
-    document.getElementById('repClosing').innerText = document.getElementById('closingCashText').innerText.split(': ')[1];
-    document.getElementById('repSignature').innerText = signatureName;
+    try {
+        const template = document.getElementById('dailyReportTemplate');
+        
+        document.getElementById('repRestroName').innerText = restaurantName;
+        document.getElementById('repDate').innerText = document.getElementById('date').value;
+        document.getElementById('repOpening').innerText = `₹${document.getElementById('openingBal').value}`;
+        
+        document.getElementById('repCashSale').innerText = document.getElementById('detCashSale').innerText;
+        document.getElementById('repCardSale').innerText = document.getElementById('detCardSale').innerText;
+        document.getElementById('repSwiggy').innerText = document.getElementById('detSwiggy').innerText;
+        document.getElementById('repZomato').innerText = document.getElementById('detZomato').innerText;
+        document.getElementById('repTotalSale').innerText = document.getElementById('totalSale').innerText;
 
-    html2canvas(template, { scale: 2 }).then(canvas => {
+        document.getElementById('repCashExp').innerText = document.getElementById('detCashExp').innerText;
+        document.getElementById('repDueExp').innerText = document.getElementById('detDueExp').innerText;
+        document.getElementById('repOwnerExp').innerText = document.getElementById('detOwnerExp').innerText;
+        document.getElementById('repTotalExp').innerText = document.getElementById('totalExpAll').innerText;
+
+        document.getElementById('repClosing').innerText = document.getElementById('closingCashText').innerText.split(': ')[1];
+        document.getElementById('repSignature').innerText = signatureName;
+
+        const canvas = await html2canvas(template, { scale: 2 });
         const link = document.createElement('a');
         link.download = `Report_${document.getElementById('date').value}.png`;
         link.href = canvas.toDataURL("image/png");
         link.click();
-    });
+
+        showToast("Report image generated!", "success");
+    } catch (err) {
+        console.error(err);
+        showToast("Failed to generate image", "error");
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalHTML;
+    }
 }
 
 async function logout() { await _supabase.auth.signOut(); window.location.href = 'index.html'; }

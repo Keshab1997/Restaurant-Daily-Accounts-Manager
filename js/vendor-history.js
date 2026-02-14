@@ -20,43 +20,57 @@ window.onload = async () => {
 };
 
 async function loadVendorHistory() {
-    const tbody = document.getElementById('vendorHistoryBody');
-    const mobileList = document.getElementById('mobileCardList');
+    const refreshBtn = document.querySelector('.btn-export[onclick="loadVendorHistory()"]');
+    const originalHTML = refreshBtn.innerHTML;
     
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:40px;">Calculating History...</td></tr>';
-    if(mobileList) mobileList.innerHTML = '<p style="text-align:center; padding:20px; color:#64748b;">Loading...</p>';
+    refreshBtn.disabled = true;
+    refreshBtn.innerHTML = '<i class="ri-refresh-line spin"></i> Refreshing...';
+    showToast("Updating vendor history...", "info");
 
-    const { data: vendors } = await _supabase.from('vendors').select('*').eq('user_id', currentUser.id);
-    if(!vendors) return;
-
-    // Fetch all ledger entries at once for performance
-    const { data: allLedger } = await _supabase.from('vendor_ledger').select('*').eq('user_id', currentUser.id).order('t_date', { ascending: false });
-
-    allVendorData = vendors.map(v => {
-        const vendorLedger = allLedger ? allLedger.filter(l => l.vendor_id === v.id) : [];
+    try {
+        const tbody = document.getElementById('vendorHistoryBody');
+        const mobileList = document.getElementById('mobileCardList');
         
-        let lastCategory = "N/A";
-        let lastDate = v.created_at ? v.created_at.split('T')[0] : "N/A";
-        
-        if(vendorLedger.length > 0) {
-            lastDate = vendorLedger[0].t_date;
-            const lastBill = vendorLedger.find(l => l.t_type === 'BILL');
-            if(lastBill && lastBill.description && lastBill.description.includes('for ')) {
-                lastCategory = lastBill.description.split('for ')[1];
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:40px;">Calculating History...</td></tr>';
+        if(mobileList) mobileList.innerHTML = '<p style="text-align:center; padding:20px; color:#64748b;">Loading...</p>';
+
+        const { data: vendors } = await _supabase.from('vendors').select('*').eq('user_id', currentUser.id);
+        if(!vendors) return;
+
+        const { data: allLedger } = await _supabase.from('vendor_ledger').select('*').eq('user_id', currentUser.id).order('t_date', { ascending: false });
+
+        allVendorData = vendors.map(v => {
+            const vendorLedger = allLedger ? allLedger.filter(l => l.vendor_id === v.id) : [];
+            
+            let lastCategory = "N/A";
+            let lastDate = v.created_at ? v.created_at.split('T')[0] : "N/A";
+            
+            if(vendorLedger.length > 0) {
+                lastDate = vendorLedger[0].t_date;
+                const lastBill = vendorLedger.find(l => l.t_type === 'BILL');
+                if(lastBill && lastBill.description && lastBill.description.includes('for ')) {
+                    lastCategory = lastBill.description.split('for ')[1];
+                }
             }
-        }
 
-        return {
-            id: v.id,
-            name: v.name,
-            opening_due: v.opening_due || 0,
-            category: lastCategory,
-            lastDate: lastDate,
-            ledger: vendorLedger
-        };
-    });
+            return {
+                id: v.id,
+                name: v.name,
+                opening_due: v.opening_due || 0,
+                category: lastCategory,
+                lastDate: lastDate,
+                ledger: vendorLedger
+            };
+        });
 
-    applyFilters();
+        applyFilters();
+        showToast("History updated successfully!", "success");
+    } catch (err) {
+        showToast("Error: " + err.message, "error");
+    } finally {
+        refreshBtn.disabled = false;
+        refreshBtn.innerHTML = originalHTML;
+    }
 }
 
 function renderTable(data) {
@@ -69,11 +83,15 @@ function renderTable(data) {
     if(data.length === 0) {
         tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:40px; color:#94a3b8;">No records found for this period</td></tr>';
         if(mobileList) mobileList.innerHTML = '<p style="text-align:center; padding:40px; color:#94a3b8;">No records found</p>';
+        document.getElementById('totalOwnerPaid').innerText = '₹0';
         return;
     }
 
+    let grandTotalOwner = 0;
+
     data.forEach(v => {
-        // Render Desktop Table Row
+        grandTotalOwner += v.displayPaidOwner;
+
         tbody.innerHTML += `
             <tr>
                 <td class="text-bold">${v.name}</td>
@@ -81,7 +99,7 @@ function renderTable(data) {
                 <td style="font-size:0.85rem; color:#64748b;">${v.lastDate}</td>
                 <td>₹${v.displayBill.toLocaleString('en-IN')}</td>
                 <td class="paid-amount">₹${v.displayPaidCash.toLocaleString('en-IN')}</td>
-                <td style="color:var(--warning)">₹${v.displayPaidOwner.toLocaleString('en-IN')}</td>
+                <td class="paid-owner-val">₹${v.displayPaidOwner.toLocaleString('en-IN')}</td>
                 <td class="due-amount">₹${v.currentDue.toLocaleString('en-IN')}</td>
                 <td>
                     <button class="btn-view" onclick="location.href='vendor-details.html?id=${v.id}'">Details</button>
@@ -89,7 +107,6 @@ function renderTable(data) {
             </tr>
         `;
         
-        // Render Mobile Card
         if(mobileList) {
             mobileList.innerHTML += `
                 <div class="history-card" onclick="location.href='vendor-details.html?id=${v.id}'">
@@ -120,6 +137,8 @@ function renderTable(data) {
             `;
         }
     });
+
+    document.getElementById('totalOwnerPaid').innerText = `₹${grandTotalOwner.toLocaleString('en-IN')}`;
 }
 
 function applyFilters() {

@@ -20,9 +20,30 @@
     outline: none;
 }
 .salary-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-.salary-table th { background: #f1f5f9; padding: 15px; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-light); border-bottom: 2px solid var(--border); }
-.salary-table td { padding: 12px 15px; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
-.salary-table input[type="number"] { width: 60px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; text-align: center; font-weight: 700; }
+.salary-table th { 
+    background: #f8fafc !important; 
+    color: #1e293b !important; 
+    font-weight: 800 !important; 
+    text-transform: uppercase; 
+    font-size: 0.75rem; 
+    letter-spacing: 0.5px;
+    padding: 15px; 
+    text-align: left; 
+    border-bottom: 2px solid var(--border); 
+}
+.salary-table td { padding: 15px !important; border-bottom: 1px solid var(--border); font-size: 0.9rem; vertical-align: middle; }
+.salary-table input[type="number"] { 
+    width: 60px; 
+    padding: 8px; 
+    border: 2px solid #e2e8f0; 
+    border-radius: 8px; 
+    text-align: center; 
+    font-weight: 800; 
+    color: #2563eb;
+    outline: none;
+    transition: 0.3s;
+}
+.salary-table input[type="number"]:focus { border-color: #2563eb; background: #eff6ff; }
 .total-row { background: #fef08a; font-weight: 800; }
 .action-btns { display: flex; gap: 10px; }
 
@@ -51,9 +72,16 @@
 .btn-save-row { background: #1e293b; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 0.8rem; }
 
 /* Status Select Styles */
-.status-select { padding: 5px 10px; border-radius: 5px; font-weight: 700; border: 1px solid var(--border); cursor: pointer; }
-.status-select.paid { background: #d1fae5; color: #059669; border-color: #059669; }
-.status-select.unpaid { background: #fee2e2; color: #ef4444; border-color: #ef4444; }
+.status-select { 
+    padding: 8px 12px; 
+    border-radius: 8px; 
+    font-weight: 700; 
+    font-size: 0.8rem;
+    border: none; 
+    cursor: pointer; 
+}
+.status-select.paid { background: #d1fae5 !important; color: #059669 !important; }
+.status-select.unpaid { background: #fee2e2 !important; color: #ef4444 !important; }
 
 /* Modal Styles */
 .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 9999; }
@@ -118,6 +146,19 @@
 }
 
 .btn-delete-row:hover { background: #dc2626 !important; }
+
+/* Delete Button Style */
+.btn-del-staff {
+    background: #fff1f1;
+    color: #ef4444;
+    border: 1px solid #fecaca;
+    width: 35px;
+    height: 35px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+.btn-del-staff:hover { background: #ef4444; color: white; }
 
 #historyTableBody b { color: var(--primary); }
 
