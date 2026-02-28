@@ -196,7 +196,7 @@
         </div>
     </main>
 
-    <!-- Hidden Image Template -->
+    <!-- Hidden Image Template (Sales Breakdown + Simple Expense) -->
     <div id="dailyReportTemplate" style="width: 600px; padding: 50px; background: #ffffff; position: absolute; left: -9999px; font-family: 'Inter', sans-serif; color: #1e293b;">
         <div style="text-align: center; border-bottom: 3px solid #2563eb; padding-bottom: 20px; margin-bottom: 30px;">
             <h2 id="repRestroName" style="color: #1e293b; margin: 0; font-size: 32px; text-transform: uppercase;">Restaurant Name</h2>
@@ -204,32 +204,38 @@
             <p style="margin: 0; font-weight: 700; color: #2563eb;">DAILY BUSINESS STATEMENT</p>
         </div>
 
+        <!-- Opening Balance -->
         <div style="display: flex; justify-content: space-between; margin-bottom: 20px; padding: 15px; background: #f8fafc; border-radius: 10px; border: 1px solid #e2e8f0;">
             <span style="font-weight: 700; color: #64748b;">OPENING BALANCE:</span>
             <strong id="repOpening" style="font-size: 1.2rem;">₹0</strong>
         </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px;">
-            <div>
-                <h2 style="border-bottom: 2px solid #eff6ff; padding-bottom: 5px; color: #2563eb; font-size: 1rem;">REVENUE</h2>
-                <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f1f5f9;"><span>Cash Sale:</span><span id="repCashSale">₹0</span></div>
-                <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f1f5f9;"><span>Card/UPI:</span><span id="repCardSale">₹0</span></div>
-                <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f1f5f9;"><span>Swiggy:</span><span id="repSwiggy">₹0</span></div>
-                <div style="display: flex; justify-content: space-between; padding: 8px 0;"><span>Zomato:</span><span id="repZomato">₹0</span></div>
-                <div style="display: flex; justify-content: space-between; margin-top: 10px; font-weight: 800; color: #2563eb;"><span>TOTAL SALE:</span><span id="repTotalSale">₹0</span></div>
-            </div>
-            <div>
-                <h2 style="border-bottom: 2px solid #fff1f1; padding-bottom: 5px; color: #ef4444; font-size: 1rem;">EXPENSES</h2>
-                <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f1f5f9;"><span>Cash Exp:</span><span id="repCashExp">₹0</span></div>
-                <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f1f5f9;"><span>Due (Baki):</span><span id="repDueExp">₹0</span></div>
-                <div style="display: flex; justify-content: space-between; padding: 8px 0;"><span>Paid by Owner:</span><span id="repOwnerExp">₹0</span></div>
-                <div style="display: flex; justify-content: space-between; margin-top: 10px; font-weight: 800; color: #ef4444;"><span>TOTAL EXP:</span><span id="repTotalExp">₹0</span></div>
-            </div>
+        <!-- Sales Breakdown -->
+        <div style="margin-bottom: 20px; padding: 20px; background: #eff6ff; border-radius: 12px;">
+            <h3 style="margin: 0 0 15px 0; color: #2563eb; font-size: 1rem; border-bottom: 2px solid #2563eb; padding-bottom: 8px;">REVENUE BREAKDOWN</h3>
+            <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #dbeafe;"><span>Cash Sale:</span><strong id="repCashSale">₹0</strong></div>
+            <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #dbeafe;"><span>Card/UPI:</span><strong id="repCardSale">₹0</strong></div>
+            <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #dbeafe;"><span>Swiggy:</span><strong id="repSwiggy">₹0</strong></div>
+            <div style="display: flex; justify-content: space-between; padding: 8px 0;"><span>Zomato:</span><strong id="repZomato">₹0</strong></div>
+            <div style="display: flex; justify-content: space-between; margin-top: 12px; padding-top: 12px; border-top: 2px solid #2563eb; font-weight: 800; color: #2563eb; font-size: 1.1rem;"><span>TOTAL SALE:</span><span id="repTotalSale">₹0</span></div>
         </div>
 
-        <div style="padding: 25px; background: #f1f5f9; border-radius: 20px; text-align: center; border: 1px solid #cbd5e1;">
-            <p style="margin: 0; font-size: 14px; font-weight: 700; color: #64748b;">FINAL CLOSING BALANCE</p>
-            <h2 id="repClosing" style="margin: 10px 0; font-size: 42px; font-weight: 900; color: #1e293b;">₹0</h2>
+        <!-- Total Expense Only -->
+        <div style="display: flex; justify-content: space-between; margin-bottom: 30px; padding: 15px; background: #fff1f1; border-radius: 12px; border: 2px solid #ef4444;">
+            <span style="font-weight: 800; color: #ef4444; font-size: 1rem;">TOTAL EXPENSES:</span>
+            <strong id="repTotalExp" style="font-size: 1.2rem; color: #ef4444;">₹0</strong>
+        </div>
+
+        <!-- Calculation Formula Box -->
+        <div style="padding: 15px; background: #f8fafc; border-radius: 10px; border: 1px dashed #cbd5e1; margin-bottom: 30px; text-align: center;">
+            <p style="margin: 0; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;">Calculation Summary</p>
+            <p id="repFormula" style="margin: 5px 0; font-size: 15px; font-weight: 600; color: #1e293b;">Opening + Sale - Expense = Closing</p>
+        </div>
+
+        <!-- Final Closing Balance -->
+        <div style="padding: 25px; background: #1e293b; border-radius: 20px; text-align: center; color: white;">
+            <p style="margin: 0; font-size: 14px; font-weight: 700; opacity: 0.8;">FINAL CLOSING BALANCE</p>
+            <h2 id="repClosing" style="margin: 10px 0; font-size: 42px; font-weight: 900;">₹0</h2>
         </div>
 
         <div style="margin-top: 50px; display: flex; justify-content: space-between; align-items: flex-end;">

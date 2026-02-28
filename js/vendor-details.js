@@ -216,21 +216,10 @@ async function addEntry() {
         });
     } 
     else if(type === 'PAYMENT' || type === 'PAYMENT_OWNER') {
-        const source = (type === 'PAYMENT') ? 'CASH' : 'OWNER';
+        // পেমেন্ট করলে পুরনো DUE এন্ট্রি আপডেট করা (ডিলিট নয়)
+        const paymentSource = (type === 'PAYMENT') ? 'CASH' : 'OWNER';
         
-        // Add payment entry
-        await _supabase.from('expenses').insert({
-            user_id: currentUser.id,
-            report_date: date,
-            description: `${vendor.name} (Payment Bill #${billNo})`,
-            amount: amount,
-            payment_source: source,
-            bill_no: billNo.toString()
-        });
-
-        console.log('Payment added. Now checking for DUE entries with bill_no:', billNo);
-
-        // Update or delete DUE entry (including PARTIAL entries)
+        // পুরনো DUE এন্ট্রি খুঁজে বের করা
         const { data: dueEntries } = await _supabase.from('expenses')
             .select('*')
             .eq('user_id', currentUser.id)
@@ -238,34 +227,29 @@ async function addEntry() {
             .eq('payment_source', 'DUE')
             .order('created_at', { ascending: true });
 
-        console.log('Found DUE entries:', dueEntries);
-
         if (dueEntries && dueEntries.length > 0) {
             let remainingPayment = amount;
             
             for (const dueEntry of dueEntries) {
                 if (remainingPayment <= 0) break;
                 
-                console.log(`Processing DUE entry: ₹${dueEntry.amount}, Remaining payment: ₹${remainingPayment}`);
-                
                 if (dueEntry.amount <= remainingPayment) {
-                    // Full payment of this DUE entry - delete it
-                    console.log(`Deleting DUE entry ID: ${dueEntry.id}`);
-                    await _supabase.from('expenses').delete().eq('id', dueEntry.id);
+                    // সম্পূর্ণ পেমেন্ট - স্ট্যাটাস আপডেট করা (ডিলিট নয়)
+                    await _supabase.from('expenses').update({ 
+                        payment_source: paymentSource,
+                        description: dueEntry.description.replace('(Bill)', `(Paid ${paymentSource})`).replace('(Partial Due)', `(Paid ${paymentSource})`)
+                    }).eq('id', dueEntry.id);
                     remainingPayment -= dueEntry.amount;
                 } else {
-                    // Partial payment of this DUE entry - update remaining
+                    // আংশিক পেমেন্ট - amount কমানো
                     const newAmount = dueEntry.amount - remainingPayment;
-                    console.log(`Updating DUE entry ID: ${dueEntry.id} from ₹${dueEntry.amount} to ₹${newAmount}`);
                     await _supabase.from('expenses').update({ 
-                        amount: newAmount
+                        amount: newAmount,
+                        description: dueEntry.description.includes('(Partial Due)') ? dueEntry.description : dueEntry.description.replace(')', ' - Partial Due)')
                     }).eq('id', dueEntry.id);
                     remainingPayment = 0;
                 }
             }
-            console.log('DUE entries processing complete');
-        } else {
-            console.log('No DUE entries found for bill_no:', billNo);
         }
 
         if(type === 'PAYMENT_OWNER') {
@@ -304,43 +288,43 @@ async function deleteEntry(id, type) {
         showToast("Error deleting: " + error.message, "error");
     } else {
         if(type === 'BILL') {
+            // বিল ডিলিট করলে expenses থেকেও মুছে ফেলা
             await _supabase.from('expenses').delete()
                 .eq('user_id', currentUser.id)
                 .eq('bill_no', record.bill_no)
                 .eq('payment_source', 'DUE');
         } else if(type === 'PAYMENT' || type === 'PAYMENT_OWNER') {
-            const expDesc = `${record.vendors.name} (Payment Bill #${record.bill_no})`;
+            // পেমেন্ট ডিলিট করলে DUE এন্ট্রি পুনরুদ্ধার করতে হবে
+            const paymentSource = (type === 'PAYMENT') ? 'CASH' : 'OWNER';
             
-            // Delete payment entry from expenses
-            await _supabase.from('expenses').delete()
-                .eq('user_id', currentUser.id)
-                .eq('report_date', record.t_date)
-                .eq('amount', record.amount)
-                .eq('description', expDesc);
-
-            // Restore or create DUE entry
-            const { data: existingDue } = await _supabase.from('expenses')
+            // যে এন্ট্রিটি CASH/OWNER স্ট্যাটাসে আছে সেটি খুঁজে DUE-তে ফিরিয়ে নিতে হবে
+            const { data: paidEntry } = await _supabase.from('expenses')
                 .select('*')
                 .eq('user_id', currentUser.id)
                 .eq('bill_no', record.bill_no)
-                .eq('payment_source', 'DUE')
+                .eq('payment_source', paymentSource)
                 .maybeSingle();
 
-            if (existingDue) {
-                // DUE entry exists - increase the amount
+            if (paidEntry) {
+                // স্ট্যাটাস DUE-তে ফিরিয়ে নেওয়া
                 await _supabase.from('expenses').update({
-                    amount: existingDue.amount + record.amount
-                }).eq('id', existingDue.id);
-            } else {
-                // No DUE entry - create new one
-                await _supabase.from('expenses').insert({
-                    user_id: currentUser.id,
-                    report_date: record.t_date,
-                    description: `${record.vendors.name} (Restored Due from Payment Delete)`,
-                    amount: record.amount,
                     payment_source: 'DUE',
-                    bill_no: record.bill_no
-                });
+                    description: paidEntry.description.replace(`(Paid ${paymentSource})`, '(Bill)')
+                }).eq('id', paidEntry.id);
+            } else {
+                // যদি কোনো এন্ট্রি না পাওয়া যায় (আংশিক পেমেন্টের ক্ষেত্রে), DUE amount বাড়ানো
+                const { data: dueEntry } = await _supabase.from('expenses')
+                    .select('*')
+                    .eq('user_id', currentUser.id)
+                    .eq('bill_no', record.bill_no)
+                    .eq('payment_source', 'DUE')
+                    .maybeSingle();
+
+                if (dueEntry) {
+                    await _supabase.from('expenses').update({
+                        amount: dueEntry.amount + record.amount
+                    }).eq('id', dueEntry.id);
+                }
             }
 
             if(type === 'PAYMENT_OWNER') {

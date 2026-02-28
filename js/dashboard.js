@@ -249,34 +249,28 @@ function shareDailyReportText() {
     const swiggy = document.getElementById('detSwiggy').innerText;
     const zomato = document.getElementById('detZomato').innerText;
     const totalSale = document.getElementById('totalSale').innerText;
-    const cashExp = document.getElementById('detCashExp').innerText;
-    const dueExp = document.getElementById('detDueExp').innerText;
-    const ownerExp = document.getElementById('detOwnerExp').innerText;
     const totalExp = document.getElementById('totalExpAll').innerText;
-    const netToday = document.getElementById('netBalanceToday').innerText;
     const finalClosing = document.getElementById('closingCashText').innerText.split(': ')[1];
 
-    let msg = `DAILY BUSINESS REPORT\n`;
+    let msg = `*DAILY BUSINESS REPORT*\n`;
     msg += `Restaurant: ${restaurantName}\n`;
     msg += `Date: ${date}\n`;
     msg += `----------------------------\n`;
     msg += `Opening Balance: ₹${opening}\n`;
     msg += `----------------------------\n`;
-    msg += `REVENUE BREAKDOWN\n`;
+    msg += `*REVENUE BREAKDOWN*\n`;
     msg += `Cash Sale: ${cashSale}\n`;
     msg += `Card/UPI Sale: ${cardSale}\n`;
     msg += `Swiggy Orders: ${swiggy}\n`;
     msg += `Zomato Orders: ${zomato}\n`;
-    msg += `TOTAL SALE (ALL): ${totalSale}\n`;
+    msg += `*TOTAL SALE: ${totalSale}*\n`;
     msg += `----------------------------\n`;
-    msg += `EXPENSE BREAKDOWN\n`;
-    msg += `Cash Expenses: ${cashExp}\n`;
-    msg += `Due Expenses (Baki): ${dueExp}\n`;
-    msg += `Paid by Owner: ${ownerExp}\n`;
-    msg += `TOTAL EXPENSE (ALL): ${totalExp}\n`;
+    msg += `*TOTAL EXPENSE: ${totalExp}*\n`;
     msg += `----------------------------\n`;
-    msg += `Today's Net: ${netToday}\n`;
-    msg += `FINAL CLOSING BALANCE: ${finalClosing}\n`;
+    msg += `*Calculation:*\n`;
+    msg += `${opening} (Opening) + ${cashSale} (Cash Sale) - ${totalExp} (Expense) = ${finalClosing} (Closing)\n`;
+    msg += `----------------------------\n`;
+    msg += `*FINAL CLOSING BALANCE: ${finalClosing}*\n`;
     msg += `----------------------------\n`;
     msg += `Authorized Signature: ${signatureName}\n`;
     msg += `App developed by Keshab Sarkar`;
@@ -290,36 +284,43 @@ async function shareDailyReportImage() {
 
     btn.disabled = true;
     btn.innerHTML = '<i class="ri-loader-4-line spin"></i> Generating...';
-    showToast("Generating daily report image...", "info");
+    showToast("Generating report for owner...", "info");
 
     try {
-        const template = document.getElementById('dailyReportTemplate');
-        
+        const opening = document.getElementById('openingBal').value;
+        const cashSale = document.getElementById('detCashSale').innerText;
+        const totalSale = document.getElementById('totalSale').innerText;
+        const totalExp = document.getElementById('totalExpAll').innerText;
+        const closing = document.getElementById('closingCashText').innerText.split(': ')[1];
+
         document.getElementById('repRestroName').innerText = restaurantName;
         document.getElementById('repDate').innerText = document.getElementById('date').value;
-        document.getElementById('repOpening').innerText = `₹${document.getElementById('openingBal').value}`;
+        document.getElementById('repOpening').innerText = `₹${opening}`;
         
+        // Sales breakdown
         document.getElementById('repCashSale').innerText = document.getElementById('detCashSale').innerText;
         document.getElementById('repCardSale').innerText = document.getElementById('detCardSale').innerText;
         document.getElementById('repSwiggy').innerText = document.getElementById('detSwiggy').innerText;
         document.getElementById('repZomato').innerText = document.getElementById('detZomato').innerText;
-        document.getElementById('repTotalSale').innerText = document.getElementById('totalSale').innerText;
-
-        document.getElementById('repCashExp').innerText = document.getElementById('detCashExp').innerText;
-        document.getElementById('repDueExp').innerText = document.getElementById('detDueExp').innerText;
-        document.getElementById('repOwnerExp').innerText = document.getElementById('detOwnerExp').innerText;
-        document.getElementById('repTotalExp').innerText = document.getElementById('totalExpAll').innerText;
-
-        document.getElementById('repClosing').innerText = document.getElementById('closingCashText').innerText.split(': ')[1];
+        document.getElementById('repTotalSale').innerText = totalSale;
+        
+        // Only total expense
+        document.getElementById('repTotalExp').innerText = totalExp;
+        document.getElementById('repClosing').innerText = closing;
         document.getElementById('repSignature').innerText = signatureName;
 
+        // Calculation formula with Cash Sale only
+        document.getElementById('repFormula').innerText = 
+            `${opening} (Opening) + ${cashSale} (Cash Sale) - ${totalExp} (Expense) = ${closing} (Closing)`;
+
+        const template = document.getElementById('dailyReportTemplate');
         const canvas = await html2canvas(template, { scale: 2 });
         const link = document.createElement('a');
         link.download = `Report_${document.getElementById('date').value}.png`;
         link.href = canvas.toDataURL("image/png");
         link.click();
 
-        showToast("Report image generated!", "success");
+        showToast("Report image ready!", "success");
     } catch (err) {
         console.error(err);
         showToast("Failed to generate image", "error");

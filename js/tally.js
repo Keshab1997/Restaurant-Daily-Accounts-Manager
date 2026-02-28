@@ -45,13 +45,22 @@ async function loadTallyData(date) {
     const { data: sales } = await _supabase.from('sales').select('amount').eq('user_id', currentUser.id).eq('report_date', date).eq('sale_type', 'CASH');
     const { data: expenses } = await _supabase.from('expenses').select('amount').eq('user_id', currentUser.id).eq('report_date', date).eq('payment_source', 'CASH');
 
+    // পুরনো বকেয়া পরিশোধ (ভেন্ডর পেমেন্ট) হিসাব করা
+    const { data: vendorPayments } = await _supabase.from('vendor_ledger')
+        .select('amount')
+        .eq('user_id', currentUser.id)
+        .eq('t_date', date)
+        .eq('t_type', 'PAYMENT');
+
     const cashSale = sales ? sales.reduce((sum, s) => sum + s.amount, 0) : 0;
     const cashExp = expenses ? expenses.reduce((sum, e) => sum + e.amount, 0) : 0;
+    const oldDuePaid = vendorPayments ? vendorPayments.reduce((sum, p) => sum + p.amount, 0) : 0;
 
     document.getElementById('todayCashSale').innerText = `₹${cashSale.toLocaleString('en-IN')}`;
     document.getElementById('todayCashExp').innerText = `₹${cashExp.toLocaleString('en-IN')}`;
+    document.getElementById('oldDuePaid').innerText = `₹${oldDuePaid.toLocaleString('en-IN')}`;
 
-    currentSystemBalance = (tallyOpeningBalance + cashSale) - cashExp;
+    currentSystemBalance = (tallyOpeningBalance + cashSale) - cashExp - oldDuePaid;
     document.getElementById('sysTotal').innerText = `₹${currentSystemBalance.toLocaleString('en-IN')}`;
 
     const { data: currentTally } = await _supabase.from('cash_tally')
@@ -175,10 +184,15 @@ function shareWhatsAppReport() {
     const sys = document.getElementById('sysTotal').innerText;
     const diff = document.getElementById('diffTotal').innerText;
     const cumul = document.getElementById('cumulativeDiff').innerText;
+    const oldDue = document.getElementById('oldDuePaid').innerText;
 
     let msg = `*CASH TALLY REPORT (${date})*\n`;
     msg += `----------------------------\n`;
     msg += `Opening Cash: ₹${tallyOpeningBalance.toLocaleString('en-IN')}\n`;
+    msg += `Today's Cash Sale: ${document.getElementById('todayCashSale').innerText}\n`;
+    msg += `Today's Cash Exp: ${document.getElementById('todayCashExp').innerText}\n`;
+    msg += `Previous Due Paid: ${oldDue}\n`;
+    msg += `----------------------------\n`;
     msg += `System Balance: ${sys}\n`;
     msg += `Physical Cash: ${phy}\n`;
     msg += `Difference: ${diff}\n`;
