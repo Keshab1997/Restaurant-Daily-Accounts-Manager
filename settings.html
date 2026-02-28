@@ -237,8 +237,18 @@
         };
 
         async function loadSettings() {
-            const { data } = await _supabase.from('profiles').select('restaurant_name, authorized_signature').eq('id', currentUser.id).single();
-            if(data) {
+            const { data, error } = await _supabase
+                .from('profiles')
+                .select('restaurant_name, authorized_signature')
+                .eq('id', currentUser.id)
+                .maybeSingle();
+
+            if (error) {
+                console.error("Error loading settings:", error.message);
+                return;
+            }
+
+            if (data) {
                 document.getElementById('restroNameInput').value = data.restaurant_name || "";
                 document.getElementById('signatureInput').value = data.authorized_signature || "";
                 document.getElementById('sideNavName').innerText = data.restaurant_name || "RestroManager";
@@ -285,43 +295,65 @@
             }
 
             closePwdModal();
+            showToast("Deleting data...", "info");
             
             try {
+                let errorOccurred = false;
+                let errorMessages = [];
+
+                // Helper function to handle delete with error check
+                const deleteData = async (table) => {
+                    const { error } = await _supabase.from(table).delete().eq('user_id', currentUser.id);
+                    if (error) {
+                        console.error(`Error deleting from ${table}:`, error.message);
+                        errorMessages.push(`${table}: ${error.message}`);
+                        errorOccurred = true;
+                    }
+                };
+
                 if (targetCategory === 'SALES' || targetCategory === 'ALL') {
-                    await _supabase.from('sales').delete().eq('user_id', currentUser.id);
-                    await _supabase.from('daily_balances').delete().eq('user_id', currentUser.id);
-                    await _supabase.from('cash_tally').delete().eq('user_id', currentUser.id);
+                    await deleteData('sales');
+                    await deleteData('daily_balances');
+                    await deleteData('cash_tally');
                 }
 
                 if (targetCategory === 'EXPENSES' || targetCategory === 'ALL') {
-                    await _supabase.from('expenses').delete().eq('user_id', currentUser.id);
+                    await deleteData('expenses');
                 }
 
                 if (targetCategory === 'VENDORS' || targetCategory === 'ALL') {
-                    await _supabase.from('vendor_ledger').delete().eq('user_id', currentUser.id);
-                    await _supabase.from('vendors').delete().eq('user_id', currentUser.id);
+                    await deleteData('vendor_ledger');
+                    await deleteData('vendors');
                 }
 
                 if (targetCategory === 'OWNER' || targetCategory === 'ALL') {
-                    await _supabase.from('owner_ledger').delete().eq('user_id', currentUser.id);
+                    await deleteData('owner_ledger');
                 }
 
                 if (targetCategory === 'STAFF' || targetCategory === 'ALL') {
-                    await _supabase.from('salary_records').delete().eq('user_id', currentUser.id);
-                    await _supabase.from('staff').delete().eq('user_id', currentUser.id);
+                    await deleteData('salary_records');
+                    await deleteData('staff');
                 }
 
                 if (targetCategory === 'PL' || targetCategory === 'ALL') {
-                    await _supabase.from('pl_monthly_data').delete().eq('user_id', currentUser.id);
+                    await deleteData('pl_monthly_data');
                 }
 
-                alert("✅ Data deleted successfully!");
-                if (targetCategory === 'ALL') window.location.href = 'dashboard.html';
-                else location.reload();
+                if (errorOccurred) {
+                    console.error('Delete errors:', errorMessages);
+                    alert("⚠️ Some data could not be deleted.\n\nPossible reasons:\n1. Supabase RLS Policy not set for DELETE\n2. Foreign key constraints\n\nCheck browser console for details.");
+                    showToast("Delete failed - Check RLS policies", "error");
+                } else {
+                    alert("✅ All selected data deleted successfully!");
+                    showToast("Data deleted successfully!", "success");
+                    if (targetCategory === 'ALL') window.location.href = 'dashboard.html';
+                    else location.reload();
+                }
 
             } catch (err) {
                 alert("Error deleting data: " + err.message);
                 console.error(err);
+                showToast("Delete operation failed", "error");
             }
         }
 
