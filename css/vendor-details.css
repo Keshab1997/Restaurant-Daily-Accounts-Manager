@@ -93,6 +93,19 @@
 .badge-payment { background: #d1fae5; color: #059669; }
 .badge-owner { background: #e0e7ff; color: #4338ca; }
 
+/* Invoice Stamp Styles */
+.stamp {
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    display: inline-block;
+}
+.stamp-paid { background: #d1fae5; color: #059669; }
+.stamp-partial { background: #fef3c7; color: #d97706; }
+.stamp-unpaid { background: #fee2e2; color: #ef4444; }
+
 @media (max-width: 1024px) {
     .summary-grid { grid-template-columns: 1fr; }
     .details-grid { grid-template-columns: 1fr; }

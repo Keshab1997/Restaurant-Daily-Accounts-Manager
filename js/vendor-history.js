@@ -12,11 +12,6 @@ window.onload = async () => {
     document.getElementById('toDate').value = today;
 
     await loadVendorHistory();
-    
-    // Auto-refresh every 30 seconds to catch vendor name updates
-    setInterval(async () => {
-        await loadVendorHistory();
-    }, 30000);
 };
 
 async function loadVendorHistory() {
@@ -83,14 +78,20 @@ function renderTable(data) {
     if(data.length === 0) {
         tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:40px; color:#94a3b8;">No records found for this period</td></tr>';
         if(mobileList) mobileList.innerHTML = '<p style="text-align:center; padding:40px; color:#94a3b8;">No records found</p>';
+        document.getElementById('totalCashPaid').innerText = '₹0';
         document.getElementById('totalOwnerPaid').innerText = '₹0';
+        document.getElementById('totalCurrentDue').innerText = '₹0';
         return;
     }
 
+    let grandTotalCash = 0;
     let grandTotalOwner = 0;
+    let grandTotalDue = 0;
 
     data.forEach(v => {
+        grandTotalCash += v.displayPaidCash;
         grandTotalOwner += v.displayPaidOwner;
+        grandTotalDue += v.currentDue;
 
         tbody.innerHTML += `
             <tr>
@@ -138,7 +139,9 @@ function renderTable(data) {
         }
     });
 
+    document.getElementById('totalCashPaid').innerText = `₹${grandTotalCash.toLocaleString('en-IN')}`;
     document.getElementById('totalOwnerPaid').innerText = `₹${grandTotalOwner.toLocaleString('en-IN')}`;
+    document.getElementById('totalCurrentDue').innerText = `₹${grandTotalDue.toLocaleString('en-IN')}`;
 }
 
 function applyFilters() {

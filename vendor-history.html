@@ -103,14 +103,37 @@
             </div>
 
             <!-- Summary Bar -->
-            <div class="summary-bar" style="margin-bottom: 25px; display: flex; gap: 20px;">
-                <div class="glass-card" style="flex: 1; padding: 20px; display: flex; align-items: center; gap: 15px; border-left: 5px solid #4338ca;">
+            <div class="summary-bar" style="margin-bottom: 25px; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+                <!-- Total Cash Paid -->
+                <div class="glass-card" style="padding: 20px; display: flex; align-items: center; gap: 15px; border-left: 5px solid #10b981;">
+                    <div style="background: #d1fae5; width: 50px; height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #10b981; font-size: 1.5rem;">
+                        <i class="ri-money-dollar-circle-line"></i>
+                    </div>
+                    <div>
+                        <p style="margin: 0; color: #64748b; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;">Total Cash Paid (নগদ পেমেন্ট)</p>
+                        <h2 id="totalCashPaid" style="margin: 5px 0 0 0; font-size: 1.5rem; color: #1e293b;">₹0</h2>
+                    </div>
+                </div>
+
+                <!-- Total Owner Paid -->
+                <div class="glass-card" style="padding: 20px; display: flex; align-items: center; gap: 15px; border-left: 5px solid #4338ca;">
                     <div style="background: #e0e7ff; width: 50px; height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #4338ca; font-size: 1.5rem;">
                         <i class="ri-user-star-line"></i>
                     </div>
                     <div>
-                        <p style="margin: 0; color: #64748b; font-size: 0.85rem; font-weight: 700; text-transform: uppercase;">Total Paid by Owner (ধারের পরিমাণ)</p>
-                        <h2 id="totalOwnerPaid" style="margin: 5px 0 0 0; font-size: 1.8rem; color: #1e293b;">₹0</h2>
+                        <p style="margin: 0; color: #64748b; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;">Total Owner Paid (মালিকের পেমেন্ট)</p>
+                        <h2 id="totalOwnerPaid" style="margin: 5px 0 0 0; font-size: 1.5rem; color: #1e293b;">₹0</h2>
+                    </div>
+                </div>
+
+                <!-- Total Current Due -->
+                <div class="glass-card" style="padding: 20px; display: flex; align-items: center; gap: 15px; border-left: 5px solid #ef4444;">
+                    <div style="background: #fee2e2; width: 50px; height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #ef4444; font-size: 1.5rem;">
+                        <i class="ri-error-warning-line"></i>
+                    </div>
+                    <div>
+                        <p style="margin: 0; color: #64748b; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;">Total Current Due (মোট বকেয়া)</p>
+                        <h2 id="totalCurrentDue" style="margin: 5px 0 0 0; font-size: 1.5rem; color: #1e293b;">₹0</h2>
                     </div>
                 </div>
             </div>

@@ -57,11 +57,12 @@ async function loadDetails() {
     document.getElementById('vNameTitle').innerText = vendor.name;
     document.getElementById('invVendorName').innerText = vendor.name;
 
-    // Fetch for calculation (oldest to newest)
+    // Fetch for calculation (oldest to newest for FIFO)
     const { data: calcLedger } = await _supabase.from('vendor_ledger')
         .select('*')
         .eq('vendor_id', vendorId)
-        .order('t_date', { ascending: true });
+        .order('t_date', { ascending: true })
+        .order('created_at', { ascending: true });
 
     // Fetch for display (newest to oldest)
     const { data: displayLedger } = await _supabase.from('vendor_ledger')
@@ -73,23 +74,65 @@ async function loadDetails() {
     allBills = {};
     let totalBillAmt = vendor.opening_due || 0;
     let totalPaidAmt = 0;
+    let billsList = []; // FIFO এর জন্য বিলের লিস্ট
 
     // Handle Opening Due as Bill #0
     if(vendor.opening_due > 0) {
         allBills["0"] = { date: 'Initial', total: vendor.opening_due, paid: 0, due: vendor.opening_due };
+        billsList.push({ billNo: "0", date: 'Initial', amount: vendor.opening_due });
     }
 
+    // প্রথমে সব বিল সংগ্রহ করা
     if(calcLedger) {
         calcLedger.forEach(l => {
-            const bNo = l.bill_no || "0";
-            if(!allBills[bNo]) allBills[bNo] = { date: l.t_date, total: 0, paid: 0, due: 0 };
-            
             if(l.t_type === 'BILL') {
+                const bNo = l.bill_no || "0";
+                if(!allBills[bNo]) {
+                    allBills[bNo] = { date: l.t_date, total: 0, paid: 0, due: 0 };
+                    billsList.push({ billNo: bNo, date: l.t_date, amount: l.amount });
+                } else {
+                    billsList.find(b => b.billNo === bNo).amount += l.amount;
+                }
                 allBills[bNo].total += l.amount;
                 totalBillAmt += l.amount;
-            } else {
-                allBills[bNo].paid += l.amount;
+            }
+        });
+
+        // Payment tracking: Bill-specific + FIFO for general payments
+        let generalPayment = 0; // "0" bill no = general payment
+        
+        calcLedger.forEach(l => {
+            if(l.t_type === 'PAYMENT' || l.t_type === 'PAYMENT_OWNER') {
+                const bNo = l.bill_no || "0";
+                
+                if(bNo === "0") {
+                    // General payment - FIFO এর জন্য জমা রাখা
+                    generalPayment += l.amount;
+                } else {
+                    // Specific bill payment
+                    if(allBills[bNo]) {
+                        allBills[bNo].paid += l.amount;
+                    }
+                }
                 totalPaidAmt += l.amount;
+            }
+        });
+
+        // FIFO Logic: General payment দিয়ে পুরনো বিল থেকে শোধ করা
+        billsList.forEach(bill => {
+            if(generalPayment > 0) {
+                const bNo = bill.billNo;
+                const remainingDue = allBills[bNo].total - allBills[bNo].paid;
+                
+                if(remainingDue > 0) {
+                    if(generalPayment >= remainingDue) {
+                        allBills[bNo].paid += remainingDue;
+                        generalPayment -= remainingDue;
+                    } else {
+                        allBills[bNo].paid += generalPayment;
+                        generalPayment = 0;
+                    }
+                }
             }
         });
     }
@@ -109,12 +152,13 @@ async function loadDetails() {
     document.getElementById('currDue').innerText = `₹${netDue.toLocaleString('en-IN')}`;
     document.getElementById('invTotalDue').innerText = `₹${netDue.toLocaleString('en-IN')}`;
 
-    // Render List Items (Newest Date First)
+    // Render List Items (Newest Date First) with Bill Status
     if(displayLedger) {
         displayLedger.forEach((l) => {
             let badgeClass = 'badge-bill';
             let statusLabel = 'BILL';
             let amountColor = 'var(--danger)';
+            let billStatusHTML = '';
 
             if(l.t_type === 'PAYMENT') {
                 badgeClass = 'badge-payment';
@@ -124,6 +168,29 @@ async function loadDetails() {
                 badgeClass = 'badge-owner';
                 statusLabel = 'PAID (OWNER)';
                 amountColor = '#4338ca';
+            } else if(l.t_type === 'BILL') {
+                // বিলের স্ট্যাটাস দেখানো (Fresh calculation)
+                const bNo = l.bill_no || "0";
+                const b = allBills[bNo];
+                if(b) {
+                    b.due = b.total - b.paid; // Recalculate due
+                    const isPaid = b.due <= 0;
+                    let billStatus = '';
+                    let stampClass = '';
+                    
+                    if(isPaid) {
+                        billStatus = 'FULL PAID';
+                        stampClass = 'stamp-paid';
+                    } else if(b.paid > 0) {
+                        billStatus = `PARTIAL (₹${b.paid.toLocaleString('en-IN')} paid, ₹${b.due.toLocaleString('en-IN')} due)`;
+                        stampClass = 'stamp-partial';
+                    } else {
+                        billStatus = 'UNPAID';
+                        stampClass = 'stamp-unpaid';
+                    }
+                    
+                    billStatusHTML = `<span class="stamp ${stampClass}" style="margin-left:8px; font-size:0.7rem;">${billStatus}</span>`;
+                }
             }
 
             const safeDesc = l.description ? l.description.replace(/'/g, "\\'") : "";
@@ -131,7 +198,7 @@ async function loadDetails() {
             list.innerHTML += `
                 <li class="ledger-item">
                     <div class="li-left">
-                        <span>${l.t_type === 'BILL' ? 'Bill #' + l.bill_no : 'Payment for Bill #' + l.bill_no}</span>
+                        <span>${l.t_type === 'BILL' ? 'Bill #' + l.bill_no : 'Payment for Bill #' + l.bill_no}${billStatusHTML}</span>
                         <small>${l.description || '-'}</small>
                         <small><i class="ri-calendar-line"></i> ${l.t_date}</small>
                     </div>
@@ -148,18 +215,30 @@ async function loadDetails() {
         });
     }
 
-    // Render Invoice Table (Bill-wise summary)
-    sortedBillNos.forEach((bNo, index) => {
+    // Render Invoice Table (Bill-wise summary with Monthly Serial)
+    let currentMonth = "";
+    let monthlySerial = 0;
+    
+    sortedBillNos.forEach((bNo) => {
         const b = allBills[bNo];
         b.due = b.total - b.paid;
         const isPaid = b.due <= 0;
         const statusLabel = isPaid ? 'FULL PAID' : (b.paid > 0 ? 'PARTIAL' : 'UNPAID');
-        const stampClass = isPaid ? 'stamp-paid' : 'stamp-partial';
+        const stampClass = isPaid ? 'stamp-paid' : (b.paid > 0 ? 'stamp-partial' : 'stamp-unpaid');
         const displayBillNo = bNo === "0" ? "OPENING" : bNo;
+
+        // Monthly Serial Logic
+        const billMonth = b.date === 'Initial' ? 'Initial' : b.date.substring(0, 7); // YYYY-MM
+        if(billMonth !== currentMonth) {
+            currentMonth = billMonth;
+            monthlySerial = 1;
+        } else {
+            monthlySerial++;
+        }
 
         invBody.innerHTML += `
             <tr>
-                <td>${index + 1}</td>
+                <td>${monthlySerial}</td>
                 <td>${b.date}</td>
                 <td>${displayBillNo}</td>
                 <td>₹${b.total.toLocaleString('en-IN')}</td>

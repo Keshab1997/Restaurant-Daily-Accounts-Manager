@@ -88,9 +88,14 @@
                         <span>Today's Cash Exp (-)</span>
                         <h2 id="todayCashExp" class="text-red">₹0</h2>
                     </div>
-                    <div class="res-item">
-                        <span>Previous Due Paid (-)</span>
-                        <h2 id="oldDuePaid" class="text-red">₹0</h2>
+                    <div class="res-item" style="flex-direction: column; align-items: flex-start; gap: 5px;">
+                        <div style="display: flex; justify-content: space-between; width: 100%;">
+                            <span>Previous Due Paid (-)</span>
+                            <h2 id="oldDuePaid" class="text-red">₹0</h2>
+                        </div>
+                        <div id="duePaidBreakdown" style="width: 100%; font-size: 0.75rem; color: #64748b; background: #fff1f1; border-radius: 8px; padding: 0; display: none;">
+                            <ul id="duePaidList" style="list-style: none; padding: 8px 12px; margin: 0;"></ul>
+                        </div>
                     </div>
                     <div class="res-item border-top">
                         <span>System Cash (Software)</span>

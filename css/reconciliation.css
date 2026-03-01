@@ -170,9 +170,17 @@
 
 @media (max-width: 768px) {
     .top-bar { flex-direction: column; align-items: flex-start; gap: 15px; }
-    .date-range-box { width: 100%; justify-content: space-between; }
-    .d-group { flex: 1; }
-    .d-group input { width: 100%; }
+    .date-range-box { width: 100%; justify-content: space-between; flex-wrap: wrap; }
+    .d-group { flex: 1; min-width: 0; }
+    .d-group input { width: 100%; font-size: 0.85rem; }
+    .btn-go { flex-shrink: 0; }
     .recon-grid { grid-template-columns: 1fr; }
     .status-card { flex-direction: column; text-align: center; gap: 15px; }
+}
+
+@media (max-width: 480px) {
+    .date-range-box { padding: 8px 10px; gap: 8px; }
+    .d-group label { font-size: 0.65rem; }
+    .d-group input { padding: 6px; font-size: 0.8rem; }
+    .btn-go { width: 32px; height: 32px; font-size: 1rem; }
 }

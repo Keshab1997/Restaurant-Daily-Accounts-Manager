@@ -47,7 +47,7 @@ async function loadTallyData(date) {
 
     // পুরনো বকেয়া পরিশোধ (ভেন্ডর পেমেন্ট) হিসাব করা
     const { data: vendorPayments } = await _supabase.from('vendor_ledger')
-        .select('amount')
+        .select('amount, vendors(name)')
         .eq('user_id', currentUser.id)
         .eq('t_date', date)
         .eq('t_type', 'PAYMENT');
@@ -60,6 +60,24 @@ async function loadTallyData(date) {
     document.getElementById('todayCashExp').innerText = `₹${cashExp.toLocaleString('en-IN')}`;
     document.getElementById('oldDuePaid').innerText = `₹${oldDuePaid.toLocaleString('en-IN')}`;
 
+    // Vendor Payment Breakdown দেখানো
+    const breakdownCont = document.getElementById('duePaidBreakdown');
+    const list = document.getElementById('duePaidList');
+    list.innerHTML = '';
+
+    if (vendorPayments && vendorPayments.length > 0) {
+        breakdownCont.style.display = 'block';
+        vendorPayments.forEach(p => {
+            list.innerHTML += `
+                <li style="display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #fee2e2;">
+                    <span>${p.vendors.name}</span>
+                    <span style="font-weight: 700;">₹${p.amount.toLocaleString('en-IN')}</span>
+                </li>
+            `;
+        });
+    } else {
+        breakdownCont.style.display = 'none';
+    }
     currentSystemBalance = (tallyOpeningBalance + cashSale) - cashExp - oldDuePaid;
     document.getElementById('sysTotal').innerText = `₹${currentSystemBalance.toLocaleString('en-IN')}`;
 

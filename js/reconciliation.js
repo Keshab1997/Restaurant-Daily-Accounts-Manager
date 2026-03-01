@@ -84,25 +84,23 @@ async function calculateReconciliation() {
         const amt = document.getElementById('diffAmount');
 
         card.className = 'glass-card status-card';
+        amt.innerText = `₹${Math.abs(diff).toLocaleString('en-IN')}`;
 
-        if (diff === 0) {
+        if (Math.abs(diff) < 1) { // Perfect Match (handles floating point)
             card.classList.add('perfect');
             icon.innerHTML = '<i class="ri-checkbox-circle-line"></i>';
-            title.innerText = "PERFECT MATCH";
-            desc.innerText = "Accounts are balanced perfectly.";
-            amt.innerText = "₹0";
-        } else if (diff < 0) {
+            title.innerText = "ACCOUNTS MATCHED";
+            desc.innerText = "Cash flow matches your liabilities perfectly.";
+        } else if (diff < 0) { // Shortage
             card.classList.add('short');
             icon.innerHTML = '<i class="ri-alert-line"></i>';
-            title.innerText = "SHORTAGE";
-            desc.innerText = "Cash is missing compared to calculations.";
-            amt.innerText = `₹${Math.abs(diff).toLocaleString('en-IN')}`;
-        } else {
+            title.innerText = "CASH SHORTAGE";
+            desc.innerText = "Physical cash is less than expected liabilities.";
+        } else { // Excess
             card.classList.add('excess');
             icon.innerHTML = '<i class="ri-information-line"></i>';
-            title.innerText = "EXCESS";
-            desc.innerText = "Extra cash found in hand.";
-            amt.innerText = `₹${Math.abs(diff).toLocaleString('en-IN')}`;
+            title.innerText = "EXCESS CASH";
+            desc.innerText = "You have more cash than recorded liabilities.";
         }
 
     } catch (err) {
