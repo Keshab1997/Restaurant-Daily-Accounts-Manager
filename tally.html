@@ -13,7 +13,17 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
     <style>
-        .auto-save-indicator { font-size: 0.8rem; color: #10b981; font-weight: 600; display: none; align-items: center; gap: 5px; margin-top: 5px; }
+        .auto-save-status { font-size: 0.85rem; color: #10b981; font-weight: 700; display: none; align-items: center; gap: 5px; }
+        
+        @media (max-width: 600px) {
+            .top-bar > div:first-child > div:last-child {
+                flex-wrap: wrap;
+            }
+            .auto-save-status {
+                padding: 5px 8px !important;
+                font-size: 0.75rem !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -48,11 +58,15 @@
             <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 15px;">
                 <div class="page-title">
                     <h1>Cash Tally & Denomination 🧮</h1>
-                    <div id="saveIndicator" class="auto-save-indicator"><i class="ri-checkbox-circle-line"></i> Saved to Cloud</div>
                 </div>
-                <div style="background: white; padding: 10px 15px; border-radius: 12px; border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 10px;">
-                    <i class="ri-calendar-line" style="color: #2563eb;"></i>
-                    <input type="date" id="tallyDate" style="border: none; font-weight: 700; color: #1e293b; outline: none; cursor: pointer;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div id="saveIndicator" class="auto-save-status" style="background: #ecfdf5; padding: 8px 12px; border-radius: 10px; border: 1px solid #d1fae5; white-space: nowrap;">
+                        <i class="ri-checkbox-circle-line"></i> Saved
+                    </div>
+                    <div style="background: white; padding: 10px 15px; border-radius: 12px; border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 10px;">
+                        <i class="ri-calendar-line" style="color: #2563eb;"></i>
+                        <input type="date" id="tallyDate" style="border: none; font-weight: 700; color: #1e293b; outline: none; cursor: pointer;">
+                    </div>
                 </div>
             </div>
         </div>
@@ -70,6 +84,20 @@
                     <div class="note-row n5"><div class="note-info"><span class="note-label">₹5</span></div><input type="number" class="note-input" id="n5" data-val="5" placeholder="0" inputmode="numeric"><b class="note-total">0</b></div>
                     <div class="note-row n2"><div class="note-info"><span class="note-label">₹2</span></div><input type="number" class="note-input" id="n2" data-val="2" placeholder="0" inputmode="numeric"><b class="note-total">0</b></div>
                     <div class="note-row n1"><div class="note-info"><span class="note-label">₹1</span></div><input type="number" class="note-input" id="n1" data-val="1" placeholder="0" inputmode="numeric"><b class="note-total">0</b></div>
+                    
+                    <!-- Stock Amount -->
+                    <div class="note-row nStock" style="border-left-color: #6366f1; background: #eef2ff; margin-top: 10px;">
+                        <div class="note-info"><span class="note-label">Stock</span></div>
+                        <input type="number" class="note-input" id="nStock" data-val="1" placeholder="Enter Stock Amount" inputmode="numeric">
+                        <b class="note-total">0</b>
+                    </div>
+                    
+                    <!-- Total Row -->
+                    <div class="note-row total-row" style="border-left: none; background: #1e293b; color: white; margin-top: 15px; padding: 15px;">
+                        <div class="note-info"><span class="note-label" style="color: white; font-size: 1.1rem;">TOTAL</span></div>
+                        <div style="flex: 1; text-align: center; font-weight: 600; opacity: 0.8;">Notes + Stock</div>
+                        <b id="grandPhysicalTotal" style="font-size: 1.3rem; font-family: 'Monaco', monospace;">0</b>
+                    </div>
                 </div>
             </div>
 

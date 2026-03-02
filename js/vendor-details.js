@@ -20,6 +20,11 @@ window.onload = async () => {
     const params = new URLSearchParams(window.location.search);
     vendorId = params.get('id');
     
+    // ডিফল্টভাবে চলতি মাস সেট করা
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    document.getElementById('filterMonth').value = currentMonth;
+    
     document.getElementById('entryDate').value = new Date().toISOString().split('T')[0];
     loadDetails();
 };
@@ -142,6 +147,17 @@ async function loadDetails() {
     list.innerHTML = '';
     invBody.innerHTML = '';
 
+    // মাসের নাম বের করার লজিক
+    const selectedMonth = document.getElementById('filterMonth').value; // e.g. "2026-02"
+    const dateObj = new Date(selectedMonth + "-01");
+    const monthName = dateObj.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+    
+    // ইমেজের লেবেল আপডেট করা
+    const invDueLabel = document.getElementById('invDueLabel');
+    if (invDueLabel) {
+        invDueLabel.innerText = `TOTAL OUTSTANDING DUE FOR ${monthName.toUpperCase()}`;
+    }
+
     // Sort Bill Numbers Numerically
     const sortedBillNos = Object.keys(allBills).sort((a, b) => parseInt(a) - parseInt(b));
 
@@ -215,38 +231,67 @@ async function loadDetails() {
         });
     }
 
-    // Render Invoice Table (Bill-wise summary with Monthly Serial)
+    // Render Invoice Table (Bill-wise summary with Monthly Serial and Opening Balance)
     let currentMonth = "";
     let monthlySerial = 0;
+    let openingDue = 0;
+    
+    // Calculate opening balance (before selected month)
+    sortedBillNos.forEach((bNo) => {
+        const b = allBills[bNo];
+        const billMonth = b.date === 'Initial' ? '1900-01' : b.date.substring(0, 7);
+        if(billMonth < selectedMonth) {
+            openingDue += (b.total - b.paid);
+        }
+    });
+    
+    // Add opening balance row if exists
+    if(openingDue !== 0) {
+        invBody.innerHTML += `
+            <tr style="background: #f8fafc; font-weight: 700;">
+                <td>-</td>
+                <td>${selectedMonth}-01</td>
+                <td>OPENING</td>
+                <td>₹${openingDue > 0 ? openingDue.toLocaleString('en-IN') : 0}</td>
+                <td>₹${openingDue < 0 ? Math.abs(openingDue).toLocaleString('en-IN') : 0}</td>
+                <td style="color: ${openingDue > 0 ? '#ef4444' : '#059669'}">₹${openingDue.toLocaleString('en-IN')}</td>
+                <td><span class="stamp ${openingDue > 0 ? 'stamp-partial' : 'stamp-paid'}">${openingDue > 0 ? 'DUE' : 'ADVANCE'}</span></td>
+            </tr>
+        `;
+    }
     
     sortedBillNos.forEach((bNo) => {
         const b = allBills[bNo];
         b.due = b.total - b.paid;
-        const isPaid = b.due <= 0;
-        const statusLabel = isPaid ? 'FULL PAID' : (b.paid > 0 ? 'PARTIAL' : 'UNPAID');
-        const stampClass = isPaid ? 'stamp-paid' : (b.paid > 0 ? 'stamp-partial' : 'stamp-unpaid');
-        const displayBillNo = bNo === "0" ? "OPENING" : bNo;
+        const billMonth = b.date === 'Initial' ? 'Initial' : b.date.substring(0, 7);
+        
+        // Only show bills from selected month
+        if(billMonth === selectedMonth || (selectedMonth === '' && billMonth !== 'Initial')) {
+            const isPaid = b.due <= 0;
+            const statusLabel = isPaid ? 'FULL PAID' : (b.paid > 0 ? 'PARTIAL' : 'UNPAID');
+            const stampClass = isPaid ? 'stamp-paid' : (b.paid > 0 ? 'stamp-partial' : 'stamp-unpaid');
+            const displayBillNo = bNo === "0" ? "OPENING" : bNo;
 
-        // Monthly Serial Logic
-        const billMonth = b.date === 'Initial' ? 'Initial' : b.date.substring(0, 7); // YYYY-MM
-        if(billMonth !== currentMonth) {
-            currentMonth = billMonth;
-            monthlySerial = 1;
-        } else {
-            monthlySerial++;
+            // Monthly Serial Logic
+            if(billMonth !== currentMonth) {
+                currentMonth = billMonth;
+                monthlySerial = 1;
+            } else {
+                monthlySerial++;
+            }
+
+            invBody.innerHTML += `
+                <tr>
+                    <td>${monthlySerial}</td>
+                    <td>${b.date}</td>
+                    <td>${displayBillNo}</td>
+                    <td>₹${b.total.toLocaleString('en-IN')}</td>
+                    <td>₹${b.paid.toLocaleString('en-IN')}</td>
+                    <td><strong style="color:${isPaid ? '#059669' : '#ef4444'}">₹${b.due.toLocaleString('en-IN')}</strong></td>
+                    <td><span class="stamp ${stampClass}">${statusLabel}</span></td>
+                </tr>
+            `;
         }
-
-        invBody.innerHTML += `
-            <tr>
-                <td>${monthlySerial}</td>
-                <td>${b.date}</td>
-                <td>${displayBillNo}</td>
-                <td>₹${b.total.toLocaleString('en-IN')}</td>
-                <td>₹${b.paid.toLocaleString('en-IN')}</td>
-                <td><strong style="color:${isPaid ? '#059669' : '#ef4444'}">₹${b.due.toLocaleString('en-IN')}</strong></td>
-                <td><span class="stamp ${stampClass}">${statusLabel}</span></td>
-            </tr>
-        `;
     });
     
     toggleBillSelect();

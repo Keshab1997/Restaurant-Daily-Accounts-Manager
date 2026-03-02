@@ -45,16 +45,37 @@ async function loadTallyData(date) {
     const { data: sales } = await _supabase.from('sales').select('amount').eq('user_id', currentUser.id).eq('report_date', date).eq('sale_type', 'CASH');
     const { data: expenses } = await _supabase.from('expenses').select('amount').eq('user_id', currentUser.id).eq('report_date', date).eq('payment_source', 'CASH');
 
-    // পুরনো বকেয়া পরিশোধ (ভেন্ডর পেমেন্ট) হিসাব করা
-    const { data: vendorPayments } = await _supabase.from('vendor_ledger')
-        .select('amount, vendors(name)')
+    // পুরনো বকেয়া পরিশোধ (শুধু পুরনো বিলের payment)
+    const { data: allPayments } = await _supabase.from('vendor_ledger')
+        .select('amount, bill_no, vendor_id, vendors(name)')
         .eq('user_id', currentUser.id)
         .eq('t_date', date)
         .eq('t_type', 'PAYMENT');
 
+    let realPreviousPaid = 0;
+    let previousPaidDetails = [];
+
+    if (allPayments) {
+        for (const pay of allPayments) {
+            // চেক করছি এই বিলটি কোন তারিখের
+            const { data: originalBill } = await _supabase.from('vendor_ledger')
+                .select('t_date')
+                .eq('vendor_id', pay.vendor_id)
+                .eq('bill_no', pay.bill_no)
+                .eq('t_type', 'BILL')
+                .maybeSingle();
+
+            // যদি বিলের তারিখ আজকের চেয়ে পুরনো হয়, তবেই Previous Due
+            if (originalBill && originalBill.t_date < date) {
+                realPreviousPaid += pay.amount;
+                previousPaidDetails.push(pay);
+            }
+        }
+    }
+
     const cashSale = sales ? sales.reduce((sum, s) => sum + s.amount, 0) : 0;
     const cashExp = expenses ? expenses.reduce((sum, e) => sum + e.amount, 0) : 0;
-    const oldDuePaid = vendorPayments ? vendorPayments.reduce((sum, p) => sum + p.amount, 0) : 0;
+    const oldDuePaid = realPreviousPaid;
 
     document.getElementById('todayCashSale').innerText = `₹${cashSale.toLocaleString('en-IN')}`;
     document.getElementById('todayCashExp').innerText = `₹${cashExp.toLocaleString('en-IN')}`;
@@ -65,9 +86,9 @@ async function loadTallyData(date) {
     const list = document.getElementById('duePaidList');
     list.innerHTML = '';
 
-    if (vendorPayments && vendorPayments.length > 0) {
+    if (previousPaidDetails.length > 0) {
         breakdownCont.style.display = 'block';
-        vendorPayments.forEach(p => {
+        previousPaidDetails.forEach(p => {
             list.innerHTML += `
                 <li style="display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #fee2e2;">
                     <span>${p.vendors.name}</span>
@@ -92,24 +113,38 @@ async function loadTallyData(date) {
             const val = currentTally[`n${d}`];
             if(val > 0) document.getElementById(`n${d}`).value = val;
         });
+        // Stock amount load
+        if(currentTally.nStock) document.getElementById('nStock').value = currentTally.nStock;
     }
 
     calculateLiveTally();
 }
 
 function calculateLiveTally() {
-    let totalPhy = 0;
-    document.querySelectorAll('.note-input').forEach(input => {
-        const val = parseInt(input.getAttribute('data-val'));
+    let notesTotal = 0;
+    
+    // সব নোটের হিসাব (500 থেকে 1 পর্যন্ত)
+    const notes = ['n500', 'n200', 'n100', 'n50', 'n20', 'n10', 'n5', 'n2', 'n1'];
+    notes.forEach(id => {
+        const input = document.getElementById(id);
         const count = parseInt(input.value) || 0;
-        const sub = val * count;
-        input.nextElementSibling.innerText = sub.toLocaleString('en-IN');
-        totalPhy += sub;
+        const multiplier = parseInt(input.getAttribute('data-val'));
+        const rowTotal = count * multiplier;
+        input.nextElementSibling.innerText = rowTotal.toLocaleString('en-IN');
+        notesTotal += rowTotal;
     });
 
-    document.getElementById('phyTotal').innerText = `₹${totalPhy.toLocaleString('en-IN')}`;
+    // স্টক অ্যামাউন্ট যোগ করা
+    const stockInput = document.getElementById('nStock');
+    const stockAmount = parseInt(stockInput.value) || 0;
+    stockInput.nextElementSibling.innerText = stockAmount.toLocaleString('en-IN');
+
+    // গ্র্যান্ড টোটাল (নোট + স্টক)
+    const grandTotal = notesTotal + stockAmount;
+    document.getElementById('grandPhysicalTotal').innerText = grandTotal.toLocaleString('en-IN');
+    document.getElementById('phyTotal').innerText = `₹${grandTotal.toLocaleString('en-IN')}`;
     
-    const diff = totalPhy - currentSystemBalance;
+    const diff = grandTotal - currentSystemBalance;
     const diffEl = document.getElementById('diffTotal');
     diffEl.innerText = `₹${diff.toLocaleString('en-IN')}`;
     
@@ -138,12 +173,18 @@ async function saveTallyData() {
     const notes = {};
     let totalPhy = 0;
 
-    document.querySelectorAll('.note-input').forEach(input => {
-        const val = input.getAttribute('data-val');
+    // Notes calculation
+    [500, 200, 100, 50, 20, 10, 5, 2, 1].forEach(d => {
+        const input = document.getElementById(`n${d}`);
         const count = parseInt(input.value) || 0;
-        notes[`n${val}`] = count;
-        totalPhy += (parseInt(val) * count);
+        notes[`n${d}`] = count;
+        totalPhy += (d * count);
     });
+
+    // Stock amount
+    const stockAmount = parseInt(document.getElementById('nStock').value) || 0;
+    notes.nStock = stockAmount;
+    totalPhy += stockAmount;
 
     const diff = totalPhy - currentSystemBalance;
     const newCumulative = lastCumulativeShortage - diff;

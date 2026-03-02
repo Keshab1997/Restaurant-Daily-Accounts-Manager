@@ -185,47 +185,116 @@
 }
 
 @media (max-width: 600px) {
-    .main-content { padding: 15px; padding-bottom: 90px; }
-    
-    /* Force Order: Form First, Result Second */
+    .main-content { 
+        padding: 12px !important; 
+        padding-bottom: 90px !important;
+    }
+
     .tally-layout {
         display: flex;
         flex-direction: column;
+        gap: 20px;
     }
-    
+
+    /* Note Counter Card */
     .counter-card {
-        order: 1;
+        padding: 15px !important;
     }
-    
-    .result-card {
-        order: 2;
-        position: static;
-    }
-    
-    /* Note Row Mobile Optimization */
+
     .note-row {
-        padding: 12px;
-        gap: 10px;
+        padding: 8px 10px !important;
+        gap: 8px !important;
     }
-    
-    .note-info { width: 50px; }
-    .note-label { font-size: 0.95rem; }
-    
-    .note-input {
-        height: 48px;
-        font-size: 1.3rem;
-        padding: 10px;
+
+    .note-label { font-size: 0.85rem !important; }
+    .note-input { height: 42px !important; font-size: 1.2rem !important; }
+    .note-total { width: 65px !important; font-size: 0.9rem !important; }
+
+    /* Total Row Fix */
+    .total-row {
+        padding: 12px !important;
+        flex-direction: row !important;
+        justify-content: space-between !important;
     }
-    
-    .note-total {
-        width: 70px;
-        font-size: 0.95rem;
+    .total-row .note-info { width: auto !important; }
+    .total-row div:nth-child(2) { font-size: 0.7rem !important; }
+
+    /* Result Card */
+    .result-card {
+        padding: 18px !important;
     }
-    
-    .highlight h2 { font-size: 1.5rem !important; }
-    
+
+    .res-item {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        padding: 12px 0 !important;
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    .res-item span {
+        font-size: 0.85rem !important;
+        color: #64748b;
+        flex: 1;
+        padding-right: 10px;
+        line-height: 1.3;
+    }
+
+    .res-item h2 {
+        font-size: 1rem !important;
+        margin: 0 !important;
+        white-space: nowrap;
+    }
+
+    /* Highlight Box */
+    .highlight {
+        background: #f8fafc !important;
+        padding: 15px !important;
+        border-radius: 12px !important;
+        margin-top: 10px !important;
+        border: 1px solid #e2e8f0 !important;
+    }
+
+    .highlight span {
+        font-weight: 800 !important;
+        color: #1e293b !important;
+    }
+
+    .highlight h2 {
+        font-size: 1.3rem !important;
+    }
+
+    /* Cumulative Shortage Box */
+    .res-item[style*="background: #fef2f2"] {
+        flex-direction: row !important;
+        padding: 15px !important;
+        margin-top: 15px !important;
+        border-radius: 12px !important;
+    }
+
+    .res-item[style*="background: #fef2f2"] span {
+        color: #991b1b !important;
+        font-weight: 800 !important;
+    }
+
+    .res-item[style*="background: #fef2f2"] h2 {
+        font-size: 1.3rem !important;
+        color: #991b1b !important;
+    }
+
     /* Buttons */
-    .btn-save-tally, .btn-share-whatsapp {
-        padding: 14px;
+    .action-buttons {
+        margin-top: 20px;
+    }
+    
+    .btn-share-whatsapp {
+        padding: 15px !important;
+        font-size: 1rem !important;
+    }
+
+    /* Breakdown List */
+    #duePaidList li {
+        font-size: 0.75rem;
+        padding: 2px 0;
     }
 }

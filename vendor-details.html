@@ -91,9 +91,12 @@
                         </div>
                     </div>
                 </div>
-                <button class="btn-share-pdf" onclick="generateInvoiceImage()" style="background: #2563eb;">
-                    <i class="ri-image-line"></i> Share Bill Image
-                </button>
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <input type="month" id="filterMonth" onchange="loadDetails()" style="padding: 8px 12px; border-radius: 10px; border: 1px solid #cbd5e1; font-weight: 700; cursor: pointer;">
+                    <button class="btn-share-pdf" onclick="generateInvoiceImage()" style="background: #2563eb;">
+                        <i class="ri-image-line"></i> Share Bill Image
+                    </button>
+                </div>
             </div>
 
             <div class="summary-grid">
@@ -195,7 +198,7 @@
         </table>
         <div class="inv-footer">
             <div>
-                <p style="color:#64748b; font-weight:700; margin-bottom:5px;">TOTAL OUTSTANDING DUE</p>
+                <p id="invDueLabel" style="color:#64748b; font-weight:700; margin-bottom:5px; text-transform: uppercase;">TOTAL OUTSTANDING DUE</p>
                 <h1 id="invTotalDue" style="color: #ef4444; margin: 0; font-size: 2.5rem;">₹0</h1>
             </div>
             <div style="text-align: center;">
