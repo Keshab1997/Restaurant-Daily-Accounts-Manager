@@ -114,7 +114,7 @@ async function loadTallyData(date) {
             if(val > 0) document.getElementById(`n${d}`).value = val;
         });
         // Stock amount load
-        if(currentTally.nStock) document.getElementById('nStock').value = currentTally.nStock;
+        if(currentTally.nstock) document.getElementById('nStock').value = currentTally.nstock;
     }
 
     calculateLiveTally();
@@ -183,13 +183,20 @@ async function saveTallyData() {
 
     // Stock amount
     const stockAmount = parseInt(document.getElementById('nStock').value) || 0;
-    notes.nStock = stockAmount;
+    notes.nstock = stockAmount;
     totalPhy += stockAmount;
 
     const diff = totalPhy - currentSystemBalance;
     const newCumulative = lastCumulativeShortage - diff;
 
-    await _supabase.from('cash_tally').upsert({
+    // প্রথমে পুরনো এন্ট্রি মুছে ফেলা (যদি থাকে)
+    await _supabase.from('cash_tally')
+        .delete()
+        .eq('user_id', currentUser.id)
+        .eq('report_date', date);
+
+    // তারপর নতুন এন্ট্রি insert করা
+    const { error } = await _supabase.from('cash_tally').insert({
         user_id: currentUser.id,
         report_date: date,
         ...notes,
@@ -197,7 +204,14 @@ async function saveTallyData() {
         system_balance: currentSystemBalance,
         difference: diff,
         cumulative_shortage: newCumulative
-    }, { onConflict: 'user_id, report_date' });
+    });
+    
+    if(error) {
+        console.error('Save error:', JSON.stringify(error, null, 2));
+        showToast('Failed to save: ' + (error.message || 'Unknown error'), 'error');
+    } else {
+        console.log('Data saved successfully');
+    }
     
     loadTallyHistory();
 }
