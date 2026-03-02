@@ -120,3 +120,8 @@ function closeModal() {
     document.getElementById('vPhone').value = '';
     document.getElementById('vOpen').value = '';
 }
+
+async function logout() {
+    await _supabase.auth.signOut();
+    window.location.href = 'index.html';
+}
