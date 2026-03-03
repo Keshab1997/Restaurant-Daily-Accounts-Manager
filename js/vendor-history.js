@@ -151,16 +151,17 @@ function applyFilters() {
     const toDate = document.getElementById('toDate').value;
 
     const filteredData = allVendorData.map(v => {
-        // Filter ledger by date range
+        // Filter ledger by date range for display
         const filteredLedger = v.ledger.filter(l => {
             if (!fromDate || !toDate) return true;
             return l.t_date >= fromDate && l.t_date <= toDate;
         });
 
-        // Calculate for selected period
+        // Calculate for selected period (for display columns)
         let periodBill = 0;
         let periodPaidCash = 0;
         let periodPaidOwner = 0;
+        let lastDateInPeriod = null;
 
         filteredLedger.forEach(l => {
             if (l.t_type === 'BILL') {
@@ -170,14 +171,19 @@ function applyFilters() {
             } else if (l.t_type === 'PAYMENT_OWNER') {
                 periodPaidOwner += l.amount;
             }
+            if (!lastDateInPeriod || l.t_date > lastDateInPeriod) {
+                lastDateInPeriod = l.t_date;
+            }
         });
 
-        // Calculate total current due (all time)
-        let totalBill = v.opening_due;
-        let totalPaid = 0;
+        // Calculate total due up to 'toDate'
+        let totalBillUpToDate = v.opening_due;
+        let totalPaidUpToDate = 0;
         v.ledger.forEach(l => {
-            if (l.t_type === 'BILL') totalBill += l.amount;
-            else if (l.t_type === 'PAYMENT' || l.t_type === 'PAYMENT_OWNER') totalPaid += l.amount;
+            if (!toDate || l.t_date <= toDate) {
+                if (l.t_type === 'BILL') totalBillUpToDate += l.amount;
+                else if (l.t_type === 'PAYMENT' || l.t_type === 'PAYMENT_OWNER') totalPaidUpToDate += l.amount;
+            }
         });
 
         return {
@@ -185,7 +191,9 @@ function applyFilters() {
             displayBill: periodBill,
             displayPaidCash: periodPaidCash,
             displayPaidOwner: periodPaidOwner,
-            currentDue: totalBill - totalPaid
+            currentDue: totalBillUpToDate - totalPaidUpToDate,
+            lastDate: lastDateInPeriod || v.lastDate,
+            hasActivityInPeriod: filteredLedger.length > 0
         };
     }).filter(v => {
         const matchesSearch = v.name.toLowerCase().includes(search) || v.category.toLowerCase().includes(search);
@@ -193,9 +201,11 @@ function applyFilters() {
                              (status === 'DUE' && v.currentDue > 0) || 
                              (status === 'PAID' && v.currentDue <= 0);
         
-        const hasActivity = v.displayBill > 0 || v.displayPaidCash > 0 || v.displayPaidOwner > 0;
-        
-        return matchesSearch && matchesStatus && (search !== "" || hasActivity || status !== 'ALL');
+        return matchesSearch && matchesStatus && v.hasActivityInPeriod;
+    }).sort((a, b) => {
+        if (a.lastDate > b.lastDate) return -1;
+        if (a.lastDate < b.lastDate) return 1;
+        return 0;
     });
 
     renderTable(filteredData);
