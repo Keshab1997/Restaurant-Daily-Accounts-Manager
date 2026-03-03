@@ -43,8 +43,7 @@ async function loadTallyData(date) {
     document.getElementById('tallyOpening').innerText = `₹${tallyOpeningBalance.toLocaleString('en-IN')}`;
 
     const { data: sales } = await _supabase.from('sales').select('amount').eq('user_id', currentUser.id).eq('report_date', date).eq('sale_type', 'CASH');
-    const { data: expenses } = await _supabase.from('expenses').select('amount').eq('user_id', currentUser.id).eq('report_date', date).eq('payment_source', 'CASH');
-
+    
     // পুরনো বকেয়া পরিশোধ (শুধু পুরনো বিলের payment)
     const { data: allPayments } = await _supabase.from('vendor_ledger')
         .select('amount, bill_no, vendor_id, vendors(name)')
@@ -53,11 +52,11 @@ async function loadTallyData(date) {
         .eq('t_type', 'PAYMENT');
 
     let realPreviousPaid = 0;
+    let previousPaidBillNos = [];
     let previousPaidDetails = [];
 
     if (allPayments) {
         for (const pay of allPayments) {
-            // চেক করছি এই বিলটি কোন তারিখের
             const { data: originalBill } = await _supabase.from('vendor_ledger')
                 .select('t_date')
                 .eq('vendor_id', pay.vendor_id)
@@ -65,16 +64,30 @@ async function loadTallyData(date) {
                 .eq('t_type', 'BILL')
                 .maybeSingle();
 
-            // যদি বিলের তারিখ আজকের চেয়ে পুরনো হয়, তবেই Previous Due
             if (originalBill && originalBill.t_date < date) {
                 realPreviousPaid += pay.amount;
+                previousPaidBillNos.push(pay.bill_no);
                 previousPaidDetails.push(pay);
             }
         }
     }
 
+    const { data: expenses } = await _supabase.from('expenses')
+        .select('amount, bill_no')
+        .eq('user_id', currentUser.id)
+        .eq('report_date', date)
+        .eq('payment_source', 'CASH');
+
+    let cashExp = 0;
+    if (expenses) {
+        for (const exp of expenses) {
+            if (!previousPaidBillNos.includes(exp.bill_no)) {
+                cashExp += exp.amount;
+            }
+        }
+    }
+
     const cashSale = sales ? sales.reduce((sum, s) => sum + s.amount, 0) : 0;
-    const cashExp = expenses ? expenses.reduce((sum, e) => sum + e.amount, 0) : 0;
     const oldDuePaid = realPreviousPaid;
 
     document.getElementById('todayCashSale').innerText = `₹${cashSale.toLocaleString('en-IN')}`;
