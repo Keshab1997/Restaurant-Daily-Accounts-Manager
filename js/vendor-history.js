@@ -151,13 +151,11 @@ function applyFilters() {
     const toDate = document.getElementById('toDate').value;
 
     const filteredData = allVendorData.map(v => {
-        // Filter ledger by date range for display
         const filteredLedger = v.ledger.filter(l => {
             if (!fromDate || !toDate) return true;
             return l.t_date >= fromDate && l.t_date <= toDate;
         });
 
-        // Calculate for selected period (for display columns)
         let periodBill = 0;
         let periodPaidCash = 0;
         let periodPaidOwner = 0;
@@ -176,22 +174,14 @@ function applyFilters() {
             }
         });
 
-        // Calculate total due up to 'toDate'
-        let totalBillUpToDate = v.opening_due;
-        let totalPaidUpToDate = 0;
-        v.ledger.forEach(l => {
-            if (!toDate || l.t_date <= toDate) {
-                if (l.t_type === 'BILL') totalBillUpToDate += l.amount;
-                else if (l.t_type === 'PAYMENT' || l.t_type === 'PAYMENT_OWNER') totalPaidUpToDate += l.amount;
-            }
-        });
+        const periodDue = periodBill - (periodPaidCash + periodPaidOwner);
 
         return {
             ...v,
             displayBill: periodBill,
             displayPaidCash: periodPaidCash,
             displayPaidOwner: periodPaidOwner,
-            currentDue: totalBillUpToDate - totalPaidUpToDate,
+            currentDue: periodDue,
             lastDate: lastDateInPeriod || v.lastDate,
             hasActivityInPeriod: filteredLedger.length > 0
         };
@@ -215,13 +205,15 @@ function exportToExcel() {
     const fromDate = document.getElementById('fromDate').value;
     const toDate = document.getElementById('toDate').value;
     let csv = `Vendor History Report (${fromDate} to ${toDate})\n`;
-    csv += "Vendor Name,Category,Last Date,Period Bill,Paid (Cash),Paid (Owner),Current Due\n";
+    csv += "Vendor Name,Category,Last Date,Period Bill,Paid (Cash),Paid (Owner),Period Due\n";
     
     allVendorData.forEach(v => {
         const filteredLedger = v.ledger.filter(l => {
             if (!fromDate || !toDate) return true;
             return l.t_date >= fromDate && l.t_date <= toDate;
         });
+
+        if (filteredLedger.length === 0) return;
 
         let periodBill = 0, periodPaidCash = 0, periodPaidOwner = 0;
         filteredLedger.forEach(l => {
@@ -230,13 +222,9 @@ function exportToExcel() {
             else if (l.t_type === 'PAYMENT_OWNER') periodPaidOwner += l.amount;
         });
 
-        let totalBill = v.opening_due, totalPaid = 0;
-        v.ledger.forEach(l => {
-            if (l.t_type === 'BILL') totalBill += l.amount;
-            else if (l.t_type === 'PAYMENT' || l.t_type === 'PAYMENT_OWNER') totalPaid += l.amount;
-        });
+        const periodDue = periodBill - (periodPaidCash + periodPaidOwner);
 
-        csv += `${v.name},${v.category},${v.lastDate},${periodBill},${periodPaidCash},${periodPaidOwner},${totalBill - totalPaid}\n`;
+        csv += `${v.name},${v.category},${v.lastDate},${periodBill},${periodPaidCash},${periodPaidOwner},${periodDue}\n`;
     });
 
     const blob = new Blob([csv], { type: 'text/csv' });
