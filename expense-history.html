@@ -10,34 +10,6 @@
     <link rel="stylesheet" href="css/expense-history.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
-    <style>
-        .footnote-section {
-            margin-top: 30px;
-            padding: 20px;
-            background: #fffbeb;
-            border-left: 5px solid #f59e0b;
-            border-radius: 10px;
-            display: none;
-        }
-        .footnote-section h4 {
-            margin: 0 0 10px 0;
-            font-size: 0.9rem;
-            color: #92400e;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .footnote-item {
-            font-size: 0.85rem;
-            color: #78350f;
-            margin-bottom: 6px;
-            line-height: 1.5;
-            font-weight: 500;
-        }
-        .footnote-item i { color: #f59e0b; }
-    </style>
 </head>
 <body>
     <div class="hamburger-trigger" onclick="toggleSidebar()"><i class="ri-menu-2-line"></i></div>
@@ -86,7 +58,7 @@
                             <th>Description</th>
                             <th>Source</th>
                             <th>Amount</th>
-                            <th width="150">Action</th>
+                            <th width="120">Action</th>
                         </tr>
                     </thead>
                     <tbody id="historyBody"></tbody>
@@ -101,11 +73,6 @@
         </div>
 
         <div id="mobileHistoryList" class="mobile-view"></div>
-
-        <div id="auditFootnotes" class="footnote-section">
-            <h4><i class="ri-information-line"></i> Audit Notes (বকেয়া ও পেমেন্ট তথ্য)</h4>
-            <div id="footnoteList"></div>
-        </div>
     </main>
 
     <script src="js/config.js"></script>
@@ -134,19 +101,11 @@
                 .eq('report_date', date)
                 .order('created_at', { ascending: true });
 
-            const { data: allLedger } = await _supabase.from('vendor_ledger')
-                .select('*, vendors(name)')
-                .eq('user_id', currentUser.id);
-
             const tbody = document.getElementById('historyBody');
             const mobileList = document.getElementById('mobileHistoryList');
-            const footNoteList = document.getElementById('footnoteList');
-            const auditSection = document.getElementById('auditFootnotes');
             
             tbody.innerHTML = '';
             mobileList.innerHTML = '';
-            footNoteList.innerHTML = '';
-            auditSection.style.display = 'none';
             let total = 0;
 
             if(expenses && expenses.length > 0) {
@@ -167,7 +126,6 @@
                             <td>
                                 <div class="action-btns">
                                     <button class="btn-details" onclick="location.href='${detailsUrl}'" ${!vendor ? 'disabled' : ''} title="View Ledger"><i class="ri-file-list-3-line"></i> Details</button>
-                                    <button class="btn-del" onclick="deleteExp('${exp.id}')" title="Delete"><i class="ri-delete-bin-line"></i></button>
                                 </div>
                             </td>
                         </tr>
@@ -184,8 +142,7 @@
                                 <h2 class="amt">₹${exp.amount.toLocaleString('en-IN')}</h2>
                             </div>
                             <div class="card-bottom">
-                                <button class="btn-mob-details" onclick="location.href='${detailsUrl}'" ${!vendor ? 'style="display:none"' : ''}><i class="ri-eye-line"></i> View Ledger</button>
-                                <button class="btn-mob-del" onclick="deleteExp('${exp.id}')"><i class="ri-delete-bin-line"></i> Delete</button>
+                                <button class="btn-mob-details" onclick="location.href='${detailsUrl}'" ${!vendor ? 'style="display:none"' : ''} style="width: 100%;"><i class="ri-eye-line"></i> View Ledger</button>
                             </div>
                         </div>
                     `;
@@ -194,39 +151,6 @@
                 tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">No expenses found.</td></tr>';
             }
             document.getElementById('historyTotal').innerText = `₹${total.toLocaleString('en-IN')}`;
-
-            if(allLedger) {
-                let notes = [];
-
-                const todayBills = allLedger.filter(l => l.t_date === date && l.t_type === 'BILL');
-                todayBills.forEach(bill => {
-                    const payment = allLedger.find(l => l.vendor_id === bill.vendor_id && l.bill_no === bill.bill_no && l.t_date > date && (l.t_type === 'PAYMENT' || l.t_type === 'PAYMENT_OWNER'));
-                    if(payment) {
-                        notes.push(`* দ্রষ্টব্য: এই তারিখের <b>${bill.vendors.name}</b> - <b>₹${bill.amount}</b>/- বিলটি পরবর্তী তারিখে (<b>${payment.t_date}</b>) পরিশোধ করা হয়েছে, তাই এটি আজকের ক্যাশ তালিকা থেকে বাদ দেওয়া হয়েছে।`);
-                    }
-                });
-
-                const todayPayments = allLedger.filter(l => l.t_date === date && (l.t_type === 'PAYMENT' || l.t_type === 'PAYMENT_OWNER'));
-                todayPayments.forEach(pay => {
-                    const bill = allLedger.find(l => l.vendor_id === pay.vendor_id && l.bill_no === pay.bill_no && l.t_date < date && l.t_type === 'BILL');
-                    if(bill) {
-                        notes.push(`* দ্রষ্টব্য: আজকের মোট খরচের সাথে <b>${bill.vendors.name}</b>-এর <b>${bill.t_date}</b> তারিখের বকেয়া বিলের (Bill #${pay.bill_no}) <b>₹${pay.amount}</b>/- পেমেন্ট যুক্ত করা হয়েছে।`);
-                    }
-                });
-
-                if(notes.length > 0) {
-                    auditSection.style.display = 'block';
-                    notes.forEach(note => {
-                        footNoteList.innerHTML += `<div class="footnote-item"><i class="ri-arrow-right-s-fill"></i> ${note}</div>`;
-                    });
-                }
-            }
-        }
-
-        async function deleteExp(id) {
-            if(!confirm("Delete this expense?")) return;
-            await _supabase.from('expenses').delete().eq('id', id);
-            loadHistory();
         }
 
         async function logout() { await _supabase.auth.signOut(); window.location.href = 'index.html'; }

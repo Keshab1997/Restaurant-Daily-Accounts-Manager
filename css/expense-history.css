@@ -6,12 +6,9 @@
 
 /* Buttons */
 .action-btns { display: flex; gap: 10px; align-items: center; }
-.btn-details { background: #eff6ff; color: #2563eb; border: 1px solid #dbeafe; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 5px; }
+.btn-details { background: #eff6ff; color: #2563eb; border: 1px solid #dbeafe; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 700; display: flex; align-items: center; gap: 5px; transition: 0.2s; }
 .btn-details:hover { background: #2563eb; color: white; }
 .btn-details:disabled { opacity: 0.5; cursor: not-allowed; }
-
-.btn-del { background: #fee2e2; color: #ef4444; border: 1px solid #fecaca; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 1rem; }
-.btn-del:hover { background: #ef4444; color: white; }
 
 .filter-box input { padding: 10px; border-radius: 10px; border: 1px solid var(--border); font-weight: 700; color: var(--primary); outline: none; }
 
@@ -42,6 +39,6 @@
     .amt { margin: 5px 0 15px 0; font-size: 1.4rem; font-weight: 800; color: #1e293b; }
     
     .card-bottom { display: flex; gap: 10px; border-top: 1px dashed #e2e8f0; padding-top: 12px; }
-    .btn-mob-details { flex: 2; background: #2563eb; color: white; border: none; padding: 10px; border-radius: 8px; font-weight: 700; font-size: 0.85rem; }
-    .btn-mob-del { flex: 1; background: #fee2e2; color: #ef4444; border: none; padding: 10px; border-radius: 8px; font-weight: 700; font-size: 0.85rem; }
+    .btn-mob-details { background: #2563eb; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 700; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s; }
+    .btn-mob-details:hover { background: #1d4ed8; }
 }
