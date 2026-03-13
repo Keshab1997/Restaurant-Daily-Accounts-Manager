@@ -66,14 +66,12 @@ async function loadDetails() {
     document.getElementById('vNameTitle').innerText = vendor.name;
     document.getElementById('invVendorName').innerText = vendor.name;
 
-    // Fetch for calculation (oldest to newest for FIFO)
     const { data: calcLedger } = await _supabase.from('vendor_ledger')
         .select('*')
         .eq('vendor_id', vendorId)
         .order('t_date', { ascending: true })
         .order('created_at', { ascending: true });
 
-    // Fetch for display (newest to oldest)
     const { data: displayLedger } = await _supabase.from('vendor_ledger')
         .select('*')
         .eq('vendor_id', vendorId)
@@ -82,18 +80,40 @@ async function loadDetails() {
 
     ledgerData = calcLedger || [];
 
-    allBills = {};
-    let totalBillAmt = vendor.opening_due || 0;
-    let totalPaidAmt = 0;
-    let billsList = []; // FIFO এর জন্য বিলের লিস্ট
+    const selectedMonth = document.getElementById('filterMonth').value;
+    const endOfMonth = selectedMonth + "-31";
 
-    // Handle Opening Due as Bill #0
+    let periodBill = 0;
+    let periodPaid = 0;
+    let cumulativeBill = vendor.opening_due || 0;
+    let cumulativePaid = 0;
+
+    ledgerData.forEach(item => {
+        if (item.t_date.startsWith(selectedMonth)) {
+            if (item.t_type === 'BILL') periodBill += item.amount;
+            else if (item.t_type === 'PAYMENT' || item.t_type === 'PAYMENT_OWNER') periodPaid += item.amount;
+        }
+
+        if (item.t_date <= endOfMonth) {
+            if (item.t_type === 'BILL') cumulativeBill += item.amount;
+            else if (item.t_type === 'PAYMENT' || item.t_type === 'PAYMENT_OWNER') cumulativePaid += item.amount;
+        }
+    });
+
+    const currentDue = cumulativeBill - cumulativePaid;
+
+    document.getElementById('totBill').innerText = `₹${periodBill.toLocaleString('en-IN')}`;
+    document.getElementById('totPaid').innerText = `₹${periodPaid.toLocaleString('en-IN')}`;
+    document.getElementById('currDue').innerText = `₹${currentDue.toLocaleString('en-IN')}`;
+
+    allBills = {};
+    let billsList = [];
+
     if(vendor.opening_due > 0) {
         allBills["0"] = { date: 'Initial', total: vendor.opening_due, paid: 0, due: vendor.opening_due };
         billsList.push({ billNo: "0", date: 'Initial', amount: vendor.opening_due });
     }
 
-    // প্রথমে সব বিল সংগ্রহ করা
     if(calcLedger) {
         calcLedger.forEach(l => {
             if(l.t_type === 'BILL') {
@@ -105,31 +125,25 @@ async function loadDetails() {
                     billsList.find(b => b.billNo === bNo).amount += l.amount;
                 }
                 allBills[bNo].total += l.amount;
-                totalBillAmt += l.amount;
             }
         });
 
-        // Payment tracking: Bill-specific + FIFO for general payments
-        let generalPayment = 0; // "0" bill no = general payment
+        let generalPayment = 0;
         
         calcLedger.forEach(l => {
             if(l.t_type === 'PAYMENT' || l.t_type === 'PAYMENT_OWNER') {
                 const bNo = l.bill_no || "0";
                 
                 if(bNo === "0") {
-                    // General payment - FIFO এর জন্য জমা রাখা
                     generalPayment += l.amount;
                 } else {
-                    // Specific bill payment
                     if(allBills[bNo]) {
                         allBills[bNo].paid += l.amount;
                     }
                 }
-                totalPaidAmt += l.amount;
             }
         });
 
-        // FIFO Logic: General payment দিয়ে পুরনো বিল থেকে শোধ করা
         billsList.forEach(bill => {
             if(generalPayment > 0) {
                 const bNo = bill.billNo;
@@ -149,34 +163,14 @@ async function loadDetails() {
     }
 
     const list = document.getElementById('ledgerList');
-    const invBody = document.getElementById('invBody');
     list.innerHTML = '';
-    invBody.innerHTML = '';
 
-    // মাসের নাম বের করার লজিক
-    const selectedMonth = document.getElementById('filterMonth').value; // e.g. "2026-02"
-    const dateObj = new Date(selectedMonth + "-01");
-    const monthName = dateObj.toLocaleString('en-US', { month: 'long', year: 'numeric' });
-    
-    // ইমেজের লেবেল আপডেট করা
-    const invDueLabel = document.getElementById('invDueLabel');
-    if (invDueLabel) {
-        invDueLabel.innerText = `TOTAL OUTSTANDING DUE FOR ${monthName.toUpperCase()}`;
-    }
+    const filteredLedger = displayLedger.filter(item => item.t_date.startsWith(selectedMonth));
 
-    // Sort Bill Numbers Numerically
-    const sortedBillNos = Object.keys(allBills).sort((a, b) => parseInt(a) - parseInt(b));
-
-    // Render Summary Cards
-    document.getElementById('totBill').innerText = `₹${totalBillAmt.toLocaleString('en-IN')}`;
-    document.getElementById('totPaid').innerText = `₹${totalPaidAmt.toLocaleString('en-IN')}`;
-    const netDue = totalBillAmt - totalPaidAmt;
-    document.getElementById('currDue').innerText = `₹${netDue.toLocaleString('en-IN')}`;
-    document.getElementById('invTotalDue').innerText = `₹${netDue.toLocaleString('en-IN')}`;
-
-    // Render List Items (Newest Date First) with Bill Status
-    if(displayLedger) {
-        displayLedger.forEach((l) => {
+    if (filteredLedger.length === 0) {
+        list.innerHTML = '<p style="text-align:center; color:#64748b; padding:20px;">No transactions in this month.</p>';
+    } else {
+        filteredLedger.forEach((l) => {
             let badgeClass = 'badge-bill';
             let statusLabel = 'BILL';
             let amountColor = 'var(--danger)';
@@ -191,11 +185,10 @@ async function loadDetails() {
                 statusLabel = 'PAID (OWNER)';
                 amountColor = '#4338ca';
             } else if(l.t_type === 'BILL') {
-                // বিলের স্ট্যাটাস দেখানো (Fresh calculation)
                 const bNo = l.bill_no || "0";
                 const b = allBills[bNo];
                 if(b) {
-                    b.due = b.total - b.paid; // Recalculate due
+                    b.due = b.total - b.paid;
                     const isPaid = b.due <= 0;
                     let billStatus = '';
                     let stampClass = '';
@@ -236,69 +229,6 @@ async function loadDetails() {
             `;
         });
     }
-
-    // Render Invoice Table (Bill-wise summary with Monthly Serial and Opening Balance)
-    let currentMonth = "";
-    let monthlySerial = 0;
-    let openingDue = 0;
-    
-    // Calculate opening balance (before selected month)
-    sortedBillNos.forEach((bNo) => {
-        const b = allBills[bNo];
-        const billMonth = b.date === 'Initial' ? '1900-01' : b.date.substring(0, 7);
-        if(billMonth < selectedMonth) {
-            openingDue += (b.total - b.paid);
-        }
-    });
-    
-    // Add opening balance row if exists
-    if(openingDue !== 0) {
-        invBody.innerHTML += `
-            <tr style="background: #f8fafc; font-weight: 700;">
-                <td>-</td>
-                <td>${selectedMonth}-01</td>
-                <td>OPENING</td>
-                <td>₹${openingDue > 0 ? openingDue.toLocaleString('en-IN') : 0}</td>
-                <td>₹${openingDue < 0 ? Math.abs(openingDue).toLocaleString('en-IN') : 0}</td>
-                <td style="color: ${openingDue > 0 ? '#ef4444' : '#059669'}">₹${openingDue.toLocaleString('en-IN')}</td>
-                <td><span class="stamp ${openingDue > 0 ? 'stamp-partial' : 'stamp-paid'}">${openingDue > 0 ? 'DUE' : 'ADVANCE'}</span></td>
-            </tr>
-        `;
-    }
-    
-    sortedBillNos.forEach((bNo) => {
-        const b = allBills[bNo];
-        b.due = b.total - b.paid;
-        const billMonth = b.date === 'Initial' ? 'Initial' : b.date.substring(0, 7);
-        
-        // Only show bills from selected month
-        if(billMonth === selectedMonth || (selectedMonth === '' && billMonth !== 'Initial')) {
-            const isPaid = b.due <= 0;
-            const statusLabel = isPaid ? 'FULL PAID' : (b.paid > 0 ? 'PARTIAL' : 'UNPAID');
-            const stampClass = isPaid ? 'stamp-paid' : (b.paid > 0 ? 'stamp-partial' : 'stamp-unpaid');
-            const displayBillNo = bNo === "0" ? "OPENING" : bNo;
-
-            // Monthly Serial Logic
-            if(billMonth !== currentMonth) {
-                currentMonth = billMonth;
-                monthlySerial = 1;
-            } else {
-                monthlySerial++;
-            }
-
-            invBody.innerHTML += `
-                <tr>
-                    <td>${monthlySerial}</td>
-                    <td>${b.date}</td>
-                    <td>${displayBillNo}</td>
-                    <td>₹${b.total.toLocaleString('en-IN')}</td>
-                    <td>₹${b.paid.toLocaleString('en-IN')}</td>
-                    <td><strong style="color:${isPaid ? '#059669' : '#ef4444'}">₹${b.due.toLocaleString('en-IN')}</strong></td>
-                    <td><span class="stamp ${stampClass}">${statusLabel}</span></td>
-                </tr>
-            `;
-        }
-    });
     
     toggleBillSelect();
 }
@@ -521,10 +451,14 @@ function prepareInvoiceTemplate() {
     document.getElementById('invDate').innerText = `Date: ${new Date().toLocaleDateString('en-IN')}`;
     document.getElementById('invSignature').innerText = signatureName;
     
+    const filterMonth = document.getElementById('filterMonth').value;
+    const dateObj = new Date(filterMonth + "-01");
+    const monthName = dateObj.toLocaleString('default', { month: 'long', year: 'numeric' }).toUpperCase();
+    document.getElementById('invDueLabel').innerText = `TOTAL OUTSTANDING DUE (UP TO ${monthName})`;
+    
     const tbody = document.getElementById('invBody');
     tbody.innerHTML = '';
     
-    const filterMonth = document.getElementById('filterMonth').value;
     const filteredLedger = ledgerData.filter(item => item.t_date.startsWith(filterMonth));
     const bills = filteredLedger.filter(l => l.t_type === 'BILL');
     
