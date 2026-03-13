@@ -1,20 +1,23 @@
 let currentUser = null;
 let vendorId = null;
-let allBills = {}; // Store bill-wise calculations
+let vendorData = null;
+let ledgerData = [];
+let allBills = {};
 let restaurantName = "RestroManager";
+let signatureName = "Authorized Person";
 
 window.onload = async () => {
     const session = await checkAuth(true);
     currentUser = session.user;
     
-    // ১. রেস্টুরেন্টের নাম লোড করা
-    const { data: profile } = await _supabase.from('profiles').select('restaurant_name, authorized_signature').eq('id', currentUser.id).maybeSingle();
-    if(profile && profile.restaurant_name) {
-        restaurantName = profile.restaurant_name;
+    // Load Profile Settings for Invoice
+    const { data: profile } = await _supabase.from('profiles').select('*').eq('id', currentUser.id).maybeSingle();
+    if(profile) {
+        restaurantName = profile.restaurant_name || "RestroManager";
+        signatureName = profile.authorized_signature || profile.restaurant_name || "Authorized Person";
         document.getElementById('sideNavName').innerText = restaurantName;
         document.getElementById('invRestroName').innerText = restaurantName;
-        // সিগনেচার সেট করা
-        document.getElementById('invSignature').innerText = profile.authorized_signature || restaurantName;
+        document.getElementById('invSignature').innerText = signatureName;
     }
 
     const params = new URLSearchParams(window.location.search);
@@ -59,6 +62,7 @@ function toggleBillSelect() {
 
 async function loadDetails() {
     const { data: vendor } = await _supabase.from('vendors').select('*').eq('id', vendorId).single();
+    vendorData = vendor;
     document.getElementById('vNameTitle').innerText = vendor.name;
     document.getElementById('invVendorName').innerText = vendor.name;
 
@@ -75,6 +79,8 @@ async function loadDetails() {
         .eq('vendor_id', vendorId)
         .order('t_date', { ascending: false })
         .order('created_at', { ascending: false });
+
+    ledgerData = calcLedger || [];
 
     allBills = {};
     let totalBillAmt = vendor.opening_due || 0;
@@ -492,48 +498,121 @@ function editEntry(id, type, amount, billNo, date, desc) {
 }
 
 async function generateInvoiceImage() {
-    const btn = document.querySelector('.btn-share-pdf');
-    const originalContent = btn.innerHTML;
-
-    btn.disabled = true;
-    btn.innerHTML = '<i class="ri-loader-4-line spin"></i> Generating...';
+    showToast("Downloading Image...", "info");
+    prepareInvoiceTemplate();
     
-    showToast("Generating bill image, please wait...", "info");
-
     try {
-        const element = document.getElementById('invoiceTemplate');
-        document.getElementById('invDate').innerText = "Date: " + new Date().toLocaleDateString('en-GB');
-        
-        const canvas = await html2canvas(element, { 
-            scale: 2,
-            useCORS: true,
-            allowTaint: true,
-            backgroundColor: "#ffffff"
-        });
-
+        const template = document.getElementById('invoiceTemplate');
+        const canvas = await html2canvas(template, { scale: 2 });
         const link = document.createElement('a');
-        const vendorName = document.getElementById('vNameTitle').innerText.replace(/\s+/g, '_');
-        link.download = `Statement_${vendorName}_${new Date().getTime()}.png`;
+        link.download = `${vendorData.name}_Ledger.png`;
         link.href = canvas.toDataURL("image/png");
         link.click();
-        
-        showToast("Bill image generated successfully!", "success");
+        showToast("Image Downloaded!", "success");
+    } catch (err) {
+        console.error(err);
+        showToast("Failed to download image", "error");
+    }
+}
 
-        if (navigator.share) {
-            canvas.toBlob(blob => {
-                const file = new File([blob], "statement.png", { type: "image/png" });
-                navigator.share({
-                    files: [file],
-                    title: 'Vendor Statement',
-                    text: `Statement for ${document.getElementById('vNameTitle').innerText}`
-                }).catch(console.error);
-            });
+function prepareInvoiceTemplate() {
+    document.getElementById('invRestroName').innerText = restaurantName;
+    document.getElementById('invVendorName').innerText = vendorData.name;
+    document.getElementById('invDate').innerText = `Date: ${new Date().toLocaleDateString('en-IN')}`;
+    document.getElementById('invSignature').innerText = signatureName;
+    
+    const tbody = document.getElementById('invBody');
+    tbody.innerHTML = '';
+    
+    const filterMonth = document.getElementById('filterMonth').value;
+    const filteredLedger = ledgerData.filter(item => item.t_date.startsWith(filterMonth));
+    const bills = filteredLedger.filter(l => l.t_type === 'BILL');
+    
+    let sl = 1;
+    
+    bills.forEach(bill => {
+        const payments = ledgerData.filter(l => (l.t_type === 'PAYMENT' || l.t_type === 'PAYMENT_OWNER') && l.bill_no === bill.bill_no);
+        const paidAmt = payments.reduce((sum, p) => sum + p.amount, 0);
+        const dueAmt = bill.amount - paidAmt;
+        
+        let statusHtml = '';
+        if (dueAmt <= 0) statusHtml = '<span class="stamp stamp-paid">PAID</span>';
+        else if (paidAmt > 0) statusHtml = '<span class="stamp stamp-partial">PARTIAL</span>';
+        else statusHtml = '<span class="stamp stamp-unpaid">DUE</span>';
+
+        tbody.innerHTML += `
+            <tr>
+                <td>${sl++}</td>
+                <td>${bill.t_date}</td>
+                <td><b>#${bill.bill_no}</b></td>
+                <td>₹${bill.amount.toLocaleString('en-IN')}</td>
+                <td style="color:#059669;">₹${paidAmt.toLocaleString('en-IN')}</td>
+                <td style="color:#ef4444; font-weight:bold;">₹${dueAmt.toLocaleString('en-IN')}</td>
+                <td>${statusHtml}</td>
+            </tr>
+        `;
+    });
+
+    document.getElementById('invTotalDue').innerText = document.getElementById('currDue').innerText;
+}
+
+async function previewInvoice() {
+    showToast("Generating preview...", "info");
+    prepareInvoiceTemplate();
+    
+    const template = document.getElementById('invoiceTemplate');
+    const previewContainer = document.getElementById('previewContainer');
+    
+    try {
+        const canvas = await html2canvas(template, { scale: 2 });
+        const imgData = canvas.toDataURL("image/png");
+        previewContainer.innerHTML = `<img src="${imgData}" alt="Bill Preview">`;
+        document.getElementById('previewModal').classList.remove('hidden');
+    } catch (err) {
+        console.error(err);
+        showToast("Failed to generate preview", "error");
+    }
+}
+
+function closePreviewModal() {
+    document.getElementById('previewModal').classList.add('hidden');
+    document.getElementById('previewContainer').innerHTML = '<div style="text-align: center; padding: 50px;"><i class="ri-loader-4-line spin" style="font-size: 2rem; color: #2563eb;"></i></div>';
+}
+
+async function generateInvoicePDF() {
+    showToast("Generating PDF...", "info");
+    prepareInvoiceTemplate();
+    
+    try {
+        const template = document.getElementById('invoiceTemplate');
+        const canvas = await html2canvas(template, { scale: 2 });
+        const imgData = canvas.toDataURL("image/png");
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('p', 'mm', 'a4');
+        
+        const pdfWidth = 210;
+        const pageHeight = 297;
+        const imgWidth = pdfWidth;
+        const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+        
+        let heightLeft = imgHeight;
+        let position = 0;
+
+        doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+
+        while (heightLeft > 0) {
+            position = heightLeft - imgHeight;
+            doc.addPage();
+            doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
         }
-    } catch (error) {
-        console.error("Image generation error:", error);
-        showToast("Failed to generate image. Try again.", "error");
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = originalContent;
+
+        doc.save(`${vendorData.name}_Ledger.pdf`);
+        showToast("PDF Downloaded!", "success");
+    } catch (err) {
+        console.error(err);
+        showToast("Failed to generate PDF", "error");
     }
 }

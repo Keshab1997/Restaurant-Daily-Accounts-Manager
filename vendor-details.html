@@ -17,23 +17,26 @@
     <link rel="stylesheet" href="css/vendor-details.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
     <style>
         #invoiceTemplate {
-            width: 700px; padding: 40px; background: white; position: absolute; left: -9999px;
+            width: 900px; padding: 60px; background: white; position: absolute; left: -9999px;
             font-family: 'Inter', sans-serif; color: #1e293b;
         }
-        .inv-header { display: flex; justify-content: space-between; border-bottom: 3px solid #2563eb; padding-bottom: 20px; }
-        .inv-logo h1 { color: #2563eb; margin: 0; font-size: 2.2rem; font-weight: 800; }
-        .inv-table { width: 100%; border-collapse: collapse; margin-top: 30px; }
-        .inv-table th { background: #f8fafc; text-align: left; padding: 12px; border-bottom: 2px solid #e2e8f0; font-size: 0.9rem; }
-        .inv-table td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 0.95rem; }
-        .inv-footer { margin-top: 50px; display: flex; justify-content: space-between; align-items: flex-end; }
-        .sig-font { font-family: 'Brush Script MT', cursive; font-size: 2.2rem; color: #2563eb; margin-bottom: 5px; }
-        .stamp { padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 800; display: inline-block; }
+        .inv-header { display: flex; justify-content: space-between; border-bottom: 3px solid #2563eb; padding-bottom: 25px; }
+        .inv-logo h1 { color: #2563eb; margin: 0; font-size: 2.5rem; font-weight: 900; text-transform: uppercase; letter-spacing: -1px; }
+        .inv-logo p { margin: 5px 0 0 0; font-size: 1.1rem; color: #64748b; font-weight: 600; }
+        .inv-vendor h2 { margin: 0; color: #1e293b; font-size: 1.8rem; }
+        .inv-table { width: 100%; border-collapse: collapse; margin-top: 40px; }
+        .inv-table th { background: #f8fafc; text-align: left; padding: 15px; border-bottom: 2px solid #e2e8f0; font-size: 1rem; color: #64748b; text-transform: uppercase; }
+        .inv-table td { padding: 15px; border-bottom: 1px solid #f1f5f9; font-size: 1.05rem; }
+        .inv-footer { margin-top: 60px; display: flex; justify-content: space-between; align-items: flex-end; }
+        .sig-font { font-family: 'Brush Script MT', cursive; font-size: 2.5rem; color: #2563eb; margin-bottom: 5px; }
+        .stamp { padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 800; display: inline-block; }
         .stamp-paid { background: #d1fae5; color: #059669; border: 1px solid #059669; }
         .stamp-partial { background: #fef3c7; color: #d97706; border: 1px solid #d97706; }
-        .bill-row-serial { font-weight: 700; color: var(--text-light); margin-right: 10px; }
+        .stamp-unpaid { background: #fee2e2; color: #ef4444; border: 1px solid #ef4444; }
     </style>
 </head>
 <body>
@@ -91,11 +94,19 @@
                         </div>
                     </div>
                 </div>
-                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                    <input type="month" id="filterMonth" onchange="loadDetails()" style="padding: 8px 12px; border-radius: 10px; border: 1px solid #cbd5e1; font-weight: 700; cursor: pointer;">
-                    <button class="btn-share-pdf" onclick="generateInvoiceImage()" style="background: #2563eb;">
-                        <i class="ri-image-line"></i> Share Bill Image
-                    </button>
+                <div class="action-controls">
+                    <input type="month" id="filterMonth" onchange="loadDetails()" class="month-picker">
+                    <div class="btn-group">
+                        <button class="btn-action btn-preview" onclick="previewInvoice()" title="Preview Bill">
+                            <i class="ri-eye-line"></i> Preview
+                        </button>
+                        <button class="btn-action btn-image" onclick="generateInvoiceImage()" title="Download Image">
+                            <i class="ri-image-line"></i> Image
+                        </button>
+                        <button class="btn-action btn-pdf" onclick="generateInvoicePDF()" title="Download PDF">
+                            <i class="ri-file-pdf-2-line"></i> PDF
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -170,12 +181,29 @@
         </main>
     </div>
 
-    <!-- Hidden Invoice Template for Image Generation -->
+    <!-- Preview Modal -->
+    <div id="previewModal" class="modal-overlay hidden">
+        <div class="modal-card preview-card">
+            <div class="modal-header">
+                <h3><i class="ri-eye-line"></i> Bill Preview</h3>
+                <button class="btn-close" onclick="closePreviewModal()"><i class="ri-close-line"></i></button>
+            </div>
+            <div class="modal-body" id="previewContainer">
+                <div style="text-align: center; padding: 50px;"><i class="ri-loader-4-line spin" style="font-size: 2rem; color: #2563eb;"></i></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closePreviewModal()">Close</button>
+                <button class="btn-save" onclick="generateInvoicePDF()"><i class="ri-file-pdf-2-line"></i> Download PDF</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden Invoice Template for Image/PDF Generation -->
     <div id="invoiceTemplate">
         <div class="inv-header">
             <div class="inv-logo">
                 <h1 id="invRestroName">RestroManager</h1>
-                <p>Daily Accounts Statement</p>
+                <p>Vendor Ledger Statement</p>
             </div>
             <div class="inv-vendor" style="text-align: right;">
                 <h2 id="invVendorName" style="margin:0; color:#1e293b;">Vendor Name</h2>
@@ -199,11 +227,11 @@
         <div class="inv-footer">
             <div>
                 <p id="invDueLabel" style="color:#64748b; font-weight:700; margin-bottom:5px; text-transform: uppercase;">TOTAL OUTSTANDING DUE</p>
-                <h1 id="invTotalDue" style="color: #ef4444; margin: 0; font-size: 2.5rem;">₹0</h1>
+                <h1 id="invTotalDue" style="color: #ef4444; margin: 0; font-size: 2.8rem;">₹0</h1>
             </div>
             <div style="text-align: center;">
-                <div class="sig-font" id="invSignature">Keshab Sarkar</div>
-                <p style="margin:0; font-weight:800; border-top:1px solid #e2e8f0; padding-top:5px;">Authorized Signature</p>
+                <div class="sig-font" id="invSignature">Authorized</div>
+                <p style="margin:0; font-weight:800; border-top:2px solid #1e293b; padding-top:5px;">Authorized Signature</p>
             </div>
         </div>
     </div>
