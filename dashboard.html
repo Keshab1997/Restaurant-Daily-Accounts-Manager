@@ -153,8 +153,8 @@
         <!-- Sales Entry Section -->
         <div class="entry-section">
             <div class="opening-card">
-                <label for="openingBal">Opening Balance</label>
-                <input type="number" id="openingBal" placeholder="0" aria-label="Opening balance amount">
+                <label for="openingBal">Opening Balance (Yesterday's Closing)</label>
+                <input type="number" id="openingBal" placeholder="0" readonly style="background: rgba(255,255,255,0.05); color: #94a3b8; cursor: not-allowed;" aria-label="Opening balance amount">
             </div>
             <div class="sales-grid">
                 <div class="sale-input-box">
@@ -172,6 +172,10 @@
                 <div class="sale-input-box">
                     <label for="saleZomato"><i class="ri-EBike-line" aria-hidden="true"></i> Zomato</label>
                     <input type="number" id="saleZomato" placeholder="0" aria-label="Zomato orders amount">
+                </div>
+                <div class="sale-input-box" style="grid-column: span 2; border-color: #10b981; background: #f0fdf4; margin-top: 5px;">
+                    <label for="saleBank" style="color: #059669; font-weight: 800;"><i class="ri-bank-line" aria-hidden="true"></i> BANK WITHDRAWAL (Add Cash to Drawer)</label>
+                    <input type="number" id="saleBank" placeholder="0" style="color: #059669; font-size: 1.5rem; font-weight: 800;" aria-label="Bank withdrawal amount">
                 </div>
             </div>
         </div>

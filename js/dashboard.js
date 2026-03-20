@@ -27,7 +27,7 @@ window.onload = async () => {
         loadData();
     });
 
-    const inputs = ['openingBal', 'saleCash', 'saleCard', 'saleSwiggy', 'saleZomato'];
+    const inputs = ['openingBal', 'saleCash', 'saleCard', 'saleSwiggy', 'saleZomato', 'saleBank'];
     inputs.forEach((id, index) => {
         const el = document.getElementById(id);
         el.addEventListener('input', function() {
@@ -82,11 +82,12 @@ async function loadData() {
     document.getElementById('openingBal').value = lastEntry ? lastEntry.closing_balance : 0;
 
     const { data: sales } = await _supabase.from('sales').select('*').eq('user_id', currentUser.id).eq('report_date', date);
-    ['saleCash', 'saleCard', 'saleSwiggy', 'saleZomato'].forEach(id => document.getElementById(id).value = 0);
+    ['saleCash', 'saleBank', 'saleCard', 'saleSwiggy', 'saleZomato'].forEach(id => document.getElementById(id).value = 0);
     
     if(sales) {
         sales.forEach(s => {
             if(s.sale_type === 'CASH') document.getElementById('saleCash').value = s.amount;
+            if(s.sale_type === 'BANK_WITHDRAWAL') document.getElementById('saleBank').value = s.amount;
             if(s.sale_type === 'CARD') document.getElementById('saleCard').value = s.amount;
             if(s.sale_type === 'SWIGGY') document.getElementById('saleSwiggy').value = s.amount;
             if(s.sale_type === 'ZOMATO') document.getElementById('saleZomato').value = s.amount;
@@ -103,6 +104,7 @@ async function loadData() {
 function updateCalculations() {
     const opening = parseFloat(document.getElementById('openingBal').value) || 0;
     const cashSale = parseFloat(document.getElementById('saleCash').value) || 0;
+    const bankWithdrawal = parseFloat(document.getElementById('saleBank').value) || 0;
     const cardSale = parseFloat(document.getElementById('saleCard').value) || 0;
     const swiggy = parseFloat(document.getElementById('saleSwiggy').value) || 0;
     const zomato = parseFloat(document.getElementById('saleZomato').value) || 0;
@@ -131,12 +133,10 @@ function updateCalculations() {
     const totalAllExp = cashExp + dueExp + ownerExp + otherExp;
     document.getElementById('totalExpAll').innerText = `₹${totalAllExp.toLocaleString('en-IN')}`;
     
-    // Net Balance = Cash Sale - TOTAL EXPENSES
-    const netCashFlow = cashSale - totalAllExp;
+    const netCashFlow = (cashSale + bankWithdrawal) - totalAllExp;
     const netBalEl = document.getElementById('netBalanceToday');
     netBalEl.innerText = `₹${netCashFlow.toLocaleString('en-IN')}`;
     
-    // Final Closing Balance = Opening Balance + Net Cash Flow
     const finalClosingBalance = opening + netCashFlow;
     document.getElementById('closingCashText').innerText = `Final Closing Balance: ₹${finalClosingBalance.toLocaleString('en-IN')}`;
     
@@ -197,6 +197,7 @@ async function saveSales(silent = false) {
     const date = document.getElementById('date').value;
     const opening = parseFloat(document.getElementById('openingBal').value) || 0;
     const cashSale = parseFloat(document.getElementById('saleCash').value) || 0;
+    const bankWithdrawal = parseFloat(document.getElementById('saleBank').value) || 0;
     const cardSale = parseFloat(document.getElementById('saleCard').value) || 0;
     const swiggy = parseFloat(document.getElementById('saleSwiggy').value) || 0;
     const zomato = parseFloat(document.getElementById('saleZomato').value) || 0;
@@ -204,10 +205,10 @@ async function saveSales(silent = false) {
     let totalExpenses = 0;
     currentDayExpenses.forEach(exp => totalExpenses += exp.amount);
 
-    const netCashFlow = cashSale - totalExpenses;
+    const netCashFlow = (cashSale + bankWithdrawal) - totalExpenses;
     const finalClosingBalance = opening + netCashFlow;
 
-    await _supabase.from('daily_balances').upsert({ 
+    const { error: upsertErr } = await _supabase.from('daily_balances').upsert({ 
         user_id: currentUser.id, 
         report_date: date, 
         opening_balance: opening, 
@@ -216,6 +217,7 @@ async function saveSales(silent = false) {
 
     const types = [
         {t:'CASH', val: cashSale}, 
+        {t:'BANK_WITHDRAWAL', val: bankWithdrawal},
         {t:'CARD', val: cardSale}, 
         {t:'SWIGGY', val: swiggy}, 
         {t:'ZOMATO', val: zomato}
@@ -236,6 +238,75 @@ async function saveSales(silent = false) {
                 .eq('report_date', date)
                 .eq('sale_type', item.t);
         }
+    }
+
+    if (!upsertErr && !silent) {
+        await recalculateFutureBalances(date);
+    }
+}
+
+async function recalculateFutureBalances(startDate) {
+    showToast("Recalculating subsequent dates... Please wait.", "info");
+
+    try {
+        const { data: allBalances, error: balErr } = await _supabase
+            .from('daily_balances')
+            .select('*')
+            .eq('user_id', currentUser.id)
+            .gt('report_date', startDate)
+            .order('report_date', { ascending: true });
+
+        if (balErr) throw balErr;
+        if (!allBalances || allBalances.length === 0) return;
+
+        const { data: allSales } = await _supabase
+            .from('sales')
+            .select('*')
+            .eq('user_id', currentUser.id)
+            .gt('report_date', startDate);
+
+        const { data: allExpenses } = await _supabase
+            .from('expenses')
+            .select('*')
+            .eq('user_id', currentUser.id)
+            .gt('report_date', startDate);
+
+        const { data: startDayBalance } = await _supabase
+            .from('daily_balances')
+            .select('closing_balance')
+            .eq('user_id', currentUser.id)
+            .eq('report_date', startDate)
+            .maybeSingle();
+
+        let previousClosing = startDayBalance ? startDayBalance.closing_balance : 0;
+
+        for (let i = 0; i < allBalances.length; i++) {
+            let dayRecord = allBalances[i];
+            let currentDate = dayRecord.report_date;
+
+            const daySales = allSales?.filter(s => s.report_date === currentDate && (s.sale_type === 'CASH' || s.sale_type === 'BANK_WITHDRAWAL')) || [];
+            const totalIn = daySales.reduce((sum, s) => sum + s.amount, 0);
+
+            const dayExps = allExpenses?.filter(e => e.report_date === currentDate) || [];
+            const totalOut = dayExps.reduce((sum, e) => sum + e.amount, 0);
+
+            let newOpening = previousClosing;
+            let newClosing = newOpening + (totalIn - totalOut);
+
+            await _supabase.from('daily_balances').upsert({
+                user_id: currentUser.id,
+                report_date: currentDate,
+                opening_balance: newOpening,
+                closing_balance: newClosing
+            }, { onConflict: 'user_id, report_date' });
+
+            previousClosing = newClosing;
+        }
+
+        showToast("All subsequent dates updated successfully!", "success");
+    } catch (err) {
+        console.error("Propagation Error:", err);
+        showToast("Error updating future dates", "error");
     }
 }
 
