@@ -5,6 +5,8 @@ let ledgerData = [];
 let allBills = {};
 let restaurantName = "RestroManager";
 let signatureName = "Authorized Person";
+let editingId = null;
+let editingOldType = null;
 
 window.onload = async () => {
     const session = await checkAuth(true);
@@ -45,7 +47,6 @@ function toggleBillSelect() {
         
         select.innerHTML = '<option value="0">General Payment (No Bill)</option>';
         
-        // Sort bill numbers numerically
         const sortedKeys = Object.keys(allBills).sort((a, b) => parseInt(a) - parseInt(b));
         
         sortedKeys.forEach(bNo => {
@@ -56,277 +57,322 @@ function toggleBillSelect() {
     } else {
         input.style.display = 'block';
         select.style.display = 'none';
-        label.innerText = "Bill Number (Numeric)";
+        label.innerText = "Bill Number (Auto)";
+        input.setAttribute('readonly', 'true');
+        input.style.background = '#f1f5f9';
+        input.style.cursor = 'not-allowed';
+        generateNextBillNumber();
     }
 }
 
 async function loadDetails() {
-    const { data: vendor } = await _supabase.from('vendors').select('*').eq('id', vendorId).single();
-    vendorData = vendor;
-    document.getElementById('vNameTitle').innerText = vendor.name;
-    document.getElementById('invVendorName').innerText = vendor.name;
-
-    const { data: calcLedger } = await _supabase.from('vendor_ledger')
-        .select('*')
-        .eq('vendor_id', vendorId)
-        .order('t_date', { ascending: true })
-        .order('created_at', { ascending: true });
-
-    const { data: displayLedger } = await _supabase.from('vendor_ledger')
-        .select('*')
-        .eq('vendor_id', vendorId)
-        .order('t_date', { ascending: false })
-        .order('created_at', { ascending: false });
-
-    ledgerData = calcLedger || [];
-
-    const selectedMonth = document.getElementById('filterMonth').value;
-    const endOfMonth = selectedMonth + "-31";
-
-    let periodBill = 0;
-    let periodPaid = 0;
-    let cumulativeBill = vendor.opening_due || 0;
-    let cumulativePaid = 0;
-
-    ledgerData.forEach(item => {
-        if (item.t_date.startsWith(selectedMonth)) {
-            if (item.t_type === 'BILL') periodBill += item.amount;
-            else if (item.t_type === 'PAYMENT' || item.t_type === 'PAYMENT_OWNER') periodPaid += item.amount;
-        }
-
-        if (item.t_date <= endOfMonth) {
-            if (item.t_type === 'BILL') cumulativeBill += item.amount;
-            else if (item.t_type === 'PAYMENT' || item.t_type === 'PAYMENT_OWNER') cumulativePaid += item.amount;
-        }
-    });
-
-    const currentDue = cumulativeBill - cumulativePaid;
-
-    document.getElementById('totBill').innerText = `₹${periodBill.toLocaleString('en-IN')}`;
-    document.getElementById('totPaid').innerText = `₹${periodPaid.toLocaleString('en-IN')}`;
-    document.getElementById('currDue').innerText = `₹${currentDue.toLocaleString('en-IN')}`;
-
-    allBills = {};
-    let billsList = [];
-
-    if(vendor.opening_due > 0) {
-        allBills["0"] = { date: 'Initial', total: vendor.opening_due, paid: 0, due: vendor.opening_due };
-        billsList.push({ billNo: "0", date: 'Initial', amount: vendor.opening_due });
-    }
-
-    if(calcLedger) {
-        calcLedger.forEach(l => {
-            if(l.t_type === 'BILL') {
-                const bNo = l.bill_no || "0";
-                if(!allBills[bNo]) {
-                    allBills[bNo] = { date: l.t_date, total: 0, paid: 0, due: 0 };
-                    billsList.push({ billNo: bNo, date: l.t_date, amount: l.amount });
-                } else {
-                    billsList.find(b => b.billNo === bNo).amount += l.amount;
-                }
-                allBills[bNo].total += l.amount;
-            }
-        });
-
-        let generalPayment = 0;
+    try {
+        const { data: vendor, error: vendorError } = await _supabase.from('vendors').select('*').eq('id', vendorId).single();
         
-        calcLedger.forEach(l => {
-            if(l.t_type === 'PAYMENT' || l.t_type === 'PAYMENT_OWNER') {
-                const bNo = l.bill_no || "0";
-                
-                if(bNo === "0") {
-                    generalPayment += l.amount;
-                } else {
-                    if(allBills[bNo]) {
-                        allBills[bNo].paid += l.amount;
-                    }
-                }
+        if (vendorError) throw vendorError;
+        if (!vendor) {
+            showToast("Vendor not found", "error");
+            window.location.href = 'vendors.html';
+            return;
+        }
+
+        vendorData = vendor;
+        document.getElementById('vNameTitle').innerText = vendor.name;
+        document.getElementById('invVendorName').innerText = vendor.name;
+
+        const { data: calcLedger, error: calcError } = await _supabase.from('vendor_ledger')
+            .select('*')
+            .eq('vendor_id', vendorId)
+            .order('t_date', { ascending: true })
+            .order('created_at', { ascending: true });
+
+        if (calcError) throw calcError;
+
+        const { data: displayLedger, error: displayError } = await _supabase.from('vendor_ledger')
+            .select('*')
+            .eq('vendor_id', vendorId)
+            .order('t_date', { ascending: false })
+            .order('created_at', { ascending: false });
+
+        if (displayError) throw displayError;
+
+        ledgerData = calcLedger || [];
+
+        const selectedMonth = document.getElementById('filterMonth').value;
+        const endOfMonth = selectedMonth + "-31";
+
+        let periodBill = 0;
+        let periodPaid = 0;
+        let cumulativeBill = vendor.opening_due || 0;
+        let cumulativePaid = 0;
+
+        ledgerData.forEach(item => {
+            if (item.t_date.startsWith(selectedMonth)) {
+                if (item.t_type === 'BILL') periodBill += item.amount;
+                else if (item.t_type === 'PAYMENT' || item.t_type === 'PAYMENT_OWNER') periodPaid += item.amount;
+            }
+
+            if (item.t_date <= endOfMonth) {
+                if (item.t_type === 'BILL') cumulativeBill += item.amount;
+                else if (item.t_type === 'PAYMENT' || item.t_type === 'PAYMENT_OWNER') cumulativePaid += item.amount;
             }
         });
 
-        billsList.forEach(bill => {
-            if(generalPayment > 0) {
-                const bNo = bill.billNo;
-                const remainingDue = allBills[bNo].total - allBills[bNo].paid;
-                
-                if(remainingDue > 0) {
-                    if(generalPayment >= remainingDue) {
-                        allBills[bNo].paid += remainingDue;
-                        generalPayment -= remainingDue;
+        const currentDue = cumulativeBill - cumulativePaid;
+
+        document.getElementById('totBill').innerText = `₹${periodBill.toLocaleString('en-IN')}`;
+        document.getElementById('totPaid').innerText = `₹${periodPaid.toLocaleString('en-IN')}`;
+        document.getElementById('currDue').innerText = `₹${currentDue.toLocaleString('en-IN')}`;
+
+        allBills = {};
+        let billsList = [];
+
+        if(vendor.opening_due > 0) {
+            allBills["0"] = { date: 'Initial', total: vendor.opening_due, paid: 0, due: vendor.opening_due };
+            billsList.push({ billNo: "0", date: 'Initial', amount: vendor.opening_due });
+        }
+
+        if(calcLedger) {
+            calcLedger.forEach(l => {
+                if(l.t_type === 'BILL') {
+                    const bNo = l.bill_no || "0";
+                    if(!allBills[bNo]) {
+                        allBills[bNo] = { date: l.t_date, total: 0, paid: 0, due: 0 };
+                        billsList.push({ billNo: bNo, date: l.t_date, amount: l.amount });
                     } else {
-                        allBills[bNo].paid += generalPayment;
-                        generalPayment = 0;
+                        billsList.find(b => b.billNo === bNo).amount += l.amount;
+                    }
+                    allBills[bNo].total += l.amount;
+                }
+            });
+
+            let generalPayment = 0;
+            
+            calcLedger.forEach(l => {
+                if(l.t_type === 'PAYMENT' || l.t_type === 'PAYMENT_OWNER') {
+                    const bNo = l.bill_no || "0";
+                    
+                    if(bNo === "0") {
+                        generalPayment += l.amount;
+                    } else {
+                        if(allBills[bNo]) {
+                            allBills[bNo].paid += l.amount;
+                        }
                     }
                 }
-            }
-        });
-    }
+            });
 
-    const list = document.getElementById('ledgerList');
-    list.innerHTML = '';
-
-    const filteredLedger = displayLedger.filter(item => item.t_date.startsWith(selectedMonth));
-
-    if (filteredLedger.length === 0) {
-        list.innerHTML = '<p style="text-align:center; color:#64748b; padding:20px;">No transactions in this month.</p>';
-    } else {
-        filteredLedger.forEach((l) => {
-            let badgeClass = 'badge-bill';
-            let statusLabel = 'BILL';
-            let amountColor = 'var(--danger)';
-            let billStatusHTML = '';
-
-            if(l.t_type === 'PAYMENT') {
-                badgeClass = 'badge-payment';
-                statusLabel = 'PAID (CASH)';
-                amountColor = 'var(--success)';
-            } else if (l.t_type === 'PAYMENT_OWNER') {
-                badgeClass = 'badge-owner';
-                statusLabel = 'PAID (OWNER)';
-                amountColor = '#4338ca';
-            } else if(l.t_type === 'BILL') {
-                const bNo = l.bill_no || "0";
-                const b = allBills[bNo];
-                if(b) {
-                    b.due = b.total - b.paid;
-                    const isPaid = b.due <= 0;
-                    let billStatus = '';
-                    let stampClass = '';
+            billsList.forEach(bill => {
+                if(generalPayment > 0) {
+                    const bNo = bill.billNo;
+                    const remainingDue = allBills[bNo].total - allBills[bNo].paid;
                     
-                    if(isPaid) {
-                        billStatus = 'FULL PAID';
-                        stampClass = 'stamp-paid';
-                    } else if(b.paid > 0) {
-                        billStatus = `PARTIAL (₹${b.paid.toLocaleString('en-IN')} paid, ₹${b.due.toLocaleString('en-IN')} due)`;
-                        stampClass = 'stamp-partial';
-                    } else {
-                        billStatus = 'UNPAID';
-                        stampClass = 'stamp-unpaid';
+                    if(remainingDue > 0) {
+                        if(generalPayment >= remainingDue) {
+                            allBills[bNo].paid += remainingDue;
+                            generalPayment -= remainingDue;
+                        } else {
+                            allBills[bNo].paid += generalPayment;
+                            generalPayment = 0;
+                        }
                     }
-                    
-                    billStatusHTML = `<span class="stamp ${stampClass}" style="margin-left:8px; font-size:0.7rem;">${billStatus}</span>`;
                 }
-            }
+            });
+        }
 
-            const safeDesc = l.description ? l.description.replace(/'/g, "\\'") : "";
+        const list = document.getElementById('ledgerList');
+        list.innerHTML = '';
 
-            list.innerHTML += `
-                <li class="ledger-item">
-                    <div class="li-left">
-                        <span>${l.t_type === 'BILL' ? 'Bill #' + l.bill_no : 'Payment for Bill #' + l.bill_no}${billStatusHTML}</span>
-                        <small>${l.description || '-'}</small>
-                        <small><i class="ri-calendar-line"></i> ${l.t_date}</small>
-                    </div>
-                    <div class="li-right">
-                        <b style="color: ${amountColor}">₹${l.amount.toLocaleString('en-IN')}</b>
-                        <small class="${badgeClass}">${statusLabel}</small>
-                        <div class="li-actions">
-                            <button class="btn-icon edit" onclick="editEntry('${l.id}', '${l.t_type}', '${l.amount}', '${l.bill_no}', '${l.t_date}', '${safeDesc}')"><i class="ri-pencil-line"></i></button>
-                            <button class="btn-icon delete" onclick="deleteEntry('${l.id}', '${l.t_type}')"><i class="ri-delete-bin-line"></i></button>
+        const filteredLedger = displayLedger.filter(item => item.t_date.startsWith(selectedMonth));
+
+        if (filteredLedger.length === 0) {
+            list.innerHTML = '<p style="text-align:center; color:#64748b; padding:20px;">No transactions in this month.</p>';
+        } else {
+            filteredLedger.forEach((l) => {
+                let badgeClass = 'badge-bill';
+                let statusLabel = 'BILL';
+                let amountColor = 'var(--danger)';
+                let billStatusHTML = '';
+
+                if(l.t_type === 'PAYMENT') {
+                    badgeClass = 'badge-payment';
+                    statusLabel = 'PAID (CASH)';
+                    amountColor = 'var(--success)';
+                } else if (l.t_type === 'PAYMENT_OWNER') {
+                    badgeClass = 'badge-owner';
+                    statusLabel = 'PAID (OWNER)';
+                    amountColor = '#4338ca';
+                } else if(l.t_type === 'BILL') {
+                    const bNo = l.bill_no || "0";
+                    const b = allBills[bNo];
+                    if(b) {
+                        b.due = b.total - b.paid;
+                        const isPaid = b.due <= 0;
+                        let billStatus = '';
+                        let stampClass = '';
+                        
+                        if(isPaid) {
+                            billStatus = 'FULL PAID';
+                            stampClass = 'stamp-paid';
+                        } else if(b.paid > 0) {
+                            billStatus = `PARTIAL (₹${b.paid.toLocaleString('en-IN')} paid, ₹${b.due.toLocaleString('en-IN')} due)`;
+                            stampClass = 'stamp-partial';
+                        } else {
+                            billStatus = 'UNPAID';
+                            stampClass = 'stamp-unpaid';
+                        }
+                        
+                        billStatusHTML = `<span class="stamp ${stampClass}" style="margin-left:8px; font-size:0.7rem;">${billStatus}</span>`;
+                    }
+                }
+
+                const safeDesc = l.description ? l.description.replace(/'/g, "\\'") : "";
+
+                list.innerHTML += `
+                    <li class="ledger-item">
+                        <div class="li-left">
+                            <span>${l.t_type === 'BILL' ? 'Bill #' + l.bill_no : 'Payment for Bill #' + l.bill_no}${billStatusHTML}</span>
+                            <small>${l.description || '-'}</small>
+                            <small><i class="ri-calendar-line"></i> ${l.t_date}</small>
                         </div>
-                    </div>
-                </li>
-            `;
-        });
+                        <div class="li-right">
+                            <b style="color: ${amountColor}">₹${l.amount.toLocaleString('en-IN')}</b>
+                            <small class="${badgeClass}">${statusLabel}</small>
+                            <div class="li-actions">
+                                <button class="btn-icon edit" onclick="editEntry('${l.id}', '${l.t_type}', '${l.amount}', '${l.bill_no}', '${l.t_date}', '${safeDesc}')"><i class="ri-pencil-line"></i></button>
+                                <button class="btn-icon delete" onclick="deleteEntry('${l.id}', '${l.t_type}')"><i class="ri-delete-bin-line"></i></button>
+                            </div>
+                        </div>
+                    </li>
+                `;
+            });
+        }
+        
+        toggleBillSelect();
+    } catch (error) {
+        console.error('Error loading vendor details:', error);
+        showToast('Failed to load vendor details: ' + (error.message || 'Unknown error'), 'error');
     }
-    
-    toggleBillSelect();
+}
+
+async function generateNextBillNumber() {
+    try {
+        if(!vendorId) return;
+        
+        const { data: allBills, error } = await _supabase.from('vendor_ledger')
+            .select('bill_no')
+            .eq('vendor_id', vendorId)
+            .eq('t_type', 'BILL');
+
+        if (error) throw error;
+
+        let maxBillNo = 0;
+
+        if (allBills && allBills.length > 0) {
+            maxBillNo = Math.max(...allBills.map(b => parseInt(b.bill_no) || 0));
+        }
+
+        document.getElementById('entryBillNo').value = maxBillNo + 1;
+    } catch (error) {
+        console.error('Error generating bill number:', error);
+        showToast('Failed to generate bill number', 'error');
+        document.getElementById('entryBillNo').value = 1;
+    }
 }
 
 async function addEntry() {
-    const type = document.getElementById('entryType').value;
-    const date = document.getElementById('entryDate').value;
-    const desc = document.getElementById('entryDesc').value;
-    const amount = parseFloat(document.getElementById('entryAmount').value);
-    let billNo = document.getElementById('entryBillNo').value;
+    try {
+        const type = document.getElementById('entryType').value;
+        const date = document.getElementById('entryDate').value;
+        const desc = document.getElementById('entryDesc').value;
+        const amount = parseFloat(document.getElementById('entryAmount').value);
+        let billNo = document.getElementById('entryBillNo').value;
 
-    if(type === 'PAYMENT' || type === 'PAYMENT_OWNER') {
-        billNo = document.getElementById('selectBillNo').value;
-    }
+        if(type === 'PAYMENT' || type === 'PAYMENT_OWNER') {
+            billNo = document.getElementById('selectBillNo').value;
+        }
 
-    if(!amount || billNo === "") return showToast("Please enter amount and numeric Bill Number", "error");
+        if(!amount || billNo === "") return showToast("Please enter amount and bill number", "error");
+        if(amount <= 0) return showToast("Amount must be greater than zero", "error");
+        if(!date) return showToast("Please select a date", "error");
 
-    const { data: vendor } = await _supabase.from('vendors').select('name').eq('id', vendorId).single();
+        const { data: vendor, error: vendorError } = await _supabase.from('vendors').select('name').eq('id', vendorId).single();
+        if (vendorError) throw vendorError;
+        if (!vendor) {
+            showToast("Vendor not found", "error");
+            return;
+        }
 
-    // 1. Add to Vendor Ledger
-    const { error } = await _supabase.from('vendor_ledger').insert({
-        user_id: currentUser.id,
-        vendor_id: vendorId,
-        t_date: date,
-        t_type: type,
-        description: desc,
-        amount: amount,
-        bill_no: billNo.toString()
-    });
-
-    if(error) {
-        showToast("Error: " + error.message, "error");
-        return;
-    }
-
-    // 2. Expense Management (Prevent Double Entry)
-    if(type === 'BILL') {
-        await _supabase.from('expenses').insert({
-            user_id: currentUser.id,
-            report_date: date,
-            description: `${vendor.name} (${desc || 'Bill'})`,
-            amount: amount,
-            payment_source: 'DUE',
-            bill_no: billNo.toString()
-        });
-    } 
-    else if(type === 'PAYMENT' || type === 'PAYMENT_OWNER') {
-        // পেমেন্ট করলে পুরনো DUE এন্ট্রি আপডেট করা (ডিলিট নয়)
-        const paymentSource = (type === 'PAYMENT') ? 'CASH' : 'OWNER';
-        
-        // পুরনো DUE এন্ট্রি খুঁজে বের করা
-        const { data: dueEntries } = await _supabase.from('expenses')
-            .select('*')
-            .eq('user_id', currentUser.id)
-            .eq('bill_no', billNo.toString())
-            .eq('payment_source', 'DUE')
-            .order('created_at', { ascending: true });
-
-        if (dueEntries && dueEntries.length > 0) {
-            let remainingPayment = amount;
+        if(type === 'BILL' && !editingId) {
+            const { data: existingBill, error: checkError } = await _supabase.from('vendor_ledger')
+                .select('id')
+                .eq('vendor_id', vendorId)
+                .eq('bill_no', billNo.toString())
+                .eq('t_type', 'BILL')
+                .maybeSingle();
             
-            for (const dueEntry of dueEntries) {
-                if (remainingPayment <= 0) break;
-                
-                if (dueEntry.amount <= remainingPayment) {
-                    // সম্পূর্ণ পেমেন্ট - স্ট্যাটাস আপডেট করা (ডিলিট নয়)
-                    await _supabase.from('expenses').update({ 
-                        payment_source: paymentSource,
-                        description: dueEntry.description.replace('(Bill)', `(Paid ${paymentSource})`).replace('(Partial Due)', `(Paid ${paymentSource})`)
-                    }).eq('id', dueEntry.id);
-                    remainingPayment -= dueEntry.amount;
-                } else {
-                    // আংশিক পেমেন্ট - amount কমানো
-                    const newAmount = dueEntry.amount - remainingPayment;
-                    await _supabase.from('expenses').update({ 
-                        amount: newAmount,
-                        description: dueEntry.description.includes('(Partial Due)') ? dueEntry.description : dueEntry.description.replace(')', ' - Partial Due)')
-                    }).eq('id', dueEntry.id);
-                    remainingPayment = 0;
-                }
+            if (checkError) throw checkError;
+            
+            if(existingBill) {
+                showToast(`Bill #${billNo} already exists for this vendor!`, "error");
+                return;
             }
         }
 
-        if(type === 'PAYMENT_OWNER') {
-            await _supabase.from('owner_ledger').insert({
+        if(typeof editingId !== 'undefined' && editingId) {
+            await deleteEntry(editingId, editingOldType, true);
+            editingId = null;
+            editingOldType = null;
+            const addBtn = document.querySelector('.btn-primary');
+            addBtn.innerText = "Add to Ledger";
+            addBtn.style.background = "var(--primary)";
+        }
+
+        const { error } = await _supabase.from('vendor_ledger').insert({
+            user_id: currentUser.id,
+            vendor_id: vendorId,
+            t_date: date,
+            t_type: type,
+            description: desc,
+            amount: amount,
+            bill_no: billNo.toString()
+        });
+
+        if(error) throw error;
+
+        if(type === 'BILL') {
+            const billDesc = desc ? `${vendor.name} (${desc})` : vendor.name;
+            const { error: expenseError } = await _supabase.from('expenses').insert({
+                user_id: currentUser.id,
+                report_date: date,
+                description: billDesc,
+                amount: amount,
+                payment_source: 'DUE',
+                bill_no: billNo.toString()
+            });
+            if (expenseError) throw expenseError;
+        } 
+        else if(type === 'PAYMENT_OWNER') {
+            const { error: ownerError } = await _supabase.from('owner_ledger').insert({
                 user_id: currentUser.id,
                 t_date: date,
                 t_type: 'LOAN_TAKEN',
                 amount: amount,
                 description: `Paid to ${vendor.name} (Bill #${billNo})`
             });
+            if (ownerError) throw ownerError;
         }
-    }
 
-    document.getElementById('entryAmount').value = '';
-    document.getElementById('entryDesc').value = '';
-    document.getElementById('entryBillNo').value = '';
-    loadDetails();
+        document.getElementById('entryAmount').value = '';
+        document.getElementById('entryDesc').value = '';
+        document.getElementById('entryBillNo').value = '';
+        
+        showToast('Entry added successfully!', 'success');
+        loadDetails();
+    } catch (error) {
+        console.error('Error adding entry:', error);
+        showToast('Failed to add entry: ' + (error.message || 'Unknown error'), 'error');
+    }
 }
 
 async function logout() {
@@ -334,8 +380,8 @@ async function logout() {
     window.location.href = 'index.html';
 }
 
-async function deleteEntry(id, type) {
-    if(!confirm("Are you sure you want to delete this entry?")) return;
+async function deleteEntry(id, type, isSilent = false) {
+    if(!isSilent && !confirm("Are you sure you want to delete this entry?")) return;
 
     const { data: record } = await _supabase.from('vendor_ledger')
         .select('*, vendors(name)')
@@ -347,84 +393,53 @@ async function deleteEntry(id, type) {
     if(error) {
         showToast("Error deleting: " + error.message, "error");
     } else {
+        const vendorName = record.vendors.name;
+
         if(type === 'BILL') {
-            // বিল ডিলিট করলে expenses থেকেও মুছে ফেলা
             await _supabase.from('expenses').delete()
                 .eq('user_id', currentUser.id)
                 .eq('bill_no', record.bill_no)
-                .eq('payment_source', 'DUE');
-        } else if(type === 'PAYMENT' || type === 'PAYMENT_OWNER') {
-            // পেমেন্ট ডিলিট করলে DUE এন্ট্রি পুনরুদ্ধার করতে হবে
-            const paymentSource = (type === 'PAYMENT') ? 'CASH' : 'OWNER';
-            
-            // যে এন্ট্রিটি CASH/OWNER স্ট্যাটাসে আছে সেটি খুঁজে DUE-তে ফিরিয়ে নিতে হবে
-            const { data: paidEntry } = await _supabase.from('expenses')
-                .select('*')
+                .eq('payment_source', 'DUE')
+                .or(`description.eq.${vendorName},description.ilike.${vendorName} (%)`);
+        } 
+        else if(type === 'PAYMENT_OWNER') {
+            await _supabase.from('owner_ledger').delete()
                 .eq('user_id', currentUser.id)
-                .eq('bill_no', record.bill_no)
-                .eq('payment_source', paymentSource)
-                .maybeSingle();
-
-            if (paidEntry) {
-                // স্ট্যাটাস DUE-তে ফিরিয়ে নেওয়া
-                await _supabase.from('expenses').update({
-                    payment_source: 'DUE',
-                    description: paidEntry.description.replace(`(Paid ${paymentSource})`, '(Bill)')
-                }).eq('id', paidEntry.id);
-            } else {
-                // যদি কোনো এন্ট্রি না পাওয়া যায় (আংশিক পেমেন্টের ক্ষেত্রে), DUE amount বাড়ানো
-                const { data: dueEntry } = await _supabase.from('expenses')
-                    .select('*')
-                    .eq('user_id', currentUser.id)
-                    .eq('bill_no', record.bill_no)
-                    .eq('payment_source', 'DUE')
-                    .maybeSingle();
-
-                if (dueEntry) {
-                    await _supabase.from('expenses').update({
-                        amount: dueEntry.amount + record.amount
-                    }).eq('id', dueEntry.id);
-                }
-            }
-
-            if(type === 'PAYMENT_OWNER') {
-                await _supabase.from('owner_ledger').delete()
-                    .eq('user_id', currentUser.id)
-                    .eq('t_date', record.t_date)
-                    .eq('amount', record.amount)
-                    .eq('t_type', 'LOAN_TAKEN');
-            }
+                .eq('t_date', record.t_date)
+                .eq('amount', record.amount)
+                .eq('t_type', 'LOAN_TAKEN');
         }
-        loadDetails();
+        
+        if(!isSilent) loadDetails();
     }
 }
 
 function editEntry(id, type, amount, billNo, date, desc) {
-    // Populate form
+    editingId = id;
+    editingOldType = type;
+
     document.getElementById('entryType').value = type;
-    toggleBillSelect(); // Refresh UI based on type
+    toggleBillSelect();
 
     document.getElementById('entryDate').value = date;
     document.getElementById('entryAmount').value = amount;
     document.getElementById('entryDesc').value = desc;
 
     if(type === 'BILL') {
-        document.getElementById('entryBillNo').value = billNo;
+        const billInput = document.getElementById('entryBillNo');
+        billInput.value = billNo;
+        billInput.removeAttribute('readonly');
+        billInput.style.background = 'white';
+        billInput.style.cursor = 'text';
     } else {
-        // For payments, we need to select the bill. 
-        // Since the select might not have the bill if it's fully paid, we might need to handle this.
-        // For now, try to set it.
         const select = document.getElementById('selectBillNo');
         select.value = billNo;
     }
 
-    // Scroll to form
     document.getElementById('entryFormCard').scrollIntoView({ behavior: 'smooth' });
-
-    // Delete the old entry so "Add" becomes "Update"
-    if(confirm("To edit, the current entry will be removed and you can save the corrected one. Proceed?")) {
-        deleteEntry(id, type);
-    }
+    const addBtn = document.querySelector('.btn-primary');
+    addBtn.innerText = "Update Entry";
+    addBtn.style.background = "#f59e0b";
 }
 
 async function generateInvoiceImage() {

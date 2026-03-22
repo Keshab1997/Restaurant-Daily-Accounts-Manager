@@ -26,111 +26,131 @@ window.onload = async () => {
 };
 
 async function loadTallyData(date) {
-    document.querySelectorAll('.note-input').forEach(i => i.value = '');
-    document.querySelectorAll('.note-total').forEach(b => b.innerText = '0');
+    try {
+        if (!date) {
+            showToast('Please select a date', 'error');
+            return;
+        }
+        
+        document.querySelectorAll('.note-input').forEach(i => i.value = '');
+        document.querySelectorAll('.note-total').forEach(b => b.innerText = '0');
 
-    const { data: lastTally } = await _supabase.from('cash_tally')
-        .select('total_physical, cumulative_shortage')
-        .eq('user_id', currentUser.id)
-        .lt('report_date', date)
-        .order('report_date', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        const { data: lastTally, error: lastTallyError } = await _supabase.from('cash_tally')
+            .select('total_physical, cumulative_shortage')
+            .eq('user_id', currentUser.id)
+            .lt('report_date', date)
+            .order('report_date', { ascending: false })
+            .limit(1)
+            .maybeSingle();
 
-    tallyOpeningBalance = lastTally ? lastTally.total_physical : 0;
-    lastCumulativeShortage = lastTally ? lastTally.cumulative_shortage : 0;
+        if (lastTallyError) throw lastTallyError;
 
-    document.getElementById('tallyOpening').innerText = `₹${tallyOpeningBalance.toLocaleString('en-IN')}`;
+        tallyOpeningBalance = lastTally ? lastTally.total_physical : 0;
+        lastCumulativeShortage = lastTally ? lastTally.cumulative_shortage : 0;
 
-    const { data: sales } = await _supabase.from('sales').select('amount').eq('user_id', currentUser.id).eq('report_date', date).eq('sale_type', 'CASH');
-    
-    // পুরনো বকেয়া পরিশোধ (শুধু পুরনো বিলের payment)
-    const { data: allPayments } = await _supabase.from('vendor_ledger')
-        .select('amount, bill_no, vendor_id, vendors(name)')
-        .eq('user_id', currentUser.id)
-        .eq('t_date', date)
-        .eq('t_type', 'PAYMENT');
+        document.getElementById('tallyOpening').innerText = `₹${tallyOpeningBalance.toLocaleString('en-IN')}`;
 
-    let realPreviousPaid = 0;
-    let previousPaidBillNos = [];
-    let previousPaidDetails = [];
+        const { data: sales, error: salesError } = await _supabase.from('sales').select('amount').eq('user_id', currentUser.id).eq('report_date', date).eq('sale_type', 'CASH');
+        
+        if (salesError) throw salesError;
+        
+        const { data: allPayments, error: paymentsError } = await _supabase.from('vendor_ledger')
+            .select('amount, bill_no, vendor_id, vendors(name)')
+            .eq('user_id', currentUser.id)
+            .eq('t_date', date)
+            .eq('t_type', 'PAYMENT');
 
-    if (allPayments) {
-        for (const pay of allPayments) {
-            const { data: originalBill } = await _supabase.from('vendor_ledger')
-                .select('t_date')
-                .eq('vendor_id', pay.vendor_id)
-                .eq('bill_no', pay.bill_no)
-                .eq('t_type', 'BILL')
-                .maybeSingle();
+        if (paymentsError) throw paymentsError;
 
-            if (originalBill && originalBill.t_date < date) {
-                realPreviousPaid += pay.amount;
-                previousPaidBillNos.push(pay.bill_no);
-                previousPaidDetails.push(pay);
+        let realPreviousPaid = 0;
+        let previousPaidBillNos = [];
+        let previousPaidDetails = [];
+
+        if (allPayments) {
+            for (const pay of allPayments) {
+                const { data: originalBill, error: billError } = await _supabase.from('vendor_ledger')
+                    .select('t_date')
+                    .eq('vendor_id', pay.vendor_id)
+                    .eq('bill_no', pay.bill_no)
+                    .eq('t_type', 'BILL')
+                    .maybeSingle();
+
+                if (billError) throw billError;
+
+                if (originalBill && originalBill.t_date <= date) {
+                    realPreviousPaid += pay.amount;
+                    previousPaidBillNos.push(pay.bill_no);
+                    previousPaidDetails.push(pay);
+                }
             }
         }
-    }
 
-    const { data: expenses } = await _supabase.from('expenses')
-        .select('amount, bill_no')
-        .eq('user_id', currentUser.id)
-        .eq('report_date', date)
-        .eq('payment_source', 'CASH');
+        const { data: expenses, error: expensesError } = await _supabase.from('expenses')
+            .select('amount, bill_no')
+            .eq('user_id', currentUser.id)
+            .eq('report_date', date)
+            .eq('payment_source', 'CASH');
 
-    let cashExp = 0;
-    if (expenses) {
-        for (const exp of expenses) {
-            if (!previousPaidBillNos.includes(exp.bill_no)) {
-                cashExp += exp.amount;
+        if (expensesError) throw expensesError;
+
+        let cashExp = 0;
+        if (expenses) {
+            for (const exp of expenses) {
+                if (!previousPaidBillNos.includes(exp.bill_no)) {
+                    cashExp += exp.amount;
+                }
             }
         }
+
+        const cashSale = sales ? sales.reduce((sum, s) => sum + s.amount, 0) : 0;
+        const oldDuePaid = realPreviousPaid;
+
+        document.getElementById('todayCashSale').innerText = `₹${cashSale.toLocaleString('en-IN')}`;
+        document.getElementById('todayCashExp').innerText = `₹${cashExp.toLocaleString('en-IN')}`;
+        document.getElementById('oldDuePaid').innerText = `₹${oldDuePaid.toLocaleString('en-IN')}`;
+
+        const breakdownCont = document.getElementById('duePaidBreakdown');
+        const list = document.getElementById('duePaidList');
+        list.innerHTML = '';
+
+        if (previousPaidDetails.length > 0) {
+            breakdownCont.style.display = 'block';
+            previousPaidDetails.forEach(p => {
+                list.innerHTML += `
+                    <li style="display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #fee2e2;">
+                        <span>${p.vendors.name}</span>
+                        <span style="font-weight: 700;">₹${p.amount.toLocaleString('en-IN')}</span>
+                    </li>
+                `;
+            });
+        } else {
+            breakdownCont.style.display = 'none';
+        }
+        
+        currentSystemBalance = (tallyOpeningBalance + cashSale) - cashExp - oldDuePaid;
+        document.getElementById('sysTotal').innerText = `₹${currentSystemBalance.toLocaleString('en-IN')}`;
+
+        const { data: currentTally, error: currentTallyError } = await _supabase.from('cash_tally')
+            .select('*')
+            .eq('user_id', currentUser.id)
+            .eq('report_date', date)
+            .maybeSingle();
+
+        if (currentTallyError) throw currentTallyError;
+
+        if(currentTally) {
+            [500, 200, 100, 50, 20, 10, 5, 2, 1].forEach(d => {
+                const val = currentTally[`n${d}`];
+                if(val > 0) document.getElementById(`n${d}`).value = val;
+            });
+            if(currentTally.nstock) document.getElementById('nStock').value = currentTally.nstock;
+        }
+
+        calculateLiveTally();
+    } catch (error) {
+        console.error('Error loading tally data:', error);
+        showToast('Failed to load tally data: ' + (error.message || 'Unknown error'), 'error');
     }
-
-    const cashSale = sales ? sales.reduce((sum, s) => sum + s.amount, 0) : 0;
-    const oldDuePaid = realPreviousPaid;
-
-    document.getElementById('todayCashSale').innerText = `₹${cashSale.toLocaleString('en-IN')}`;
-    document.getElementById('todayCashExp').innerText = `₹${cashExp.toLocaleString('en-IN')}`;
-    document.getElementById('oldDuePaid').innerText = `₹${oldDuePaid.toLocaleString('en-IN')}`;
-
-    // Vendor Payment Breakdown দেখানো
-    const breakdownCont = document.getElementById('duePaidBreakdown');
-    const list = document.getElementById('duePaidList');
-    list.innerHTML = '';
-
-    if (previousPaidDetails.length > 0) {
-        breakdownCont.style.display = 'block';
-        previousPaidDetails.forEach(p => {
-            list.innerHTML += `
-                <li style="display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #fee2e2;">
-                    <span>${p.vendors.name}</span>
-                    <span style="font-weight: 700;">₹${p.amount.toLocaleString('en-IN')}</span>
-                </li>
-            `;
-        });
-    } else {
-        breakdownCont.style.display = 'none';
-    }
-    currentSystemBalance = (tallyOpeningBalance + cashSale) - cashExp - oldDuePaid;
-    document.getElementById('sysTotal').innerText = `₹${currentSystemBalance.toLocaleString('en-IN')}`;
-
-    const { data: currentTally } = await _supabase.from('cash_tally')
-        .select('*')
-        .eq('user_id', currentUser.id)
-        .eq('report_date', date)
-        .maybeSingle();
-
-    if(currentTally) {
-        [500, 200, 100, 50, 20, 10, 5, 2, 1].forEach(d => {
-            const val = currentTally[`n${d}`];
-            if(val > 0) document.getElementById(`n${d}`).value = val;
-        });
-        // Stock amount load
-        if(currentTally.nstock) document.getElementById('nStock').value = currentTally.nstock;
-    }
-
-    calculateLiveTally();
 }
 
 function calculateLiveTally() {
@@ -182,51 +202,56 @@ function triggerAutoSave() {
 }
 
 async function saveTallyData() {
-    const date = document.getElementById('tallyDate').value;
-    const notes = {};
-    let totalPhy = 0;
+    try {
+        const date = document.getElementById('tallyDate').value;
+        
+        if (!date) {
+            showToast('Please select a date', 'error');
+            return;
+        }
+        
+        const notes = {};
+        let totalPhy = 0;
 
-    // Notes calculation
-    [500, 200, 100, 50, 20, 10, 5, 2, 1].forEach(d => {
-        const input = document.getElementById(`n${d}`);
-        const count = parseInt(input.value) || 0;
-        notes[`n${d}`] = count;
-        totalPhy += (d * count);
-    });
+        [500, 200, 100, 50, 20, 10, 5, 2, 1].forEach(d => {
+            const input = document.getElementById(`n${d}`);
+            const count = parseInt(input.value) || 0;
+            notes[`n${d}`] = count;
+            totalPhy += (d * count);
+        });
 
-    // Stock amount
-    const stockAmount = parseInt(document.getElementById('nStock').value) || 0;
-    notes.nstock = stockAmount;
-    totalPhy += stockAmount;
+        const stockAmount = parseInt(document.getElementById('nStock').value) || 0;
+        notes.nstock = stockAmount;
+        totalPhy += stockAmount;
 
-    const diff = totalPhy - currentSystemBalance;
-    const newCumulative = lastCumulativeShortage - diff;
+        const diff = totalPhy - currentSystemBalance;
+        const newCumulative = lastCumulativeShortage - diff;
 
-    // প্রথমে পুরনো এন্ট্রি মুছে ফেলা (যদি থাকে)
-    await _supabase.from('cash_tally')
-        .delete()
-        .eq('user_id', currentUser.id)
-        .eq('report_date', date);
+        const { error: deleteError } = await _supabase.from('cash_tally')
+            .delete()
+            .eq('user_id', currentUser.id)
+            .eq('report_date', date);
 
-    // তারপর নতুন এন্ট্রি insert করা
-    const { error } = await _supabase.from('cash_tally').insert({
-        user_id: currentUser.id,
-        report_date: date,
-        ...notes,
-        total_physical: totalPhy,
-        system_balance: currentSystemBalance,
-        difference: diff,
-        cumulative_shortage: newCumulative
-    });
-    
-    if(error) {
-        console.error('Save error:', JSON.stringify(error, null, 2));
-        showToast('Failed to save: ' + (error.message || 'Unknown error'), 'error');
-    } else {
+        if (deleteError) throw deleteError;
+
+        const { error } = await _supabase.from('cash_tally').insert({
+            user_id: currentUser.id,
+            report_date: date,
+            ...notes,
+            total_physical: totalPhy,
+            system_balance: currentSystemBalance,
+            difference: diff,
+            cumulative_shortage: newCumulative
+        });
+        
+        if(error) throw error;
+        
         console.log('Data saved successfully');
+        loadTallyHistory();
+    } catch (error) {
+        console.error('Save error:', error);
+        showToast('Failed to save: ' + (error.message || 'Unknown error'), 'error');
     }
-    
-    loadTallyHistory();
 }
 
 async function loadTallyHistory() {

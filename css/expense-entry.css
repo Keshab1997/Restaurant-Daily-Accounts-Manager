@@ -1,27 +1,366 @@
-.excel-container { padding: 0; overflow: hidden; margin-top: 20px; }
-.table-wrapper { overflow-x: auto; max-height: 65vh; }
-.excel-table { width: 100%; border-collapse: collapse; min-width: 1000px; }
-.excel-table th { background: #f1f5f9; padding: 12px; text-align: left; font-size: 0.75rem; color: #64748b; border-bottom: 2px solid #e2e8f0; position: sticky; top: 0; z-index: 10; }
-.excel-table td { padding: 4px; border-bottom: 1px solid #f1f5f9; }
-.excel-table input, .excel-table select { width: 100%; padding: 10px; border: 1px solid transparent; border-radius: 6px; font-size: 0.9rem; outline: none; background: transparent; }
-.excel-table input:focus { background: white; border-color: var(--primary); }
+/* Modern SaaS Dashboard Design for Expense Entry */
 
-/* Status Colors */
-.status-cash { background: #d1fae5 !important; color: #065f46 !important; font-weight: 700; border: 1px solid #059669 !important; }
-.status-owner { background: #dbeafe !important; color: #1e40af !important; font-weight: 700; border: 1px solid #2563eb !important; }
-.status-due { background: #fee2e2 !important; color: #991b1b !important; font-weight: 700; border: 1px solid #ef4444 !important; }
-.status-partial { background: #fef3c7 !important; color: #92400e !important; font-weight: 700; border: 1px solid #f59e0b !important; }
+:root {
+    --primary: #2563eb;
+    --bg-main: #f1f5f9;
+    --card-bg: #ffffff;
+    --input-bg: #f8fafc;
+    --border-color: #e2e8f0;
+}
 
-.opt-cash { background: white; color: #059669; }
-.opt-owner { background: white; color: #2563eb; }
-.opt-due { background: white; color: #ef4444; }
-.opt-partial { background: white; color: #f59e0b; }
+.main-content {
+    background-color: var(--bg-main);
+    min-height: 100vh;
+    padding: 20px;
+}
 
-.hidden { display: none; }
-.btn-remove { color: #ef4444; background: none; border: none; cursor: pointer; font-size: 1.1rem; }
-.table-footer { padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: #f8fafc; border-top: 1px solid #e2e8f0; }
-.btn-add-row { background: white; border: 1px dashed #cbd5e1; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-weight: 600; color: var(--primary); }
-.action-bar { margin-top: 20px; display: flex; justify-content: flex-end; }
-.btn-save-all { background: var(--primary); color: white; border: none; padding: 12px 30px; border-radius: 10px; font-weight: 700; cursor: pointer; }
-.accounting-date { display: flex; align-items: center; gap: 10px; background: #fff7ed; padding: 8px 15px; border-radius: 10px; border: 1px solid #ffedd5; }
-.accounting-date input { border: 1px solid #fdba74; padding: 5px; border-radius: 5px; font-weight: 700; color: #c2410c; }
+/* Header Section */
+.top-bar {
+    background: white;
+    padding: 25px;
+    border-radius: 20px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    margin-bottom: 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.page-title h1 {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: #1e293b;
+    margin-bottom: 5px;
+}
+
+.page-title p {
+    color: #64748b;
+    font-size: 0.9rem;
+}
+
+.accounting-date {
+    background: #eff6ff !important;
+    border: 1px solid #dbeafe !important;
+    padding: 10px 20px !important;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.accounting-date label {
+    font-weight: 700;
+    color: #2563eb;
+    font-size: 0.9rem;
+}
+
+.accounting-date input {
+    border: 1px solid #93c5fd !important;
+    padding: 8px 12px !important;
+    border-radius: 8px !important;
+    font-weight: 700 !important;
+    color: #1e40af !important;
+    background: white !important;
+}
+
+/* Table Container */
+.excel-container {
+    background: white;
+    border-radius: 24px;
+    padding: 15px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
+    margin-top: 20px;
+}
+
+.table-wrapper {
+    border-radius: 16px;
+    overflow-x: auto;
+    max-height: 65vh;
+}
+
+.excel-table {
+    width: 100%;
+    min-width: 1100px;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+/* Table Header */
+.excel-table th {
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 18px 15px;
+    border-bottom: 2px solid #f1f5f9;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    text-align: left;
+}
+
+/* Table Rows */
+.excel-table td {
+    padding: 10px;
+    border-bottom: 1px solid #f1f5f9;
+    transition: background-color 0.2s;
+}
+
+.excel-table tr:hover td {
+    background-color: #fbfcfe;
+}
+
+/* Inputs Styling */
+.excel-table input,
+.excel-table select {
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-weight: 600;
+    color: #334155;
+    transition: all 0.3s;
+    font-size: 0.9rem;
+    outline: none;
+}
+
+.excel-table input:focus {
+    background: white;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+}
+
+.excel-table input:disabled {
+    background: #f8fafc;
+    color: #94a3b8;
+    cursor: not-allowed;
+}
+
+/* Status Badges */
+.v-status {
+    appearance: none;
+    cursor: pointer;
+    text-align: center;
+    font-size: 0.8rem !important;
+    font-weight: 700 !important;
+}
+
+.status-cash {
+    background: #dcfce7 !important;
+    color: #15803d !important;
+    border: 1px solid #bbf7d0 !important;
+}
+
+.status-due {
+    background: #fee2e2 !important;
+    color: #b91c1c !important;
+    border: 1px solid #fecaca !important;
+}
+
+.status-owner {
+    background: #e0e7ff !important;
+    color: #4338ca !important;
+    border: 1px solid #c7d2fe !important;
+}
+
+.status-partial {
+    background: #fef3c7 !important;
+    color: #92400e !important;
+    border: 1px solid #fde68a !important;
+}
+
+/* Partial Payment Inputs */
+.v-partial {
+    background: #fffbeb !important;
+    border: 1px solid #fde68a !important;
+}
+
+.v-partial-src {
+    background: #fffbeb !important;
+    border: 1px solid #fde68a !important;
+    font-size: 0.75rem !important;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Row Actions */
+.btn-remove {
+    width: 35px;
+    height: 35px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff1f1;
+    color: #ef4444;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-size: 1.1rem;
+}
+
+.btn-remove:hover {
+    background: #ef4444;
+    color: white;
+    transform: scale(1.1);
+}
+
+/* Save Status Icons */
+.save-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.status-saved {
+    color: #10b981;
+    font-size: 1.3rem;
+    animation: pulse 2s infinite;
+}
+
+.status-pending {
+    color: #94a3b8;
+    font-size: 1.3rem;
+}
+
+.status-saving {
+    color: #f59e0b;
+    font-size: 1.3rem;
+    animation: spin 1s linear infinite;
+}
+
+.status-error {
+    color: #ef4444;
+    font-size: 1.3rem;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Footer & Buttons */
+.table-footer {
+    margin-top: 20px;
+    padding: 20px;
+    background: #f8fafc;
+    border-radius: 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 2px solid #e2e8f0;
+}
+
+.btn-add-row {
+    background: white;
+    border: 2px dashed #cbd5e1;
+    padding: 12px 25px;
+    color: #64748b;
+    border-radius: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-add-row:hover {
+    border-color: #2563eb;
+    color: #2563eb;
+    background: #eff6ff;
+    transform: translateY(-2px);
+}
+
+.action-bar {
+    margin-top: 20px;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.btn-save-all {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    color: white;
+    border: none;
+    padding: 14px 40px;
+    border-radius: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3);
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1rem;
+}
+
+.btn-save-all:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 15px 25px -5px rgba(37, 99, 235, 0.4);
+}
+
+.btn-save-all:disabled {
+    background: #94a3b8;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Total Summary */
+.total-summary {
+    font-size: 1.2rem;
+    color: #1e293b;
+    font-weight: 600;
+}
+
+.total-summary strong {
+    color: #2563eb;
+    font-size: 1.5rem;
+    font-weight: 800;
+}
+
+/* Loading Overlay */
+#loading {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.spin {
+    animation: spin 1s linear infinite;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .top-bar {
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .table-footer {
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .btn-save-all {
+        width: 100%;
+        justify-content: center;
+    }
+}

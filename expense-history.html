@@ -42,10 +42,10 @@
         <div class="top-bar">
             <div class="page-title">
                 <h1>Expense History 📊</h1>
-                <p>View all expenses by date</p>
+                <p>Monthly expense summary by date</p>
             </div>
             <div class="filter-box">
-                <input type="date" id="historyDate" onchange="loadHistory()">
+                <input type="month" id="historyMonth" onchange="loadMonthlyHistory()">
             </div>
         </div>
 
@@ -54,17 +54,15 @@
                 <table class="history-table">
                     <thead>
                         <tr>
-                            <th width="60">Sr.No</th>
-                            <th>Description</th>
-                            <th>Source</th>
-                            <th>Amount</th>
+                            <th>Date</th>
+                            <th>Total Expense</th>
                             <th width="120">Action</th>
                         </tr>
                     </thead>
                     <tbody id="historyBody"></tbody>
                     <tfoot>
                         <tr class="total-row">
-                            <td colspan="3">TOTAL EXPENSE (ALL)</td>
+                            <td>MONTHLY TOTAL</td>
                             <td id="historyTotal" colspan="2">₹0</td>
                         </tr>
                     </tfoot>
@@ -79,78 +77,109 @@
     <script src="js/hamburger.js"></script>
     <script>
         let currentUser = null;
-        let vendorsList = [];
 
         window.onload = async () => {
             const session = await checkAuth(true);
             currentUser = session.user;
-            document.getElementById('historyDate').value = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
             
-            const { data: vendors } = await _supabase.from('vendors').select('id, name').eq('user_id', currentUser.id);
-            vendorsList = vendors || [];
+            const now = new Date();
+            const currentMonth = now.toISOString().substring(0, 7);
+            document.getElementById('historyMonth').value = currentMonth;
             
-            loadHistory();
+            loadMonthlyHistory();
         };
 
-        async function loadHistory() {
-            const date = document.getElementById('historyDate').value;
-            
-            const { data: expenses } = await _supabase.from('expenses')
-                .select('*')
-                .eq('user_id', currentUser.id)
-                .eq('report_date', date)
-                .order('created_at', { ascending: true });
+        async function loadMonthlyHistory() {
+            try {
+                const monthYear = document.getElementById('historyMonth').value;
+                if (!monthYear) {
+                    showToast('Please select a month', 'error');
+                    return;
+                }
 
-            const tbody = document.getElementById('historyBody');
-            const mobileList = document.getElementById('mobileHistoryList');
-            
-            tbody.innerHTML = '';
-            mobileList.innerHTML = '';
-            let total = 0;
+                const [year, month] = monthYear.split('-');
+                
+                const startDate = `${monthYear}-01`;
+                
+                // মাসের শেষ দিনটি ডাইনামিকলি বের করা (২৮, ২৯, ৩০ বা ৩১)
+                const lastDay = new Date(year, month, 0).getDate();
+                const endDate = `${monthYear}-${String(lastDay).padStart(2, '0')}`;
 
-            if(expenses && expenses.length > 0) {
-                expenses.forEach((exp, index) => {
-                    total += exp.amount;
-                    const sourceClass = exp.payment_source === 'CASH' ? 'text-green' : (exp.payment_source === 'DUE' ? 'text-red' : 'text-blue');
-                    
-                    const vendorName = exp.description.split(' (')[0];
-                    const vendor = vendorsList.find(v => v.name.toLowerCase() === vendorName.toLowerCase());
-                    const detailsUrl = vendor ? `vendor-details.html?id=${vendor.id}` : '#';
+                const tbody = document.getElementById('historyBody');
+                const mobileList = document.getElementById('mobileHistoryList');
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:30px;">Loading...</td></tr>';
+                mobileList.innerHTML = '';
+
+                const { data: expenses, error } = await _supabase.from('expenses')
+                    .select('report_date, amount')
+                    .eq('user_id', currentUser.id)
+                    .gte('report_date', startDate)
+                    .lte('report_date', endDate)
+                    .order('report_date', { ascending: false });
+
+                if (error) throw error;
+
+                const dailySummary = {};
+                if (expenses) {
+                    expenses.forEach(exp => {
+                        if (!dailySummary[exp.report_date]) {
+                            dailySummary[exp.report_date] = 0;
+                        }
+                        dailySummary[exp.report_date] += exp.amount;
+                    });
+                }
+
+                tbody.innerHTML = '';
+                let monthlyGrandTotal = 0;
+
+                const sortedDates = Object.keys(dailySummary).sort().reverse();
+                
+                if (sortedDates.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:30px; color:#94a3b8;">No expenses found in this month.</td></tr>';
+                    document.getElementById('historyTotal').innerText = `₹0`;
+                    return;
+                }
+
+                sortedDates.forEach(date => {
+                    const totalAmount = dailySummary[date];
+                    monthlyGrandTotal += totalAmount;
 
                     tbody.innerHTML += `
                         <tr>
-                            <td>${index + 1}</td>
-                            <td>${exp.description}</td>
-                            <td class="${sourceClass}"><b>${exp.payment_source}</b></td>
-                            <td>₹${exp.amount.toLocaleString('en-IN')}</td>
+                            <td style="font-family: monospace; font-weight: 700;">${date}</td>
+                            <td style="color: #ef4444; font-weight: 800;">₹${totalAmount.toLocaleString('en-IN')}</td>
                             <td>
-                                <div class="action-btns">
-                                    <button class="btn-details" onclick="location.href='${detailsUrl}'" ${!vendor ? 'disabled' : ''} title="View Ledger"><i class="ri-file-list-3-line"></i> Details</button>
-                                </div>
+                                <button class="btn-details" onclick="viewDayDetails('${date}')">
+                                    <i class="ri-file-list-3-line"></i> Expense Details
+                                </button>
                             </td>
                         </tr>
                     `;
 
                     mobileList.innerHTML += `
-                        <div class="exp-card">
-                            <div class="card-top">
-                                <span class="sr-no">#${index + 1}</span>
-                                <span class="source-badge ${sourceClass}">${exp.payment_source}</span>
+                        <div class="exp-card" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 15px; background: white; border-radius: 12px; border: 1px solid #e2e8f0;">
+                            <div>
+                                <small style="color: #64748b; font-weight: 700;">${date}</small>
+                                <h3 style="margin: 5px 0 0 0; color: #ef4444; font-weight: 800;">₹${totalAmount.toLocaleString('en-IN')}</h3>
                             </div>
-                            <div class="card-mid">
-                                <h3>${exp.description}</h3>
-                                <h2 class="amt">₹${exp.amount.toLocaleString('en-IN')}</h2>
-                            </div>
-                            <div class="card-bottom">
-                                <button class="btn-mob-details" onclick="location.href='${detailsUrl}'" ${!vendor ? 'style="display:none"' : ''} style="width: 100%;"><i class="ri-eye-line"></i> View Ledger</button>
-                            </div>
+                            <button class="btn-details" onclick="viewDayDetails('${date}')" style="padding: 10px 15px; background: #eff6ff; border: 1px solid #dbeafe; color: #2563eb; border-radius: 10px; font-weight: 700;">
+                                <i class="ri-file-list-3-line"></i> Details
+                            </button>
                         </div>
                     `;
                 });
-            } else {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">No expenses found.</td></tr>';
+
+                document.getElementById('historyTotal').innerText = `₹${monthlyGrandTotal.toLocaleString('en-IN')}`;
+            } catch (error) {
+                console.error('Error loading monthly history:', error);
+                const tbody = document.getElementById('historyBody');
+                tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:#ef4444; padding:30px;">Error: ${error.message}</td></tr>`;
+                showToast('Failed to load expense history: ' + (error.message || 'Unknown error'), 'error');
             }
-            document.getElementById('historyTotal').innerText = `₹${total.toLocaleString('en-IN')}`;
+        }
+
+        function viewDayDetails(date) {
+            window.location.href = `expense-entry.html?date=${date}`;
         }
 
         async function logout() { await _supabase.auth.signOut(); window.location.href = 'index.html'; }

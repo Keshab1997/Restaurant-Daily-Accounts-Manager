@@ -6,8 +6,14 @@ let rowCount = 0;
 window.onload = async () => {
     const session = await checkAuth(true);
     currentUser = session.user;
-    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    
+    // Check if date parameter is passed from expense-history
+    const urlParams = new URLSearchParams(window.location.search);
+    const dateParam = urlParams.get('date');
+    
+    const today = dateParam || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
     document.getElementById('accDate').value = today;
+    
     await fetchVendors();
     loadDataForDate();
 };
@@ -74,23 +80,61 @@ async function loadDataForDate() {
                 }
             });
 
+            // Batch fetch all vendor ledgers and owner ledgers at once
+            const billNumbers = [...new Set(Object.values(grouped).map(g => g.bill_no).filter(Boolean))];
+            const vendorIds = vendorsList.map(v => v.id);
+            
+            const { data: allLedgers } = await _supabase.from('vendor_ledger')
+                .select('*')
+                .eq('user_id', currentUser.id)
+                .in('bill_no', billNumbers)
+                .in('vendor_id', vendorIds);
+
+            const { data: allOwnerRecords } = await _supabase.from('owner_ledger')
+                .select('*')
+                .eq('user_id', currentUser.id)
+                .eq('t_date', selectedDate);
+
+            // Create lookup maps for faster access
+            const ledgerMap = {};
+            const ownerMap = {};
+
+            if (allLedgers) {
+                allLedgers.forEach(ledger => {
+                    const key = `${ledger.vendor_id}-${ledger.bill_no}`;
+                    if (!ledgerMap[key]) ledgerMap[key] = [];
+                    ledgerMap[key].push(ledger);
+                });
+            }
+
+            if (allOwnerRecords) {
+                allOwnerRecords.forEach(owner => {
+                    const key = `${owner.amount}`;
+                    if (!ownerMap[key]) ownerMap[key] = [];
+                    ownerMap[key].push(owner);
+                });
+            }
+
             for (const key in grouped) {
                 const item = grouped[key];
                 const vendor = vendorsList.find(v => v.name.trim().toLowerCase() === item.vendorName.trim().toLowerCase());
                 let billDate = item.report_date, ledgerId = null, payLedgerId = null, ownerId = null;
 
                 if (vendor && item.bill_no) {
-                    const { data: ledger } = await _supabase.from('vendor_ledger').select('*').eq('vendor_id', vendor.id).eq('bill_no', item.bill_no).limit(5);
-                    if (ledger) {
-                        const billRec = ledger.find(l => l.t_type === 'BILL');
-                        const payRec = ledger.find(l => l.t_type.startsWith('PAYMENT'));
-                        if (billRec) { billDate = billRec.t_date; ledgerId = billRec.id; }
-                        if (payRec) payLedgerId = payRec.id;
-                    }
+                    const lookupKey = `${vendor.id}-${item.bill_no}`;
+                    const ledgers = ledgerMap[lookupKey] || [];
+                    
+                    const billRec = ledgers.find(l => l.t_type === 'BILL');
+                    const payRec = ledgers.find(l => l.t_type.startsWith('PAYMENT'));
+                    
+                    if (billRec) { billDate = billRec.t_date; ledgerId = billRec.id; }
+                    if (payRec) payLedgerId = payRec.id;
                 }
 
                 if (item.partialSrc === 'OWNER' || item.payment_source === 'OWNER') {
-                    const { data: ownerRec } = await _supabase.from('owner_ledger').select('id').eq('user_id', currentUser.id).eq('t_date', item.report_date).eq('amount', item.partial || item.amount).limit(1).maybeSingle();
+                    const ownerAmount = item.partial || item.amount;
+                    const ownerRecords = ownerMap[ownerAmount] || [];
+                    const ownerRec = ownerRecords.find(o => o.t_date === item.report_date);
                     if (ownerRec) ownerId = ownerRec.id;
                 }
 
