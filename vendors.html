@@ -17,6 +17,8 @@
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/vendors.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css" rel="stylesheet">
 </head>
 <body>
@@ -74,6 +76,28 @@
                 </button>
             </div>
 
+            <div class="vendor-controls glass-card">
+                <div class="search-wrapper">
+                    <i class="ri-search-line"></i>
+                    <input type="text" id="vendorSearch" placeholder="Search vendor name..." oninput="filterVendors()">
+                </div>
+                
+                <div class="summary-wrapper">
+                    <div class="total-due-badge">
+                        <span>Total Outstanding Due:</span>
+                        <h2 id="totalDueAmt">₹0</h2>
+                    </div>
+                    <div class="report-btns">
+                        <button class="btn-report jpg" onclick="downloadReport('image')" title="Download as JPG">
+                            <i class="ri-image-line"></i> JPG
+                        </button>
+                        <button class="btn-report pdf" onclick="downloadReport('pdf')" title="Download as PDF">
+                            <i class="ri-file-pdf-line"></i> PDF
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <div id="vendorList" class="vendor-grid"></div>
         </main>
     </div>
@@ -112,6 +136,31 @@
                 <button class="btn-save" onclick="addVendor()" aria-label="Save vendor">Save Vendor</button>
             </div>
         </div>
+    </div>
+
+    <!-- Report Template (Hidden) -->
+    <div id="reportTemplate" style="position: absolute; left: -9999px; width: 800px; padding: 40px; background: white; color: #1e293b;">
+        <div style="text-align: center; border-bottom: 2px solid #2563eb; padding-bottom: 20px; margin-bottom: 20px;">
+            <h1 id="repRestroName" style="margin: 0; text-transform: uppercase;">Restaurant Name</h1>
+            <p style="margin: 5px 0; font-weight: 700; color: #64748b;">VENDOR OUTSTANDING DUES REPORT</p>
+            <p id="repDate" style="margin: 0; font-size: 0.9rem;"></p>
+        </div>
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: #f1f5f9;">
+                    <th style="border: 1px solid #cbd5e1; padding: 12px; text-align: left;">Vendor Name</th>
+                    <th style="border: 1px solid #cbd5e1; padding: 12px; text-align: left;">Phone</th>
+                    <th style="border: 1px solid #cbd5e1; padding: 12px; text-align: right;">Due Amount</th>
+                </tr>
+            </thead>
+            <tbody id="reportTableBody"></tbody>
+            <tfoot>
+                <tr style="background: #eff6ff; font-weight: 800;">
+                    <td colspan="2" style="border: 1px solid #cbd5e1; padding: 12px; text-align: right;">TOTAL OUTSTANDING:</td>
+                    <td id="repTotalDue" style="border: 1px solid #cbd5e1; padding: 12px; text-align: right; color: #ef4444;">₹0</td>
+                </tr>
+            </tfoot>
+        </table>
     </div>
 
     <script src="js/config.js"></script>

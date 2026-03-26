@@ -1,8 +1,16 @@
 let currentUser = null;
+let allVendors = [];
+let restaurantName = "RestroManager";
 
 window.onload = async () => {
     const session = await checkAuth(true);
     currentUser = session.user;
+    
+    const { data: profile } = await _supabase.from('profiles').select('restaurant_name').eq('id', currentUser.id).maybeSingle();
+    if (profile && profile.restaurant_name) {
+        restaurantName = profile.restaurant_name;
+    }
+    
     loadVendors();
 };
 
@@ -26,19 +34,7 @@ async function loadVendors() {
         const vendors = vendorsRes.data;
         const allLedger = ledgerRes.data || [];
 
-        vendorGrid.innerHTML = '';
-
-        if (vendors.length === 0) {
-            vendorGrid.innerHTML = `
-                <div style="grid-column: 1/-1; text-align: center; padding: 50px; color: #64748b;">
-                    <i class="ri-store-2-line" style="font-size: 3rem; opacity: 0.3;"></i>
-                    <p>No vendors found. Click "Add New Vendor" to start.</p>
-                </div>
-            `;
-            return;
-        }
-
-        vendors.forEach(vendor => {
+        allVendors = vendors.map(vendor => {
             const vendorTransactions = allLedger.filter(l => l.vendor_id === vendor.id);
             
             let totalBill = 0;
@@ -50,28 +46,61 @@ async function loadVendors() {
             });
 
             const currentDue = (vendor.opening_due || 0) + totalBill - totalPaid;
-
-            const card = document.createElement('div');
-            card.className = 'vendor-card';
-            card.onclick = () => window.location.href = `vendor-details.html?id=${vendor.id}`;
             
-            card.innerHTML = `
-                <i class="ri-store-2-line" style="font-size: 2.5rem; color: #2563eb; margin-bottom: 15px;"></i>
-                <h3>${vendor.name}</h3>
-                <p style="color: ${currentDue > 0 ? '#ef4444' : '#10b981'}; background: ${currentDue > 0 ? '#fee2e2' : '#d1fae5'}">
-                    ${currentDue > 0 ? 'Due: ₹' + currentDue.toLocaleString('en-IN') : 'No Due'}
-                </p>
-                <small style="color: #64748b; margin-top: 10px; display: block;">
-                    <i class="ri-phone-line"></i> ${vendor.phone || 'No Phone'}
-                </small>
-            `;
-            vendorGrid.appendChild(card);
+            return { ...vendor, currentDue };
         });
+
+        renderVendorCards(allVendors);
+        calculateTotalDue(allVendors);
 
     } catch (err) {
         console.error(err);
         showToast("Failed to load vendors", "error");
     }
+}
+
+function renderVendorCards(vendors) {
+    const vendorGrid = document.getElementById('vendorList');
+    vendorGrid.innerHTML = '';
+
+    if (vendors.length === 0) {
+        vendorGrid.innerHTML = `
+            <div style="grid-column: 1/-1; text-align: center; padding: 50px; color: #64748b;">
+                <i class="ri-store-2-line" style="font-size: 3rem; opacity: 0.3;"></i>
+                <p>No vendors found. Click "Add New Vendor" to start.</p>
+            </div>
+        `;
+        return;
+    }
+
+    vendors.forEach(vendor => {
+        const card = document.createElement('div');
+        card.className = 'vendor-card';
+        card.onclick = () => window.location.href = `vendor-details.html?id=${vendor.id}`;
+        
+        card.innerHTML = `
+            <i class="ri-store-2-line" style="font-size: 2.5rem; color: #2563eb; margin-bottom: 15px;"></i>
+            <h3>${vendor.name}</h3>
+            <p style="color: ${vendor.currentDue > 0 ? '#ef4444' : '#10b981'}; background: ${vendor.currentDue > 0 ? '#fee2e2' : '#d1fae5'}">
+                ${vendor.currentDue > 0 ? 'Due: ₹' + vendor.currentDue.toLocaleString('en-IN') : 'No Due'}
+            </p>
+            <small style="color: #64748b; margin-top: 10px; display: block;">
+                <i class="ri-phone-line"></i> ${vendor.phone || 'No Phone'}
+            </small>
+        `;
+        vendorGrid.appendChild(card);
+    });
+}
+
+function calculateTotalDue(vendors) {
+    const total = vendors.reduce((sum, v) => sum + (v.currentDue || 0), 0);
+    document.getElementById('totalDueAmt').innerText = `₹${total.toLocaleString('en-IN')}`;
+}
+
+function filterVendors() {
+    const term = document.getElementById('vendorSearch').value.toLowerCase();
+    const filtered = allVendors.filter(v => v.name.toLowerCase().includes(term));
+    renderVendorCards(filtered);
 }
 
 async function addVendor() {
@@ -119,6 +148,63 @@ function closeModal() {
     document.getElementById('vName').value = '';
     document.getElementById('vPhone').value = '';
     document.getElementById('vOpen').value = '';
+}
+
+async function downloadReport(format) {
+    const dueVendors = allVendors.filter(v => (v.currentDue || 0) > 0);
+    
+    if (dueVendors.length === 0) {
+        showToast("No pending dues to report", "info");
+        return;
+    }
+
+    showToast(`Generating ${format === 'image' ? 'JPG' : 'PDF'}...`, "info");
+
+    const tableBody = document.getElementById('reportTableBody');
+    tableBody.innerHTML = '';
+    let total = 0;
+
+    dueVendors.forEach(v => {
+        total += v.currentDue;
+        tableBody.innerHTML += `
+            <tr>
+                <td style="border: 1px solid #cbd5e1; padding: 10px;">${v.name}</td>
+                <td style="border: 1px solid #cbd5e1; padding: 10px;">${v.phone || '-'}</td>
+                <td style="border: 1px solid #cbd5e1; padding: 10px; text-align: right;">₹${v.currentDue.toLocaleString('en-IN')}</td>
+            </tr>
+        `;
+    });
+
+    document.getElementById('repRestroName').innerText = restaurantName;
+    document.getElementById('repDate').innerText = `Report Generated: ${new Date().toLocaleString('en-IN')}`;
+    document.getElementById('repTotalDue').innerText = `₹${total.toLocaleString('en-IN')}`;
+
+    const element = document.getElementById('reportTemplate');
+
+    try {
+        if (format === 'image') {
+            const canvas = await html2canvas(element, { scale: 2 });
+            const link = document.createElement('a');
+            link.download = `Vendor_Due_Report_${new Date().toLocaleDateString('en-IN').replace(/\//g, '-')}.jpg`;
+            link.href = canvas.toDataURL("image/jpeg", 0.9);
+            link.click();
+            showToast("JPG Downloaded!", "success");
+        } else {
+            const canvas = await html2canvas(element, { scale: 2 });
+            const imgData = canvas.toDataURL('image/png');
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const imgProps = pdf.getImageProperties(imgData);
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+            pdf.save(`Vendor_Due_Report_${new Date().toLocaleDateString('en-IN').replace(/\//g, '-')}.pdf`);
+            showToast("PDF Downloaded!", "success");
+        }
+    } catch (err) {
+        console.error(err);
+        showToast("Failed to generate report", "error");
+    }
 }
 
 async function logout() {
