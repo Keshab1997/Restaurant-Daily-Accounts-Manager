@@ -77,7 +77,7 @@ async function loadTallyData(date) {
 
                 if (billError) throw billError;
 
-                if (originalBill && originalBill.t_date <= date) {
+                if (pay.bill_no === "0" || (originalBill && originalBill.t_date < date)) {
                     realPreviousPaid += pay.amount;
                     previousPaidBillNos.push(pay.bill_no);
                     previousPaidDetails.push(pay);
@@ -86,7 +86,7 @@ async function loadTallyData(date) {
         }
 
         const { data: expenses, error: expensesError } = await _supabase.from('expenses')
-            .select('amount, bill_no')
+            .select('amount, bill_no, description')
             .eq('user_id', currentUser.id)
             .eq('report_date', date)
             .eq('payment_source', 'CASH');
@@ -96,7 +96,10 @@ async function loadTallyData(date) {
         let cashExp = 0;
         if (expenses) {
             for (const exp of expenses) {
-                if (!previousPaidBillNos.includes(exp.bill_no)) {
+                const isGeneralPayment = exp.bill_no === "0" && exp.description && exp.description.includes("Vendor Payment");
+                const isPreviousBillPayment = previousPaidBillNos.includes(exp.bill_no);
+                
+                if (!isGeneralPayment && !isPreviousBillPayment) {
                     cashExp += exp.amount;
                 }
             }

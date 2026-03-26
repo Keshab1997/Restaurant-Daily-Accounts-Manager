@@ -352,6 +352,17 @@ async function addEntry() {
             });
             if (expenseError) throw expenseError;
         } 
+        else if(type === 'PAYMENT') {
+            const { error: expenseError } = await _supabase.from('expenses').insert({
+                user_id: currentUser.id,
+                report_date: date,
+                description: `Vendor Payment: ${vendor.name}`,
+                amount: amount,
+                payment_source: 'CASH',
+                bill_no: billNo.toString()
+            });
+            if (expenseError) throw expenseError;
+        }
         else if(type === 'PAYMENT_OWNER') {
             const { error: ownerError } = await _supabase.from('owner_ledger').insert({
                 user_id: currentUser.id,
@@ -402,6 +413,14 @@ async function deleteEntry(id, type, isSilent = false) {
                 .eq('payment_source', 'DUE')
                 .or(`description.eq.${vendorName},description.ilike.${vendorName} (%)`);
         } 
+        else if(type === 'PAYMENT') {
+            await _supabase.from('expenses').delete()
+                .eq('user_id', currentUser.id)
+                .eq('bill_no', record.bill_no)
+                .eq('payment_source', 'CASH')
+                .eq('report_date', record.t_date)
+                .ilike('description', `Vendor Payment: ${vendorName}`);
+        }
         else if(type === 'PAYMENT_OWNER') {
             await _supabase.from('owner_ledger').delete()
                 .eq('user_id', currentUser.id)
