@@ -81,40 +81,37 @@ async function loadData() {
             return;
         }
         
-        // Always fetch previous day's closing balance
-        const { data: lastEntry, error: lastEntryError } = await _supabase.from('daily_balances')
-            .select('closing_balance')
-            .eq('user_id', currentUser.id)
-            .lt('report_date', date)
-            .order('report_date', { ascending: false })
-            .limit(1)
-            .maybeSingle();
+        const [lastEntryData, salesData, expensesData] = await Promise.all([
+            _supabase.from('daily_balances')
+                .select('closing_balance')
+                .eq('user_id', currentUser.id)
+                .lt('report_date', date)
+                .order('report_date', { ascending: false })
+                .limit(1)
+                .maybeSingle(),
+            _supabase.from('sales').select('*').eq('user_id', currentUser.id).eq('report_date', date),
+            _supabase.from('expenses').select('*').eq('user_id', currentUser.id).eq('report_date', date)
+        ]);
 
-        if (lastEntryError) throw lastEntryError;
+        if (lastEntryData.error) throw lastEntryData.error;
+        if (salesData.error) throw salesData.error;
+        if (expensesData.error) throw expensesData.error;
 
-        document.getElementById('openingBal').value = lastEntry ? lastEntry.closing_balance : 0;
+        document.getElementById('openingBal').value = lastEntryData.data ? lastEntryData.data.closing_balance : 0;
 
-        const { data: sales, error: salesError } = await _supabase.from('sales').select('*').eq('user_id', currentUser.id).eq('report_date', date);
-        
-        if (salesError) throw salesError;
-        
         ['saleCash', 'saleBank', 'saleCard', 'saleSwiggy', 'saleZomato'].forEach(id => document.getElementById(id).value = 0);
         
-        if(sales) {
-            sales.forEach(s => {
-                if(s.sale_type === 'CASH') document.getElementById('saleCash').value = s.amount;
-                if(s.sale_type === 'BANK_WITHDRAWAL') document.getElementById('saleBank').value = s.amount;
-                if(s.sale_type === 'CARD') document.getElementById('saleCard').value = s.amount;
-                if(s.sale_type === 'SWIGGY') document.getElementById('saleSwiggy').value = s.amount;
-                if(s.sale_type === 'ZOMATO') document.getElementById('saleZomato').value = s.amount;
-            });
+        if(salesData.data) {
+            const saleMap = {};
+            salesData.data.forEach(s => saleMap[s.sale_type] = s.amount);
+            document.getElementById('saleCash').value = saleMap['CASH'] || 0;
+            document.getElementById('saleBank').value = saleMap['BANK_WITHDRAWAL'] || 0;
+            document.getElementById('saleCard').value = saleMap['CARD'] || 0;
+            document.getElementById('saleSwiggy').value = saleMap['SWIGGY'] || 0;
+            document.getElementById('saleZomato').value = saleMap['ZOMATO'] || 0;
         }
 
-        const { data: expenses, error: expensesError } = await _supabase.from('expenses').select('*').eq('user_id', currentUser.id).eq('report_date', date);
-        
-        if (expensesError) throw expensesError;
-        
-        currentDayExpenses = expenses || [];
+        currentDayExpenses = expensesData.data || [];
         
         updateCalculations();
         await saveSales(true);
@@ -288,7 +285,6 @@ async function recalculateFutureBalances(startDate) {
     showToast("Recalculating subsequent dates... Please wait.", "info");
 
     try {
-        // Get the closing balance of the start date
         const { data: startDayBalance } = await _supabase
             .from('daily_balances')
             .select('closing_balance')
@@ -301,81 +297,57 @@ async function recalculateFutureBalances(startDate) {
             return;
         }
 
-        // Fetch only future dates that exist in the database
-        const { data: allBalances, error: balErr } = await _supabase
+        const { data: allBalances } = await _supabase
             .from('daily_balances')
             .select('report_date')
             .eq('user_id', currentUser.id)
             .gt('report_date', startDate)
             .order('report_date', { ascending: true });
 
-        if (balErr) throw balErr;
         if (!allBalances || allBalances.length === 0) {
             showToast("No future dates to recalculate", "info");
             return;
         }
 
-        // Batch fetch all sales and expenses for affected dates
         const futureDates = allBalances.map(b => b.report_date);
-        const minDate = futureDates[0];
-        const maxDate = futureDates[futureDates.length - 1];
+        const [salesData, expensesData] = await Promise.all([
+            _supabase.from('sales').select('report_date, amount, sale_type')
+                .eq('user_id', currentUser.id)
+                .in('report_date', futureDates)
+                .in('sale_type', ['CASH', 'BANK_WITHDRAWAL']),
+            _supabase.from('expenses').select('report_date, amount')
+                .eq('user_id', currentUser.id)
+                .in('report_date', futureDates)
+        ]);
 
-        const { data: allSales } = await _supabase
-            .from('sales')
-            .select('report_date, amount, sale_type')
-            .eq('user_id', currentUser.id)
-            .gte('report_date', minDate)
-            .lte('report_date', maxDate)
-            .in('sale_type', ['CASH', 'BANK_WITHDRAWAL']);
-
-        const { data: allExpenses } = await _supabase
-            .from('expenses')
-            .select('report_date, amount')
-            .eq('user_id', currentUser.id)
-            .gte('report_date', minDate)
-            .lte('report_date', maxDate);
-
-        // Create lookup maps for O(1) access
         const salesMap = {};
         const expensesMap = {};
 
-        if (allSales) {
-            allSales.forEach(s => {
-                if (!salesMap[s.report_date]) salesMap[s.report_date] = 0;
-                salesMap[s.report_date] += s.amount;
+        if (salesData.data) {
+            salesData.data.forEach(s => {
+                salesMap[s.report_date] = (salesMap[s.report_date] || 0) + s.amount;
             });
         }
 
-        if (allExpenses) {
-            allExpenses.forEach(e => {
-                if (!expensesMap[e.report_date]) expensesMap[e.report_date] = 0;
-                expensesMap[e.report_date] += e.amount;
+        if (expensesData.data) {
+            expensesData.data.forEach(e => {
+                expensesMap[e.report_date] = (expensesMap[e.report_date] || 0) + e.amount;
             });
         }
 
-        // Prepare batch update
         let previousClosing = startDayBalance.closing_balance;
-        const updates = [];
-
-        for (const dateRecord of allBalances) {
-            const currentDate = dateRecord.report_date;
-            const totalIn = salesMap[currentDate] || 0;
-            const totalOut = expensesMap[currentDate] || 0;
-
-            const newOpening = previousClosing;
-            const newClosing = newOpening + (totalIn - totalOut);
-
-            updates.push({
+        const updates = allBalances.map(dateRecord => {
+            const totalIn = salesMap[dateRecord.report_date] || 0;
+            const totalOut = expensesMap[dateRecord.report_date] || 0;
+            previousClosing = previousClosing + (totalIn - totalOut);
+            return {
                 user_id: currentUser.id,
-                report_date: currentDate,
-                opening_balance: newOpening,
-                closing_balance: newClosing
-            });
+                report_date: dateRecord.report_date,
+                opening_balance: previousClosing - (totalIn - totalOut),
+                closing_balance: previousClosing
+            };
+        });
 
-            previousClosing = newClosing;
-        }
-
-        // Batch upsert all updates at once
         if (updates.length > 0) {
             const { error: upsertError } = await _supabase
                 .from('daily_balances')

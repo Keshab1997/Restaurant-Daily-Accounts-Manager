@@ -24,7 +24,7 @@ async function fetchVendors() {
         vendorsList = data;
         document.getElementById('vendorSuggestions').innerHTML = data.map(v => `<option value="${v.name}">`).join('');
     }
-    await fetchItems();
+    fetchItems();
 }
 
 async function fetchItems() {
@@ -51,7 +51,9 @@ async function loadDataForDate() {
     rowCount = 0;
 
     try {
-        const { data: expenses } = await _supabase.from('expenses').select('*').eq('user_id', currentUser.id).eq('report_date', selectedDate).order('created_at', { ascending: true });
+        const { data: expenses, error: expensesError } = await _supabase.from('expenses').select('*').eq('user_id', currentUser.id).eq('report_date', selectedDate).order('created_at', { ascending: true });
+
+        if (expensesError) throw expensesError;
 
         if (expenses && expenses.length > 0) {
             const grouped = {};
@@ -80,35 +82,27 @@ async function loadDataForDate() {
                 }
             });
 
-            // Batch fetch all vendor ledgers and owner ledgers at once
             const billNumbers = [...new Set(Object.values(grouped).map(g => g.bill_no).filter(Boolean))];
             const vendorIds = vendorsList.map(v => v.id);
             
-            const { data: allLedgers } = await _supabase.from('vendor_ledger')
-                .select('*')
-                .eq('user_id', currentUser.id)
-                .in('bill_no', billNumbers)
-                .in('vendor_id', vendorIds);
+            const [ledgersData, ownerRecordsData] = await Promise.all([
+                _supabase.from('vendor_ledger').select('*').eq('user_id', currentUser.id).in('bill_no', billNumbers).in('vendor_id', vendorIds),
+                _supabase.from('owner_ledger').select('*').eq('user_id', currentUser.id).eq('t_date', selectedDate)
+            ]);
 
-            const { data: allOwnerRecords } = await _supabase.from('owner_ledger')
-                .select('*')
-                .eq('user_id', currentUser.id)
-                .eq('t_date', selectedDate);
-
-            // Create lookup maps for faster access
             const ledgerMap = {};
             const ownerMap = {};
 
-            if (allLedgers) {
-                allLedgers.forEach(ledger => {
+            if (ledgersData.data) {
+                ledgersData.data.forEach(ledger => {
                     const key = `${ledger.vendor_id}-${ledger.bill_no}`;
                     if (!ledgerMap[key]) ledgerMap[key] = [];
                     ledgerMap[key].push(ledger);
                 });
             }
 
-            if (allOwnerRecords) {
-                allOwnerRecords.forEach(owner => {
+            if (ownerRecordsData.data) {
+                ownerRecordsData.data.forEach(owner => {
                     const key = `${owner.amount}`;
                     if (!ownerMap[key]) ownerMap[key] = [];
                     ownerMap[key].push(owner);
