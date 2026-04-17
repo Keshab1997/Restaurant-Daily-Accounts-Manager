@@ -1,4 +1,4 @@
-const CACHE_NAME = 'restro-manager-v68';
+const CACHE_NAME = 'restro-manager-v69';
 const ASSETS = [
   '/',
   '/index.html',
@@ -23,8 +23,8 @@ const ASSETS = [
   '/css/owner-history.css',
   '/css/tally.css',
   '/css/pl.css',
-  '/js/config.js?v=68',
-  '/js/shortcuts.js?v=68',
+  '/js/config.js?v=69',
+  '/js/shortcuts.js?v=69',
   'https://cdn.jsdelivr.net/npm/remixicon@2.5.0/fonts/remixicon.css'
 ];
 
@@ -47,6 +47,16 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
+  const url = new URL(e.request.url);
+  
+  // Network-first strategy for HTML pages (navigation)
+  if (e.request.mode === 'navigate' || url.pathname.endsWith('.html')) {
+    e.respondWith(
+      fetch(e.request).catch(() => caches.match(e.request))
+    );
+    return;
+  }
+
   e.respondWith(
     caches.match(e.request).then((res) => {
       if (res) return res;
