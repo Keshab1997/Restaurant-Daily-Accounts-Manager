@@ -351,17 +351,6 @@ async function addEntry() {
                 bill_no: billNo.toString()
             });
             if (expenseError) throw expenseError;
-        } 
-        else if(type === 'PAYMENT') {
-            const { error: expenseError } = await _supabase.from('expenses').insert({
-                user_id: currentUser.id,
-                report_date: date,
-                description: `Vendor Payment: ${vendor.name}`,
-                amount: amount,
-                payment_source: 'CASH',
-                bill_no: billNo.toString()
-            });
-            if (expenseError) throw expenseError;
         }
         else if(type === 'PAYMENT_OWNER') {
             const { error: ownerError } = await _supabase.from('owner_ledger').insert({
