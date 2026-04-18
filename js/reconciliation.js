@@ -42,27 +42,21 @@ async function calculateReconciliation() {
 
         const closingBalance = balanceData ? balanceData.closing_balance : 0;
 
-        // Get Total Vendor Due for the period (new dues added)
-        const { data: expenses } = await _supabase.from('expenses')
-            .select('amount')
-            .eq('user_id', currentUser.id)
-            .gte('report_date', fromDate)
-            .lte('report_date', toDate)
-            .eq('payment_source', 'DUE');
-            
-        const totalDueAdded = expenses ? expenses.reduce((sum, item) => sum + item.amount, 0) : 0;
+        // Get Total Vendor Due as of toDate (opening_due + all bills - all payments up to toDate)
+        const [vendorsRes, ledgerRes] = await Promise.all([
+            _supabase.from('vendors').select('id, opening_due').eq('user_id', currentUser.id),
+            _supabase.from('vendor_ledger').select('vendor_id, amount, t_type').eq('user_id', currentUser.id).lte('t_date', toDate)
+        ]);
 
-        // Get Total Due Payments made in the period
-        const { data: duePayments } = await _supabase.from('vendor_ledger')
-            .select('amount')
-            .eq('user_id', currentUser.id)
-            .gte('t_date', fromDate)
-            .lte('t_date', toDate)
-            .in('t_type', ['PAYMENT', 'PAYMENT_OWNER']);
+        const vendors = vendorsRes.data || [];
+        const ledger = ledgerRes.data || [];
 
-        const totalDuePaid = duePayments ? duePayments.reduce((sum, item) => sum + item.amount, 0) : 0;
-
-        const totalVendorDue = totalDueAdded - totalDuePaid;
+        const totalVendorDue = vendors.reduce((sum, vendor) => {
+            const txns = ledger.filter(l => l.vendor_id === vendor.id);
+            const bill = txns.filter(l => l.t_type === 'BILL').reduce((s, l) => s + l.amount, 0);
+            const paid = txns.filter(l => l.t_type === 'PAYMENT' || l.t_type === 'PAYMENT_OWNER').reduce((s, l) => s + l.amount, 0);
+            return sum + (vendor.opening_due || 0) + bill - paid;
+        }, 0);
 
         // Get Total Owner Loan for the period
         const { data: loans } = await _supabase.from('owner_ledger')
