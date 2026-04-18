@@ -42,7 +42,7 @@ async function calculateReconciliation() {
 
         const closingBalance = balanceData ? balanceData.closing_balance : 0;
 
-        // Get Total Vendor Due for the period
+        // Get Total Vendor Due for the period (new dues added)
         const { data: expenses } = await _supabase.from('expenses')
             .select('amount')
             .eq('user_id', currentUser.id)
@@ -50,7 +50,19 @@ async function calculateReconciliation() {
             .lte('report_date', toDate)
             .eq('payment_source', 'DUE');
             
-        const totalVendorDue = expenses ? expenses.reduce((sum, item) => sum + item.amount, 0) : 0;
+        const totalDueAdded = expenses ? expenses.reduce((sum, item) => sum + item.amount, 0) : 0;
+
+        // Get Total Due Payments made in the period
+        const { data: duePayments } = await _supabase.from('vendor_ledger')
+            .select('amount')
+            .eq('user_id', currentUser.id)
+            .gte('t_date', fromDate)
+            .lte('t_date', toDate)
+            .in('t_type', ['PAYMENT', 'PAYMENT_OWNER']);
+
+        const totalDuePaid = duePayments ? duePayments.reduce((sum, item) => sum + item.amount, 0) : 0;
+
+        const totalVendorDue = totalDueAdded - totalDuePaid;
 
         // Get Total Owner Loan for the period
         const { data: loans } = await _supabase.from('owner_ledger')
