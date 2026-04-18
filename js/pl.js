@@ -317,3 +317,75 @@ async function generatePLImage() {
 }
 
 async function logout() { await _supabase.auth.signOut(); window.location.href = 'index.html'; }
+
+async function showYearlySummary() {
+    const yearSelect = document.getElementById('yearSelect');
+    yearSelect.innerHTML = '';
+    const currentYear = new Date().getFullYear();
+    for (let y = currentYear; y >= currentYear - 4; y--) {
+        yearSelect.innerHTML += `<option value="${y}">${y}</option>`;
+    }
+    document.getElementById('yearlyModal').classList.remove('hidden');
+    await loadYearlySummary();
+}
+
+async function loadYearlySummary() {
+    const year = document.getElementById('yearSelect').value;
+    const container = document.getElementById('yearlySummaryContent');
+    container.innerHTML = '<p style="text-align:center;color:#94a3b8;">Loading...</p>';
+
+    const months = Array.from({length: 12}, (_, i) => `${year}-${String(i+1).padStart(2,'0')}`);
+    const { data: allSaved } = await _supabase.from('pl_monthly_data')
+        .select('month_year, values, commissions')
+        .eq('user_id', currentUser.id)
+        .in('month_year', months);
+
+    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    let totalProfit = 0;
+    let rows = '';
+
+    for (let i = 0; i < 12; i++) {
+        const m = months[i];
+        const saved = allSaved ? allSaved.find(d => d.month_year === m) : null;
+        if (!saved) {
+            rows += `<tr><td>${monthNames[i]}</td><td style="color:#94a3b8;">-</td><td style="color:#94a3b8;">-</td><td style="color:#94a3b8;">No Data</td></tr>`;
+            continue;
+        }
+
+        let rev = 0, exp = 0;
+        categories.REVENUE.forEach(cat => {
+            const base = saved.values[cat.id] || 0;
+            if (cat.is_special) {
+                const comm = saved.commissions ? (saved.commissions[cat.id] || 0) : 0;
+                rev += base - (base * comm / 100);
+            } else { rev += base; }
+        });
+        categories.EXPENSE.forEach(cat => { exp += saved.values[cat.id] || 0; });
+
+        const net = rev - exp;
+        totalProfit += net;
+        const cls = net >= 0 ? 'yr-profit' : 'yr-loss';
+        const label = net >= 0 ? 'Profit' : 'Loss';
+        rows += `<tr>
+            <td>${monthNames[i]}</td>
+            <td>₹${Math.round(rev).toLocaleString('en-IN')}</td>
+            <td>₹${Math.round(exp).toLocaleString('en-IN')}</td>
+            <td class="${cls}">${label}: ₹${Math.abs(Math.round(net)).toLocaleString('en-IN')}</td>
+        </tr>`;
+    }
+
+    const totalCls = totalProfit >= 0 ? 'yr-profit' : 'yr-loss';
+    const totalLabel = totalProfit >= 0 ? '✅ TOTAL PROFIT' : '❌ TOTAL LOSS';
+
+    container.innerHTML = `
+        <table class="yearly-table">
+            <thead><tr><th>Month</th><th>Revenue</th><th>Expense</th><th>Net</th></tr></thead>
+            <tbody>
+                ${rows}
+                <tr class="yearly-total-row">
+                    <td colspan="3">${totalLabel}</td>
+                    <td class="${totalCls}">₹${Math.abs(Math.round(totalProfit)).toLocaleString('en-IN')}</td>
+                </tr>
+            </tbody>
+        </table>`;
+}
