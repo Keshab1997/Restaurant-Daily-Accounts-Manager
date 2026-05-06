@@ -86,7 +86,9 @@ async function loadDataForDate() {
             const vendorIds = vendorsList.map(v => v.id);
             
             const [ledgersData, ownerRecordsData] = await Promise.all([
-                _supabase.from('vendor_ledger').select('*').eq('user_id', currentUser.id).in('bill_no', billNumbers).in('vendor_id', vendorIds),
+                (billNumbers.length > 0 && vendorIds.length > 0)
+                    ? _supabase.from('vendor_ledger').select('*').eq('user_id', currentUser.id).in('bill_no', billNumbers).in('vendor_id', vendorIds)
+                    : Promise.resolve({ data: [] }),
                 _supabase.from('owner_ledger').select('*').eq('user_id', currentUser.id).eq('t_date', selectedDate)
             ]);
 
@@ -355,8 +357,8 @@ async function syncRowToSupabase(id) {
         statusIcon.innerHTML = '<i class="ri-checkbox-circle-line status-saved"></i>';
         return true;
     } catch (err) { 
-        console.error('Save error:', err);
-        showToast(`Error: ${err.message || 'Save failed'}`, 'error');
+        console.error('Save error:', err?.message || err?.details || JSON.stringify(err));
+        showToast(`Error: ${err?.message || err?.details || 'Save failed'}`, 'error');
         statusIcon.innerHTML = '<i class="ri-error-warning-line status-error"></i>';
         return false;
     }
