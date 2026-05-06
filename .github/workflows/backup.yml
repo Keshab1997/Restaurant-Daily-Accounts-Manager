@@ -1,0 +1,33 @@
+name: Daily Supabase Backup
+
+on:
+  schedule:
+    - cron: '0 20 * * *'  # Every day at 1:30 AM IST (8 PM UTC)
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Backup all tables
+        run: |
+          URL="https://rudfyfvdhafgjomnwftz.supabase.co/rest/v1"
+          KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ1ZGZ5ZnZkaGFmZ2pvbW53ZnR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwNDgwOTYsImV4cCI6MjA5MzYyNDA5Nn0.01PvIA1ocBF6mft0TYfqBZCdvaUu134IGr6DBj6uLc4"
+          mkdir -p backup
+
+          for TABLE in sales expenses vendors vendor_ledger owner_ledger staff salary_records daily_balances cash_tally pl_monthly_data profiles; do
+            curl -s "$URL/$TABLE?select=*&limit=10000" \
+              -H "apikey: $KEY" \
+              -H "Authorization: Bearer $KEY" \
+              > "backup/$TABLE.json"
+          done
+
+      - name: Commit backup
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add backup/
+          git diff --staged --quiet || git commit -m "Backup $(date +'%Y-%m-%d')"
+          git push
