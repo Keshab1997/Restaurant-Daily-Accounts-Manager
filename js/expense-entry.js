@@ -266,14 +266,31 @@ async function syncRowToSupabase(id) {
         else if (status === 'OWNER') { expData.payment_source = 'OWNER'; expData.description += " (Owner Paid)"; }
         else if (status === 'DUE') expData.payment_source = 'DUE';
         else if (status === 'PARTIAL') { expData.payment_source = 'DUE'; expData.amount = amount - partialPaid; expData.description += " (Partial Due)"; }
-        if (expenseId) expData.id = expenseId;
-        let { data: expResult } = await _supabase.from('expenses').upsert(expData).select().single();
+
+        let expResult;
+        if (expenseId) {
+            const { data, error } = await _supabase.from('expenses').update(expData).eq('id', expenseId).select().single();
+            if (error) throw error;
+            expResult = data;
+        } else {
+            const { data, error } = await _supabase.from('expenses').insert(expData).select().single();
+            if (error) throw error;
+            expResult = data;
+        }
         row.setAttribute('data-expense-id', expResult.id);
 
         if (status === 'PARTIAL') {
             let paidData = { user_id: currentUser.id, report_date: accDate, description: `${fullDesc} (Partial ${partialSrc})`, amount: partialPaid, payment_source: partialSrc, bill_no: billNo };
-            if (dueExpenseId) paidData.id = dueExpenseId;
-            let { data: paidResult } = await _supabase.from('expenses').upsert(paidData).select().single();
+            let paidResult;
+            if (dueExpenseId) {
+                const { data, error } = await _supabase.from('expenses').update(paidData).eq('id', dueExpenseId).select().single();
+                if (error) throw error;
+                paidResult = data;
+            } else {
+                const { data, error } = await _supabase.from('expenses').insert(paidData).select().single();
+                if (error) throw error;
+                paidResult = data;
+            }
             row.setAttribute('data-due-expense-id', paidResult.id);
         } else if (dueExpenseId) {
             await _supabase.from('expenses').delete().eq('id', dueExpenseId);
@@ -282,16 +299,32 @@ async function syncRowToSupabase(id) {
 
         if (vendor) {
             let billData = { user_id: currentUser.id, vendor_id: vendor.id, t_date: billDate, bill_no: billNo, amount, description: `Bill for ${itemName || vendorName}`, t_type: 'BILL' };
-            if (ledgerId) billData.id = ledgerId;
-            let { data: billResult } = await _supabase.from('vendor_ledger').upsert(billData).select().single();
+            let billResult;
+            if (ledgerId) {
+                const { data, error } = await _supabase.from('vendor_ledger').update(billData).eq('id', ledgerId).select().single();
+                if (error) throw error;
+                billResult = data;
+            } else {
+                const { data, error } = await _supabase.from('vendor_ledger').insert(billData).select().single();
+                if (error) throw error;
+                billResult = data;
+            }
             row.setAttribute('data-ledger-id', billResult.id);
 
             if (status === 'PAID' || status === 'OWNER' || status === 'PARTIAL') {
                 let payAmt = (status === 'PARTIAL') ? partialPaid : amount;
                 let paySrc = (status === 'PARTIAL') ? partialSrc : status;
                 let payData = { user_id: currentUser.id, vendor_id: vendor.id, t_date: accDate, bill_no: billNo, amount: payAmt, description: paySrc === 'OWNER' ? 'Paid by Owner' : 'Cash Paid', t_type: paySrc === 'OWNER' ? 'PAYMENT_OWNER' : 'PAYMENT' };
-                if (payLedgerId) payData.id = payLedgerId;
-                let { data: payResult } = await _supabase.from('vendor_ledger').upsert(payData).select().single();
+                let payResult;
+                if (payLedgerId) {
+                    const { data, error } = await _supabase.from('vendor_ledger').update(payData).eq('id', payLedgerId).select().single();
+                    if (error) throw error;
+                    payResult = data;
+                } else {
+                    const { data, error } = await _supabase.from('vendor_ledger').insert(payData).select().single();
+                    if (error) throw error;
+                    payResult = data;
+                }
                 row.setAttribute('data-pay-ledger-id', payResult.id);
             } else if (payLedgerId) {
                 await _supabase.from('vendor_ledger').delete().eq('id', payLedgerId);
@@ -303,8 +336,16 @@ async function syncRowToSupabase(id) {
         if (isOwnerPay) {
             let ownAmt = (status === 'PARTIAL') ? partialPaid : amount;
             let ownData = { user_id: currentUser.id, t_date: accDate, t_type: 'LOAN_TAKEN', amount: ownAmt, description: `Paid for ${fullDesc}` };
-            if (ownerId) ownData.id = ownerId;
-            let { data: ownResult } = await _supabase.from('owner_ledger').upsert(ownData).select().single();
+            let ownResult;
+            if (ownerId) {
+                const { data, error } = await _supabase.from('owner_ledger').update(ownData).eq('id', ownerId).select().single();
+                if (error) throw error;
+                ownResult = data;
+            } else {
+                const { data, error } = await _supabase.from('owner_ledger').insert(ownData).select().single();
+                if (error) throw error;
+                ownResult = data;
+            }
             row.setAttribute('data-owner-id', ownResult.id);
         } else if (ownerId) {
             await _supabase.from('owner_ledger').delete().eq('id', ownerId);
@@ -314,7 +355,8 @@ async function syncRowToSupabase(id) {
         statusIcon.innerHTML = '<i class="ri-checkbox-circle-line status-saved"></i>';
         return true;
     } catch (err) { 
-        console.error(err); 
+        console.error('Save error:', err);
+        showToast(`Error: ${err.message || 'Save failed'}`, 'error');
         statusIcon.innerHTML = '<i class="ri-error-warning-line status-error"></i>';
         return false;
     }
