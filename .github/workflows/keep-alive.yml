@@ -1,0 +1,15 @@
+name: Keep Supabase Active
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase
+        run: |
+          curl -X GET "https://rudfyfvdhafgjomnwftz.supabase.co/rest/v1/" \
+            -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ1ZGZ5ZnZkaGFmZ2pvbW53ZnR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwNDgwOTYsImV4cCI6MjA5MzYyNDA5Nn0.01PvIA1ocBF6mft0TYfqBZCdvaUu134IGr6DBj6uLc4"
