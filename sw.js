@@ -7,7 +7,6 @@ const ASSETS = [
   '/expense-history.html',
   '/tally.html',
   '/vendors.html',
-  '/vendor-history.html',
   '/vendor-details.html',
   '/owner.html',
   '/owner-history.html',
