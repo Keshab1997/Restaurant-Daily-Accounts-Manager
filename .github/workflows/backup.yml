@@ -5,6 +5,9 @@ on:
     - cron: '0 20 * * *'  # Every day at 1:30 AM IST (8 PM UTC)
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   backup:
     runs-on: ubuntu-latest
