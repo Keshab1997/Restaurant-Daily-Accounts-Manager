@@ -34,9 +34,9 @@ jobs:
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
+          git pull --rebase origin main
           git add backup/
-          git diff --staged --quiet || {
+          if ! git diff --staged --quiet; then
             git commit -m "Backup $(date +'%Y-%m-%d')"
-            git pull --rebase origin main
             git push origin main
-          }
+          fi
