@@ -332,6 +332,7 @@ async function addEntry() {
             user_id: currentUser.id,
             vendor_id: vendorId,
             t_date: date,
+            report_date: date,
             t_type: type,
             description: desc,
             amount: amount,
@@ -356,6 +357,7 @@ async function addEntry() {
             const { error: ownerError } = await _supabase.from('owner_ledger').insert({
                 user_id: currentUser.id,
                 t_date: date,
+                report_date: date,
                 t_type: 'LOAN_TAKEN',
                 amount: amount,
                 description: `Paid to ${vendor.name} (Bill #${billNo})`
@@ -371,7 +373,8 @@ async function addEntry() {
         loadDetails();
     } catch (error) {
         console.error('Error adding entry:', error);
-        showToast('Failed to add entry: ' + (error.message || 'Unknown error'), 'error');
+        const errorMsg = error?.message || error?.details || error?.hint || 'Unknown error';
+        showToast('Failed to add entry: ' + errorMsg, 'error');
     }
 }
 

@@ -2,12 +2,13 @@ let currentUser = null;
 let vendorsList = [];
 let itemsList = [];
 let rowCount = 0;
+let autoSaveTimeout = null;
+let isAutoSaving = false;
 
 window.onload = async () => {
     const session = await checkAuth(true);
     currentUser = session.user;
     
-    // Check if date parameter is passed from expense-history
     const urlParams = new URLSearchParams(window.location.search);
     const dateParam = urlParams.get('date');
     
@@ -16,6 +17,8 @@ window.onload = async () => {
     
     await fetchVendors();
     loadDataForDate();
+    setupKeyboardShortcuts();
+    showShortcutHint();
 };
 
 async function fetchVendors() {
@@ -28,22 +31,28 @@ async function fetchVendors() {
 }
 
 async function fetchItems() {
-    const { data } = await _supabase.from('expenses').select('description').eq('user_id', currentUser.id);
+    const { data } = await _supabase.from('expenses').select('description').eq('user_id', currentUser.id).order('created_at', { ascending: false }).limit(100);
     if(data) {
-        const items = new Set();
+        const itemCount = {};
         data.forEach(exp => {
             if(exp.description && exp.description.includes('(')) {
                 const item = exp.description.match(/\(([^)]+)\)/)?.[1];
-                if(item) items.add(item.replace('Partial Paid by CASH', '').replace('Partial Paid by OWNER', '').replace('Partial Due', '').replace('Owner Paid', '').trim());
+                const cleanItem = item?.replace('Partial Paid by CASH', '').replace('Partial Paid by OWNER', '').replace('Partial Due', '').replace('Owner Paid', '').trim();
+                if(cleanItem) itemCount[cleanItem] = (itemCount[cleanItem] || 0) + 1;
             }
         });
-        itemsList = Array.from(items).filter(i => i);
+        itemsList = Object.entries(itemCount).sort((a, b) => b[1] - a[1]).map(([item]) => item);
         document.getElementById('itemSuggestions').innerHTML = itemsList.map(i => `<option value="${i}">`).join('');
     }
 }
 
 async function loadDataForDate() {
     const selectedDate = document.getElementById('accDate').value;
+    if (!selectedDate) {
+        showToast("Please select a date", "error");
+        return;
+    }
+    
     const tbody = document.getElementById('expenseBody');
     const loader = document.getElementById('loading');
     loader.style.display = 'flex';
@@ -142,11 +151,11 @@ async function loadDataForDate() {
             }
         }
 
-        if (rowCount === 0) for (let i = 0; i < 5; i++) addNewRow();
+        if (rowCount === 0) for (let i = 0; i < 10; i++) addNewRow();
         else addNewRow();
     } catch (err) {
         console.error("Error:", err);
-        for (let i = 0; i < 5; i++) addNewRow();
+        for (let i = 0; i < 10; i++) addNewRow();
     } finally {
         loader.style.display = 'none';
         calculateGrandTotal();
@@ -174,13 +183,13 @@ function createRowHTML(data) {
 
     tr.innerHTML = `
         <td>${rowCount}</td>
-        <td><input type="text" class="v-name" list="vendorSuggestions" value="${data.vendor || ''}" placeholder="Vendor" onchange="handleVendorChange(this)" oninput="validateVendor(this)"></td>
-        <td><input type="text" class="v-item" list="itemSuggestions" value="${data.item || ''}" placeholder="Item" ${data.id ? '' : 'disabled'}></td>
-        <td><input type="date" class="v-bill-date" value="${data.billDate || ''}" ${data.id ? '' : 'disabled'}></td>
+        <td><input type="text" class="v-name" list="vendorSuggestions" value="${data.vendor || ''}" placeholder="Vendor" onchange="handleVendorChange(this)" oninput="validateVendor(this); triggerAutoSave()"></td>
+        <td><input type="text" class="v-item" list="itemSuggestions" value="${data.item || ''}" placeholder="Item" oninput="triggerAutoSave()" ${data.id ? '' : 'disabled'}></td>
+        <td><input type="date" class="v-bill-date" value="${data.billDate || ''}" onchange="triggerAutoSave()" ${data.id ? '' : 'disabled'}></td>
         <td><input type="number" class="v-bill-no" value="${data.billNo || ''}" placeholder="Auto" readonly></td>
-        <td><input type="number" class="v-amount" value="${data.amount || ''}" placeholder="0" oninput="calculateGrandTotal()" ${data.id ? '' : 'disabled'}></td>
+        <td><input type="text" class="v-amount" value="${data.amount || ''}" placeholder="0" oninput="calculateGrandTotal()" onblur="handleAmountInput(this)" onfocus="this.select()" ${data.id ? '' : 'disabled'}></td>
         <td>
-            <select class="v-status" onchange="handleStatusChange(this)" ${data.id ? '' : 'disabled'}>
+            <select class="v-status" onchange="handleStatusChange(this); triggerAutoSave()" ${data.id ? '' : 'disabled'}>
                 <option value="PAID" ${data.status === 'PAID' ? 'selected' : ''}>CASH</option>
                 <option value="OWNER" ${data.status === 'OWNER' ? 'selected' : ''}>OWNER</option>
                 <option value="DUE" ${data.status === 'DUE' ? 'selected' : ''}>DUE</option>
@@ -188,8 +197,8 @@ function createRowHTML(data) {
             </select>
         </td>
         <td>
-            <input type="number" class="v-partial ${data.status === 'PARTIAL' ? '' : 'hidden'}" value="${data.partial || ''}" placeholder="Paid" ${data.status === 'PARTIAL' ? '' : 'disabled'}>
-            <select class="v-partial-src ${data.status === 'PARTIAL' ? '' : 'hidden'}" ${data.status === 'PARTIAL' ? '' : 'disabled'}>
+            <input type="number" class="v-partial ${data.status === 'PARTIAL' ? '' : 'hidden'}" value="${data.partial || ''}" placeholder="Paid" oninput="triggerAutoSave()" ${data.status === 'PARTIAL' ? '' : 'disabled'}>
+            <select class="v-partial-src ${data.status === 'PARTIAL' ? '' : 'hidden'}" onchange="triggerAutoSave()" ${data.status === 'PARTIAL' ? '' : 'disabled'}>
                 <option value="CASH" ${data.partialSrc === 'CASH' ? 'selected' : ''}>CASH</option>
                 <option value="OWNER" ${data.partialSrc === 'OWNER' ? 'selected' : ''}>OWNER</option>
             </select>
@@ -237,20 +246,17 @@ async function syncRowToSupabase(id) {
     const partialSrc = row.querySelector('.v-partial-src')?.value || 'CASH';
 
     if (!vendorName || amount <= 0) return false;
+    if (!billDate || !accDate) {
+        showToast("Date is required", "error");
+        statusIcon.innerHTML = '<i class="ri-error-warning-line status-error"></i>';
+        return false;
+    }
 
     const vendor = vendorsList.find(v => v.name.trim().toLowerCase() === vendorName.trim().toLowerCase());
     if (!vendor) {
         showToast(`Vendor "${vendorName}" not found. Please add vendor first.`, "error");
+        statusIcon.innerHTML = '<i class="ri-error-warning-line status-error"></i>';
         return false;
-    }
-
-    if (!row.getAttribute('data-expense-id')) {
-        const { data: existingBill } = await _supabase.from('vendor_ledger').select('id').eq('vendor_id', vendor.id).eq('bill_no', billNo).eq('t_type', 'BILL').maybeSingle();
-        if (existingBill) {
-            showToast(`Error: Bill No ${billNo} already exists for ${vendorName}!`, "error");
-            statusIcon.innerHTML = '<i class="ri-error-warning-line status-error"></i>';
-            return false;
-        }
     }
 
     statusIcon.innerHTML = '<i class="ri-loader-4-line status-saving"></i>';
@@ -300,13 +306,22 @@ async function syncRowToSupabase(id) {
         }
 
         if (vendor) {
-            let billData = { user_id: currentUser.id, vendor_id: vendor.id, t_date: billDate, bill_no: billNo, amount, description: `Bill for ${itemName || vendorName}`, t_type: 'BILL' };
+            let billData = { user_id: currentUser.id, vendor_id: vendor.id, t_date: billDate, report_date: accDate, bill_no: billNo, amount, description: `Bill for ${itemName || vendorName}`, t_type: 'BILL' };
             let billResult;
             if (ledgerId) {
                 const { data, error } = await _supabase.from('vendor_ledger').update(billData).eq('id', ledgerId).select().single();
                 if (error) throw error;
                 billResult = data;
             } else {
+                // Check if bill_no already exists before inserting
+                if (billNo) {
+                    const { data: existingBill } = await _supabase.from('vendor_ledger').select('id').eq('vendor_id', vendor.id).eq('bill_no', billNo).eq('t_type', 'BILL').maybeSingle();
+                    if (existingBill) {
+                        showToast(`Error: Bill No ${billNo} already exists for ${vendorName}!`, "error");
+                        statusIcon.innerHTML = '<i class="ri-error-warning-line status-error"></i>';
+                        return false;
+                    }
+                }
                 const { data, error } = await _supabase.from('vendor_ledger').insert(billData).select().single();
                 if (error) throw error;
                 billResult = data;
@@ -316,7 +331,7 @@ async function syncRowToSupabase(id) {
             if (status === 'PAID' || status === 'OWNER' || status === 'PARTIAL') {
                 let payAmt = (status === 'PARTIAL') ? partialPaid : amount;
                 let paySrc = (status === 'PARTIAL') ? partialSrc : status;
-                let payData = { user_id: currentUser.id, vendor_id: vendor.id, t_date: accDate, bill_no: billNo, amount: payAmt, description: paySrc === 'OWNER' ? 'Paid by Owner' : 'Cash Paid', t_type: paySrc === 'OWNER' ? 'PAYMENT_OWNER' : 'PAYMENT' };
+                let payData = { user_id: currentUser.id, vendor_id: vendor.id, t_date: accDate, report_date: accDate, bill_no: billNo, amount: payAmt, description: paySrc === 'OWNER' ? 'Paid by Owner' : 'Cash Paid', t_type: paySrc === 'OWNER' ? 'PAYMENT_OWNER' : 'PAYMENT' };
                 let payResult;
                 if (payLedgerId) {
                     const { data, error } = await _supabase.from('vendor_ledger').update(payData).eq('id', payLedgerId).select().single();
@@ -337,7 +352,7 @@ async function syncRowToSupabase(id) {
         const isOwnerPay = (status === 'OWNER') || (status === 'PARTIAL' && partialSrc === 'OWNER');
         if (isOwnerPay) {
             let ownAmt = (status === 'PARTIAL') ? partialPaid : amount;
-            let ownData = { user_id: currentUser.id, t_date: accDate, t_type: 'LOAN_TAKEN', amount: ownAmt, description: `Paid for ${fullDesc}` };
+            let ownData = { user_id: currentUser.id, t_date: accDate, report_date: accDate, t_type: 'LOAN_TAKEN', amount: ownAmt, description: `Paid for ${fullDesc}` };
             let ownResult;
             if (ownerId) {
                 const { data, error } = await _supabase.from('owner_ledger').update(ownData).eq('id', ownerId).select().single();
@@ -373,6 +388,14 @@ async function handleVendorChange(input) {
     if (vendor) {
         // যদি এই রো-তে আগে থেকেই ডাটা সেভ করা থাকে (Edit mode), তবে বিল নম্বর পরিবর্তন করব না
         if (row.getAttribute('data-expense-id')) return;
+
+        // Check if date is selected
+        const accDate = document.getElementById('accDate').value;
+        if (!accDate) {
+            showToast("Please select a date first", "error");
+            lockRow(row);
+            return;
+        }
 
         // ১. ডাটাবেস থেকে ওই ভেন্ডরের সব বিল নম্বর নিয়ে আসা
         const { data: allBills, error } = await _supabase.from('vendor_ledger')
@@ -446,6 +469,161 @@ function handleStatusChange(select) {
         partialInput.classList.add('hidden'); partialInput.disabled = true; partialInput.value = '';
         partialSrc.classList.add('hidden'); partialSrc.disabled = true;
     }
+}
+
+function setupKeyboardShortcuts() {
+    document.addEventListener('keydown', (e) => {
+        // Global shortcuts
+        if (e.ctrlKey && e.key === 's') {
+            e.preventDefault();
+            saveAllRows();
+            return;
+        }
+        if (e.ctrlKey && e.key === 'n') {
+            e.preventDefault();
+            addNewRow();
+            const lastRow = document.querySelector('#expenseBody tr:last-child');
+            lastRow?.querySelector('.v-name')?.focus();
+            return;
+        }
+        
+        // Enter on status dropdown to move to next row
+        if (e.key === 'Enter' && e.target.classList.contains('v-status')) {
+            e.preventDefault();
+            const currentRow = e.target.closest('tr');
+            const nextRow = currentRow.nextElementSibling;
+            if (!nextRow) addNewRow();
+            setTimeout(() => {
+                const targetRow = currentRow.nextElementSibling;
+                targetRow?.querySelector('.v-name')?.focus();
+            }, 100);
+            return;
+        }
+        
+        // Quick status change with keyboard (when status dropdown is focused)
+        if (e.target.classList.contains('v-status') && !e.ctrlKey && !e.altKey && !e.metaKey) {
+            const select = e.target;
+            let changed = false;
+            
+            if (e.key === 'c' || e.key === 'C') { 
+                e.preventDefault();
+                select.value = 'PAID'; 
+                changed = true;
+            }
+            else if (e.key === 'o' || e.key === 'O') { 
+                e.preventDefault();
+                select.value = 'OWNER'; 
+                changed = true;
+            }
+            else if (e.key === 'd' || e.key === 'D') { 
+                e.preventDefault();
+                select.value = 'DUE'; 
+                changed = true;
+            }
+            else if (e.key === 'p' || e.key === 'P') { 
+                e.preventDefault();
+                select.value = 'PARTIAL'; 
+                changed = true;
+            }
+            
+            if (changed) {
+                handleStatusChange(select);
+                triggerAutoSave();
+                // Trigger change event for any listeners
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        }
+    });
+}
+
+function showShortcutHint() {
+    const hint = document.createElement('div');
+    hint.id = 'shortcut-hint';
+    hint.innerHTML = `
+        <div style="background: #1e293b; color: white; padding: 15px 20px; border-radius: 12px; position: fixed; bottom: 20px; right: 20px; z-index: 1000; box-shadow: 0 4px 20px rgba(0,0,0,0.3); font-size: 0.85rem; max-width: 300px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <strong style="font-size: 0.9rem;">⚡ Keyboard Shortcuts</strong>
+                <button onclick="document.getElementById('shortcut-hint').remove()" style="background: none; border: none; color: white; cursor: pointer; font-size: 1.2rem;">&times;</button>
+            </div>
+            <div style="line-height: 1.8;">
+                <div><kbd style="background: #334155; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem;">Ctrl+S</kbd> Save All</div>
+                <div><kbd style="background: #334155; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem;">Ctrl+N</kbd> New Row</div>
+                <div><kbd style="background: #334155; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem;">Enter</kbd> Next Row</div>
+                <div><kbd style="background: #334155; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem;">C/O/D/P</kbd> Status (in dropdown)</div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(hint);
+    setTimeout(() => hint.remove(), 10000);
+}
+
+function triggerAutoSave() {
+    clearTimeout(autoSaveTimeout);
+    autoSaveTimeout = setTimeout(async () => {
+        if (isAutoSaving) return;
+        isAutoSaving = true;
+        
+        const rows = document.querySelectorAll('#expenseBody tr');
+        let savedCount = 0;
+        
+        for (let row of rows) {
+            const vendorInput = row.querySelector('.v-name');
+            const amountInput = row.querySelector('.v-amount');
+            const statusIcon = row.querySelector('.save-status i');
+            
+            if (vendorInput?.value.trim() && amountInput?.value && parseFloat(amountInput.value) > 0) {
+                if (statusIcon?.classList.contains('status-pending') || statusIcon?.classList.contains('status-error')) {
+                    const id = row.id.split('-')[1];
+                    const success = await syncRowToSupabase(id);
+                    if (success) savedCount++;
+                }
+            }
+        }
+        
+        if (savedCount > 0) {
+            const toast = document.createElement('div');
+            toast.style.cssText = 'position: fixed; top: 80px; right: 20px; background: #10b981; color: white; padding: 10px 20px; border-radius: 8px; z-index: 9999; font-size: 0.9rem; box-shadow: 0 4px 12px rgba(0,0,0,0.2);';
+            toast.innerHTML = `<i class="ri-checkbox-circle-line"></i> Auto-saved ${savedCount} entries`;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2000);
+        }
+        
+        isAutoSaving = false;
+    }, 3000);
+}
+
+function handleAmountInput(input) {
+    const value = input.value.trim();
+    
+    // If empty, just return
+    if (!value) {
+        calculateGrandTotal();
+        return;
+    }
+    
+    // Check if it contains math operators
+    if (value.includes('+') || value.includes('-') || value.includes('*') || value.includes('/')) {
+        try {
+            // Calculate the result using Function (safer than eval)
+            const result = Function('"use strict"; return (' + value + ')')();
+            
+            if (!isNaN(result) && isFinite(result)) {
+                input.value = Math.round(result * 100) / 100; // Round to 2 decimal places
+                showToast(`Calculated: ${value} = ${input.value}`, "success");
+            }
+        } catch (e) {
+            showToast("Invalid calculation", "error");
+        }
+    } else {
+        // Just a number, validate it
+        const num = parseFloat(value);
+        if (!isNaN(num)) {
+            input.value = num;
+        }
+    }
+    
+    calculateGrandTotal();
+    triggerAutoSave();
 }
 
 async function removeRow(id) {

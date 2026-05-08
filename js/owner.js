@@ -79,6 +79,7 @@ async function addOwnerTrans() {
     const { error } = await _supabase.from('owner_ledger').insert({
         user_id: currentUser.id,
         t_date: date,
+        report_date: date,
         t_type: currentType,
         amount: amount,
         description: desc
