@@ -73,6 +73,7 @@ async function loadTallyData(date) {
                     .eq('vendor_id', pay.vendor_id)
                     .eq('bill_no', pay.bill_no)
                     .eq('t_type', 'BILL')
+                    .limit(1)
                     .maybeSingle();
 
                 if (billError) throw billError;
@@ -137,6 +138,7 @@ async function loadTallyData(date) {
             .select('*')
             .eq('user_id', currentUser.id)
             .eq('report_date', date)
+            .limit(1)
             .maybeSingle();
 
         if (currentTallyError) throw currentTallyError;

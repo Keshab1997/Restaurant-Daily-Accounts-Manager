@@ -29,6 +29,7 @@ async function calculateReconciliation() {
             .select('total_physical')
             .eq('user_id', currentUser.id)
             .eq('report_date', toDate)
+            .limit(1)
             .maybeSingle();
 
         const physicalCash = tallyData ? tallyData.total_physical : 0;
@@ -38,6 +39,7 @@ async function calculateReconciliation() {
             .select('closing_balance')
             .eq('user_id', currentUser.id)
             .eq('report_date', toDate)
+            .limit(1)
             .maybeSingle();
 
         const closingBalance = balanceData ? balanceData.closing_balance : 0;

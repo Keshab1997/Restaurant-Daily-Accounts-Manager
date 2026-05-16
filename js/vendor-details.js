@@ -309,6 +309,7 @@ async function addEntry() {
                 .eq('vendor_id', vendorId)
                 .eq('bill_no', billNo.toString())
                 .eq('t_type', 'BILL')
+                .limit(1)
                 .maybeSingle();
             
             if (checkError) throw checkError;

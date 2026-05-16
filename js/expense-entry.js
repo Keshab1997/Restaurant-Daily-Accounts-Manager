@@ -315,7 +315,7 @@ async function syncRowToSupabase(id) {
             } else {
                 // Check if bill_no already exists before inserting
                 if (billNo) {
-                    const { data: existingBill } = await _supabase.from('vendor_ledger').select('id').eq('vendor_id', vendor.id).eq('bill_no', billNo).eq('t_type', 'BILL').maybeSingle();
+                    const { data: existingBill } = await _supabase.from('vendor_ledger').select('id').eq('vendor_id', vendor.id).eq('bill_no', billNo).eq('t_type', 'BILL').limit(1).maybeSingle();
                     if (existingBill) {
                         showToast(`Error: Bill No ${billNo} already exists for ${vendorName}!`, "error");
                         statusIcon.innerHTML = '<i class="ri-error-warning-line status-error"></i>';
