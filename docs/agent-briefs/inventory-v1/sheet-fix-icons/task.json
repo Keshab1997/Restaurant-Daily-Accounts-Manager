@@ -1,0 +1,9 @@
+{
+ "repo":"Keshab1997/Restaurant-Daily-Accounts-Manager",
+ "worker":"A",
+ "task":"sheet-fix-icons",
+ "allowed":["inventory.html","css/inventory.css","js/inventory.js","js/inventory-logic.js","inventory-setup.md","tests/test_inventory.py","assets/inventory-icons.svg","tests/test_inventory_icons.py"],
+ "commit":"fix(inventory): protect drafts and polish icons",
+ "check":{"kind":"pytest","target":"tests"},
+ "arena":{"branch":"arena/ca1a74bf-restaurant-daily-accounts-mana","base_sha":"b319f4e709a858815d78f91fa5e98f3fa1bc47fd"}
+}
