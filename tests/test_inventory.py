@@ -497,6 +497,7 @@ def test_ui_draft_restore_save_failure_date_switch_and_print_export():
           {user_id:'user-A',day:'2026-11-19',sales:{i1:5}},
         ],
         inventory_mappings:[],
+        inventory_corrections:[],
       };
 
       let failUpsert=false, failPreRead=false, printCalls=0, sharedPayload=null, blobCount=0, allowShare=true;
@@ -551,7 +552,27 @@ def test_ui_draft_restore_save_failure_date_switch_and_print_export():
             };
             return q;
           },
-          rpc: async()=>({data:'saved',error:null}),
+          rpc: async(fn, params)=>{
+            if (fn==='inventory_save_entry') {
+              if (failPreRead) return {data:null, error:new Error('Server check timed out')};
+              const idx=db.inventory_entries.findIndex(e=>e.user_id===userId&&e.item_id===params.p_item_id&&e.day===params.p_day);
+              const existing=idx>=0 ? db.inventory_entries[idx] : null;
+              const curExists=Boolean(existing);
+              const curP=existing ? Number(existing.purchase) : 0;
+              const curD=existing ? Number(existing.damage) : 0;
+              if ((params.p_expected_exists!==null && curExists!==params.p_expected_exists)
+                  || curP!==Number(params.p_expected_purchase||0)
+                  || curD!==Number(params.p_expected_damage||0)) {
+                return {data:{status:'conflict', exists:curExists, purchase:curP, damage:curD}, error:null};
+              }
+              if (onBeforeEntryWrite) await onBeforeEntryWrite(params);
+              if (failUpsert) return {data:null, error:new Error('Network offline')};
+              const payload={user_id:userId, item_id:params.p_item_id, day:params.p_day, purchase:params.p_purchase, damage:params.p_damage};
+              if (idx>=0) db.inventory_entries[idx]=payload; else db.inventory_entries.push(payload);
+              return {data:{status:'saved', exists:true, purchase:params.p_purchase, damage:params.p_damage}, error:null};
+            }
+            return {data:'saved',error:null};
+          },
         };
         const document={
           title:'',

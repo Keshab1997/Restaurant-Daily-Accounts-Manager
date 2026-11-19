@@ -274,6 +274,7 @@
                         damage: d.damage != null ? String(d.damage) : '',
                         basePurchase: Number.isFinite(Number(d.basePurchase)) ? Number(d.basePurchase) : 0,
                         baseDamage: Number.isFinite(Number(d.baseDamage)) ? Number(d.baseDamage) : 0,
+                        baseExists: typeof d.baseExists === 'boolean' ? d.baseExists : null,
                         revision: Number.isInteger(Number(d.revision)) && Number(d.revision) > 0 ? Number(d.revision) : 1,
                         updatedAt: typeof d.updatedAt === 'string' ? d.updatedAt : '',
                     };
@@ -324,13 +325,18 @@
         if (!DATE_RE.test(String(day || '')) || !itemId) return clean;
         const id = String(itemId);
         const nextDay = { ...(clean.entries[day] || {}) };
-        const prevRev = nextDay[id] ? nextDay[id].revision : 0;
+        const prev = nextDay[id];
+        const prevRev = prev ? prev.revision : 0;
         const requested = Number.isInteger(Number(draft.revision)) ? Number(draft.revision) : 0;
+        const baseExists = typeof draft.baseExists === 'boolean'
+            ? draft.baseExists
+            : (prev && typeof prev.baseExists === 'boolean' ? prev.baseExists : null);
         nextDay[id] = {
             purchase: draft.purchase != null ? String(draft.purchase) : '',
             damage: draft.damage != null ? String(draft.damage) : '',
             basePurchase: Number.isFinite(Number(draft.basePurchase)) ? Number(draft.basePurchase) : 0,
             baseDamage: Number.isFinite(Number(draft.baseDamage)) ? Number(draft.baseDamage) : 0,
+            baseExists,
             revision: Math.max(prevRev + 1, requested, 1),
             updatedAt: typeof draft.updatedAt === 'string' ? draft.updatedAt : '',
         };
@@ -352,7 +358,7 @@
         if (!existing || existing.revision !== expectedRevision) return clean;
         return clearEntryDraft(clean, day, itemId);
     }
-    function rebaseEntryDraft(state, day, itemId, newBasePurchase, newBaseDamage) {
+    function rebaseEntryDraft(state, day, itemId, newBasePurchase, newBaseDamage, newBaseExists) {
         const clean = sanitizeDraftState(state);
         const id = String(itemId || '');
         const existing = clean.entries[day] && clean.entries[day][id];
@@ -363,11 +369,15 @@
                 ...existing,
                 basePurchase: Number.isFinite(Number(newBasePurchase)) ? Number(newBasePurchase) : existing.basePurchase,
                 baseDamage: Number.isFinite(Number(newBaseDamage)) ? Number(newBaseDamage) : existing.baseDamage,
+                baseExists: typeof newBaseExists === 'boolean' ? newBaseExists : existing.baseExists,
             },
         };
         return clean;
     }
-    function hasEntryServerConflict(basePurchase, baseDamage, serverPurchase, serverDamage) {
+    function hasEntryServerConflict(basePurchase, baseDamage, serverPurchase, serverDamage, baseExists = null, serverExists = null) {
+        if (baseExists !== null && serverExists !== null && Boolean(baseExists) !== Boolean(serverExists)) {
+            return true;
+        }
         return Number(basePurchase) !== Number(serverPurchase) || Number(baseDamage) !== Number(serverDamage);
     }
     function setItemFormDraft(state, formDraft) {
@@ -410,12 +420,15 @@
         if (!base) {
             return { available: false, item, startDate: item.start_date, dirty: false, stale: false, invalidDraft: false };
         }
+        const serverEntry = (entries || []).find(e => e.item_id === item.id && e.day === day) || null;
+        const serverExists = Boolean(serverEntry);
         const draft = dayDrafts && dayDrafts[item.id];
         if (!draft) {
             return {
                 available: true,
                 item,
                 base,
+                serverExists,
                 opening: base.opening,
                 purchase: base.purchase,
                 sale: base.sale,
@@ -428,7 +441,7 @@
                 invalidDraft: false,
             };
         }
-        const stale = Number(draft.basePurchase) !== base.purchase || Number(draft.baseDamage) !== base.damage;
+        const stale = hasEntryServerConflict(draft.basePurchase, draft.baseDamage, base.purchase, base.damage, draft.baseExists, serverExists);
         let p = null, d = null, invalidDraft = false;
         try { p = number(draft.purchase, 'Purchase'); } catch (_) { invalidDraft = true; }
         try { d = number(draft.damage, 'Damage'); } catch (_) { invalidDraft = true; }
@@ -437,6 +450,7 @@
             available: true,
             item,
             base,
+            serverExists,
             opening: base.opening,
             purchase: invalidDraft ? null : p,
             sale: base.sale,
@@ -656,6 +670,208 @@
         if (page.length) pages.push(page);
         return pages;
     }
+    function dayDraftCount(state, day) {
+        const clean = sanitizeDraftState(state);
+        const dayStr = String(day || '');
+        if (!DATE_RE.test(dayStr) || !clean.entries[dayStr]) return 0;
+        return Object.keys(clean.entries[dayStr]).length;
+    }
+    function hasDayDrafts(state, day) {
+        return dayDraftCount(state, day) > 0;
+    }
+    function summarizeDayForClear(day, entries, imports) {
+        const dayStr = String(day || '');
+        const dayImport = (imports || []).find(im => im.day === dayStr) || null;
+        const salesObj = dayImport && dayImport.sales && typeof dayImport.sales === 'object' ? dayImport.sales : {};
+        const salesEntries = Object.entries(salesObj).filter(([, qty]) => Number(qty) > 0);
+        const salesItemCount = salesEntries.length;
+        const totalSalesPieces = salesEntries.reduce((acc, [, qty]) => acc + Number(qty || 0), 0);
+        const dayEntries = (entries || [])
+            .filter(e => e.day === dayStr)
+            .slice()
+            .sort((a, b) => String(a.item_id).localeCompare(String(b.item_id)));
+        const activeEntryCount = dayEntries.filter(e => Number(e.purchase || 0) > 0 || Number(e.damage || 0) > 0).length;
+        const totalPurchase = dayEntries.reduce((acc, e) => acc + Number(e.purchase || 0), 0);
+        const totalDamage = dayEntries.reduce((acc, e) => acc + Number(e.damage || 0), 0);
+        const expectedEntries = dayEntries.map(e => ({
+            item_id: e.item_id,
+            purchase: Number(e.purchase || 0),
+            damage: Number(e.damage || 0),
+        }));
+        const laterDateSet = new Set();
+        for (const e of (entries || [])) {
+            if (e && e.day && e.day > dayStr) laterDateSet.add(e.day);
+        }
+        for (const im of (imports || [])) {
+            if (im && im.day && im.day > dayStr) laterDateSet.add(im.day);
+        }
+        const laterDates = Array.from(laterDateSet).sort();
+        return {
+            day: dayStr,
+            hasImport: Boolean(dayImport),
+            importRecord: dayImport,
+            importFingerprint: dayImport ? (dayImport.fingerprint || null) : null,
+            salesItemCount,
+            totalSalesPieces,
+            entryCount: dayEntries.length,
+            activeEntryCount,
+            totalPurchase,
+            totalDamage,
+            expectedEntries,
+            laterDates,
+            laterDatesCount: laterDates.length,
+            isSalesEmpty: !dayImport,
+            isWholeDayEmpty: !dayImport && dayEntries.length === 0,
+        };
+    }
+    function checkRestoreConflicts(correction, items, entries, imports) {
+        if (!correction || typeof correction !== 'object') {
+            return {
+                ok: false,
+                alreadyRestored: false,
+                hasImportConflict: false,
+                entryConflicts: [],
+                missingItems: [],
+                startDateConflicts: [],
+                reasons: ['Recovery snapshot was not found.'],
+            };
+        }
+        if (correction.restored_at) {
+            return {
+                ok: false,
+                alreadyRestored: true,
+                hasImportConflict: false,
+                entryConflicts: [],
+                missingItems: [],
+                startDateConflicts: [],
+                reasons: ['This recovery snapshot was already restored.'],
+            };
+        }
+        const day = String(correction.day || '');
+        const itemMap = new Map((items || []).map(it => [it.id, it]));
+        const reasons = [];
+        let hasImportConflict = false;
+        const entryConflicts = [];
+        const missingItems = [];
+        const startDateConflicts = [];
+        const missingSeen = new Set();
+        const startSeen = new Set();
+
+        const checkItemAvailability = (itemId) => {
+            const it = itemMap.get(itemId);
+            if (!it) {
+                if (!missingSeen.has(itemId)) {
+                    missingSeen.add(itemId);
+                    missingItems.push(itemId);
+                    reasons.push('Referenced stock item no longer exists.');
+                }
+                return;
+            }
+            if (it.start_date && day && it.start_date > day && !startSeen.has(itemId)) {
+                startSeen.add(itemId);
+                startDateConflicts.push({ itemId, itemName: it.name, startDate: it.start_date });
+                reasons.push(`${it.name} now starts on ${it.start_date} (after ${day}).`);
+            }
+        };
+
+        const impSnap = correction.import_snapshot;
+        if (impSnap && typeof impSnap === 'object') {
+            const existingImport = (imports || []).find(im => im.day === day) || null;
+            if (existingImport) {
+                hasImportConflict = true;
+                reasons.push(`Imported sales already exist for ${day}. Remove them first before restoring.`);
+            }
+            const sales = impSnap.sales && typeof impSnap.sales === 'object' ? impSnap.sales : {};
+            for (const itemId of Object.keys(sales)) {
+                checkItemAvailability(itemId);
+            }
+        }
+
+        const entrySnaps = Array.isArray(correction.entries_snapshot) ? correction.entries_snapshot : [];
+        if (entrySnaps.length) {
+            const existingByItem = new Map(
+                (entries || []).filter(e => e.day === day).map(e => [e.item_id, e])
+            );
+            for (const snap of entrySnaps) {
+                if (!snap || !snap.item_id) continue;
+                checkItemAvailability(snap.item_id);
+                const existing = existingByItem.get(snap.item_id);
+                if (existing) {
+                    const it = itemMap.get(snap.item_id);
+                    const name = it ? it.name : snap.item_id;
+                    entryConflicts.push({
+                        itemId: snap.item_id,
+                        itemName: name,
+                        existingPurchase: Number(existing.purchase || 0),
+                        existingDamage: Number(existing.damage || 0),
+                    });
+                    const pStr = Number(Number(existing.purchase || 0).toFixed(4));
+                    const dStr = Number(Number(existing.damage || 0).toFixed(4));
+                    reasons.push(`Movement row already exists on ${day} for ${name} (Purchase ${pStr}, Damage ${dStr}).`);
+                }
+            }
+        }
+
+        return {
+            ok: reasons.length === 0,
+            alreadyRestored: false,
+            hasImportConflict,
+            entryConflicts,
+            missingItems,
+            startDateConflicts,
+            reasons,
+        };
+    }
+    function formatCorrectionSummary(correction) {
+        if (!correction || typeof correction !== 'object') {
+            return {
+                day: '',
+                scopeLabel: 'Correction',
+                detailText: '',
+                hasImport: false,
+                salesItemCount: 0,
+                salesPieces: 0,
+                entryCount: 0,
+                purchaseTotal: 0,
+                damageTotal: 0,
+                isRestored: false,
+            };
+        }
+        const fmtCount = n => String(Number(Number(n || 0).toFixed(4)));
+        const impSnap = correction.import_snapshot && typeof correction.import_snapshot === 'object'
+            ? correction.import_snapshot
+            : null;
+        const salesObj = impSnap && impSnap.sales && typeof impSnap.sales === 'object' ? impSnap.sales : {};
+        const salesEntries = Object.entries(salesObj).filter(([, qty]) => Number(qty) > 0);
+        const salesItemCount = salesEntries.length;
+        const salesPieces = salesEntries.reduce((acc, [, qty]) => acc + Number(qty || 0), 0);
+        const entrySnaps = Array.isArray(correction.entries_snapshot) ? correction.entries_snapshot : [];
+        const entryCount = entrySnaps.length;
+        const purchaseTotal = entrySnaps.reduce((acc, e) => acc + Number((e && e.purchase) || 0), 0);
+        const damageTotal = entrySnaps.reduce((acc, e) => acc + Number((e && e.damage) || 0), 0);
+        const scopeLabel = correction.scope === 'sales_only'
+            ? 'Imported sales removed'
+            : 'Whole day cleared';
+        const parts = [];
+        if (entryCount > 0) {
+            parts.push(`${entryCount} movement row${entryCount === 1 ? '' : 's'} (${fmtCount(purchaseTotal)} purchase, ${fmtCount(damageTotal)} damage)`);
+        }
+        if (impSnap) {
+            parts.push(`Imported POS sales (${salesItemCount} item${salesItemCount === 1 ? '' : 's'}, ${fmtCount(salesPieces)} pcs)`);
+        }
+        return {
+            day: String(correction.day || ''),
+            scopeLabel,
+            detailText: parts.join(' + ') || 'Empty snapshot',
+            hasImport: Boolean(impSnap),
+            salesItemCount,
+            salesPieces,
+            entryCount,
+            purchaseTotal,
+            damageTotal,
+            isRestored: Boolean(correction.restored_at),
+        };
+    }
     return {
         normalizeName,
         tokenizeName,
@@ -681,6 +897,11 @@
         resolveRowState,
         isItemFormDraftStale,
         draftSummary,
+        dayDraftCount,
+        hasDayDrafts,
+        summarizeDayForClear,
+        checkRestoreConflicts,
+        formatCorrectionSummary,
         buildSheetExportRows,
         wrapLinesByMeasure,
         layoutSheetPages,

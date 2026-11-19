@@ -2,12 +2,18 @@
 (() => {
     'use strict';
     const L = InventoryLogic, $ = id => document.getElementById(id);
-    let user, restaurantName = 'RestroManager', items = [], entries = [], imports = [], mappings = [], report = null, previewData = null, editing = null, editingBase = null, revision = 0, fileRevision = 0;
+    let user, restaurantName = 'RestroManager', items = [], entries = [], imports = [], mappings = [], corrections = [], report = null, previewData = null, editing = null, editingBase = null, revision = 0, fileRevision = 0;
     let draftState = L.emptyDraftState(), restoredNotice = false, exportUrls = [];
     const inFlightEntrySaves = new Set();
-    let inFlightFormSave = false;
+    let inFlightFormSave = false, inFlightCorrection = false, pendingClearScope = null, pendingClearRequestId = null;
     const SVG_NS = 'http://www.w3.org/2000/svg';
     const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+    function makeRequestId() {
+        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+            return crypto.randomUUID();
+        }
+        return `req-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+    }
     function message(msg, error = false) { $('message').textContent = msg; $('message').className = error ? 'error' : ''; }
     function fail(err) { message(err.message || String(err), true); }
     function el(tag, text, cls) { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (cls) node.className = cls; return node; }
@@ -97,16 +103,22 @@
     async function all(table) {
         const result = []; let start = 0;
         for (;;) {
-            let query = _supabase.from(table).select('*').eq('user_id', user.id).order(table === 'inventory_items' ? 'id' : table === 'inventory_mappings' ? 'dish_key' : 'day');
-            if (table === 'inventory_entries') query = query.order('item_id');
+            let query = _supabase.from(table).select('*').eq('user_id', user.id);
+            if (table === 'inventory_corrections') {
+                query = query.order('created_at', { ascending: false });
+            } else {
+                query = query.order(table === 'inventory_items' ? 'id' : table === 'inventory_mappings' ? 'dish_key' : 'day');
+                if (table === 'inventory_entries') query = query.order('item_id');
+            }
             const {data, error} = await query.range(start, start + 499);
             if (error) throw error;
             result.push(...data); if (data.length < 500) return result; start += data.length;
         }
     }
     async function refresh() {
-        [items, entries, imports, mappings] = await Promise.all(['inventory_items','inventory_entries','inventory_imports','inventory_mappings'].map(all));
-        renderStock(); renderItems(); updateItemDraftNote(); updateDraftStatus();
+        [items, entries, imports, mappings, corrections] = await Promise.all(['inventory_items','inventory_entries','inventory_imports','inventory_mappings','inventory_corrections'].map(all));
+        corrections.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+        renderStock(); renderItems(); updateItemDraftNote(); updateDraftStatus(); renderCorrections();
     }
     function invalidate() { revision++; previewData = null; $('preview-area').hidden = true; }
     function clearExportUrls() {
@@ -177,6 +189,9 @@
                         damage: dv,
                         basePurchase: existingDraft ? existingDraft.basePurchase : rowState.base.purchase,
                         baseDamage: existingDraft ? existingDraft.baseDamage : rowState.base.damage,
+                        baseExists: existingDraft && typeof existingDraft.baseExists === 'boolean'
+                            ? existingDraft.baseExists
+                            : rowState.serverExists,
                         updatedAt: new Date().toISOString(),
                     });
                 }
@@ -190,6 +205,7 @@
                 discardRow.hidden = !updated.dirty;
                 applyRowClasses(updated.dirty, updated.stale);
                 updateDraftStatus();
+                renderCorrections();
             }
 
             p.oninput = syncRowDraft;
@@ -218,22 +234,28 @@
                     let savedRevision = pendingDraft ? pendingDraft.revision : 0;
                     const basePurchase = pendingDraft ? pendingDraft.basePurchase : currentRow.base.purchase;
                     const baseDamage = pendingDraft ? pendingDraft.baseDamage : currentRow.base.damage;
+                    const baseExists = pendingDraft && typeof pendingDraft.baseExists === 'boolean'
+                        ? pendingDraft.baseExists
+                        : currentRow.serverExists;
 
-                    // Fresh pre-write server read (client pre-check; brief TOCTOU window remains before upsert).
-                    const { data: serverRow, error: readErr } = await _supabase
-                        .from('inventory_entries')
-                        .select('purchase, damage')
-                        .eq('user_id', user.id)
-                        .eq('item_id', item.id)
-                        .eq('day', day)
-                        .maybeSingle();
-                    if (readErr) throw readErr;
+                    // Atomic advisory-locked CAS save via RPC so movement saves serialize with clears/restores/imports.
+                    let { data: saveRes, error: saveErr } = await _supabase.rpc('inventory_save_entry', {
+                        p_item_id: item.id,
+                        p_day: day,
+                        p_purchase: purchase,
+                        p_damage: damage,
+                        p_expected_exists: baseExists,
+                        p_expected_purchase: basePurchase,
+                        p_expected_damage: baseDamage,
+                    });
+                    if (saveErr) throw saveErr;
 
-                    const serverPurchase = serverRow ? Number(serverRow.purchase) : 0;
-                    const serverDamage = serverRow ? Number(serverRow.damage) : 0;
-                    if (L.hasEntryServerConflict(basePurchase, baseDamage, serverPurchase, serverDamage)) {
+                    if (saveRes && saveRes.status === 'conflict') {
+                        const serverExists = Boolean(saveRes.exists);
+                        const serverPurchase = Number(saveRes.purchase || 0);
+                        const serverDamage = Number(saveRes.damage || 0);
                         const idx = entries.findIndex(e => e.item_id === item.id && e.day === day);
-                        if (serverRow) {
+                        if (serverExists) {
                             const updatedEntry = { user_id: user.id, item_id: item.id, day, purchase: serverPurchase, damage: serverDamage };
                             if (idx >= 0) entries[idx] = updatedEntry; else entries.push(updatedEntry);
                         } else if (idx >= 0) {
@@ -245,6 +267,7 @@
                                 damage: d.value,
                                 basePurchase,
                                 baseDamage,
+                                baseExists,
                                 updatedAt: new Date().toISOString(),
                             });
                             persistDrafts();
@@ -252,26 +275,40 @@
                             savedRevision = pendingDraft.revision;
                         }
                         if (typeof confirm === 'function') {
-                            const ok = confirm(`Saved server values for ${item.name} on ${day} changed on the server since you started editing (Server now: Purchase ${fmt(serverPurchase)}, Damage ${fmt(serverDamage)}; Your edit: Purchase ${fmt(purchase)}, Damage ${fmt(damage)}). Replace server data with your values?`);
+                            const serverSummary = serverExists
+                                ? `Purchase ${fmt(serverPurchase)}, Damage ${fmt(serverDamage)}`
+                                : 'No saved entry (day may have been cleared)';
+                            const ok = confirm(`Saved server values for ${item.name} on ${day} changed on the server since you started editing (Server now: ${serverSummary}; Your edit: Purchase ${fmt(purchase)}, Damage ${fmt(damage)}). Replace server data with your values?`);
                             if (!ok) {
                                 inFlightEntrySaves.delete(saveKey);
                                 renderStock();
                                 updateDraftStatus();
+                                renderCorrections();
                                 return;
                             }
                         }
+                        const retry = await _supabase.rpc('inventory_save_entry', {
+                            p_item_id: item.id,
+                            p_day: day,
+                            p_purchase: purchase,
+                            p_damage: damage,
+                            p_expected_exists: serverExists,
+                            p_expected_purchase: serverPurchase,
+                            p_expected_damage: serverDamage,
+                        });
+                        if (retry.error) throw retry.error;
+                        if (retry.data && retry.data.status === 'conflict') {
+                            await refresh();
+                            throw new Error('Server data changed again while confirming. Review the refreshed values and try saving again.');
+                        }
                     }
-
-                    const payload = { user_id: user.id, item_id: item.id, day, purchase, damage };
-                    const { error } = await _supabase.from('inventory_entries').upsert(payload, { onConflict: 'user_id,item_id,day' });
-                    if (error) throw error;
 
                     const latestDraft = (draftState.entries[day] || {})[item.id];
                     if (latestDraft) {
                         if (savedRevision > 0 && latestDraft.revision === savedRevision) {
                             draftState = L.clearEntryDraftIfRevision(draftState, day, item.id, savedRevision);
                         } else {
-                            draftState = L.rebaseEntryDraft(draftState, day, item.id, purchase, damage);
+                            draftState = L.rebaseEntryDraft(draftState, day, item.id, purchase, damage, true);
                         }
                         persistDrafts();
                     }
@@ -291,6 +328,7 @@
                 persistDrafts();
                 renderStock();
                 updateDraftStatus();
+                renderCorrections();
                 message(`Discarded unsaved draft for ${item.name} on ${day}.`);
             };
 
@@ -460,10 +498,13 @@
         $('day').value = newDay;
         draftState.selectedDay = newDay;
         persistDrafts();
+        hideClearConfirm();
+        hideRestoreConflict();
         renderStock();
         invalidate();
         if (!editing && !draftState.itemForm) $('item-start').value = newDay;
         updateDraftStatus();
+        renderCorrections();
         if (report) reportInfo();
     }
     function shiftDay(delta) {
@@ -476,6 +517,25 @@
     $('day').onchange=() => applyDateChange($('day').value);
     if ($('prev-day')) $('prev-day').onclick = () => shiftDay(-1);
     if ($('next-day')) $('next-day').onclick = () => shiftDay(1);
+    function discardDraftsForDay(targetDay) {
+        const count = L.dayDraftCount(draftState, targetDay);
+        if (!count) return false;
+        if (typeof confirm === 'function' && !confirm(`Discard ${count} unsaved stock draft(s) on ${targetDay}? Drafts on other dates will be kept.`)) return false;
+        const nextEntries = { ...draftState.entries };
+        delete nextEntries[targetDay];
+        draftState = L.sanitizeDraftState({ ...draftState, entries: nextEntries });
+        persistDrafts();
+        hideRestoreConflict();
+        renderStock();
+        updateDraftStatus();
+        renderCorrections();
+        message(`Discarded ${count} unsaved draft(s) for ${targetDay}.`);
+        return true;
+    }
+    if ($('discard-day-drafts')) $('discard-day-drafts').onclick = () => {
+        const day = $('day').value || '';
+        discardDraftsForDay(day);
+    };
     if ($('discard-drafts')) $('discard-drafts').onclick = () => {
         const summary = L.draftSummary(draftState, $('day').value || '');
         if (summary.totalCount && typeof confirm === 'function' && !confirm('Discard all unsaved stock row drafts across all dates and any pending item form draft?')) return;
@@ -484,9 +544,11 @@
         restoredNotice = false;
         persistDrafts();
         draftState.selectedDay = keepDay;
+        hideRestoreConflict();
         resetForm(true);
         renderStock();
         updateDraftStatus();
+        renderCorrections();
         message('All unsaved local drafts discarded.');
     };
 
@@ -969,6 +1031,301 @@
         const {data,error}=await _supabase.rpc('inventory_save_import',{p_day:p.day,p_fingerprint:p.hash,p_sales:p.sales,p_expected:p.expected}); if(error) throw error;
         await refresh(); invalidate(); message(data==='duplicate' ? 'Already imported; no sales added.' : 'Sales saved. Later balances are recalculated.');
     } catch(e) { fail(e); button.disabled=false; } };
+    function hideClearConfirm() {
+        pendingClearScope = null;
+        pendingClearRequestId = null;
+        if ($('clear-confirm-panel')) $('clear-confirm-panel').hidden = true;
+    }
+    function hideRestoreConflict() {
+        const box = $('restore-conflict-box'), txt = $('restore-conflict-text');
+        if (box) box.hidden = true;
+        if (txt) txt.replaceChildren();
+    }
+    function showRestoreConflict(reasons, draftDay = null) {
+        const box = $('restore-conflict-box'), txt = $('restore-conflict-text');
+        const list = Array.isArray(reasons) && reasons.length ? reasons : ['Restore stopped because one or more target slots are already occupied.'];
+        if (box && txt) {
+            txt.replaceChildren();
+            txt.append(el('strong', 'Restore stopped (no existing data was overwritten and snapshot was kept):'));
+            const ul = el('ul');
+            for (const r of list) ul.append(el('li', r));
+            txt.append(ul);
+            if (draftDay) {
+                const btn = el('button', `Discard ${draftDay} drafts`, 'btn-danger-outline');
+                btn.type = 'button';
+                btn.onclick = () => discardDraftsForDay(draftDay);
+                txt.append(btn);
+            }
+            box.hidden = false;
+        }
+        fail(new Error(list.join(' ')));
+    }
+    function formatTimestamp(ts) {
+        if (!ts) return '';
+        const d = new Date(ts);
+        return Number.isNaN(d.getTime()) ? String(ts) : d.toLocaleString();
+    }
+    function renderCorrections() {
+        const summaryEl = $('day-correction-summary');
+        const blocker = $('correction-draft-blocker');
+        const blockerText = $('correction-draft-blocker-text');
+        const discardDayBtn = $('discard-day-drafts');
+        const clearSalesBtn = $('clear-sales-btn');
+        const clearWholeBtn = $('clear-whole-day-btn');
+        const confirmBtn = $('confirm-clear-btn');
+        const cancelBtn = $('cancel-clear-btn');
+        const list = $('recovery-list');
+        if (!summaryEl && !list && !clearSalesBtn && !clearWholeBtn) return;
+
+        const day = $('day').value || '';
+        const summary = day ? L.summarizeDayForClear(day, entries, imports) : null;
+        const dayDraftsCount = day ? L.dayDraftCount(draftState, day) : 0;
+        const hasDrafts = dayDraftsCount > 0;
+
+        if (hasDrafts && pendingClearScope) {
+            hideClearConfirm();
+        }
+
+        if (summaryEl && summary) {
+            const salesPart = summary.hasImport
+                ? `1 POS sales import (${summary.salesItemCount} item${summary.salesItemCount === 1 ? '' : 's'}, ${fmt(summary.totalSalesPieces)} pcs)`
+                : 'No imported sales';
+            summaryEl.textContent = `Selected date ${day}: ${summary.entryCount} saved movement row${summary.entryCount === 1 ? '' : 's'} (${fmt(summary.totalPurchase)} purchase, ${fmt(summary.totalDamage)} damage) · ${salesPart}.`;
+        } else if (summaryEl) {
+            summaryEl.textContent = 'Choose a stock date above to view or fix its entries.';
+        }
+
+        if (blocker && blockerText) {
+            if (hasDrafts) {
+                blockerText.textContent = `You have ${dayDraftsCount} unsaved local stock draft${dayDraftsCount === 1 ? '' : 's'} on ${day}. Save or discard drafts for ${day} before clearing or restoring this date.`;
+                if (discardDayBtn) discardDayBtn.textContent = `Discard ${day} drafts`;
+                blocker.hidden = false;
+            } else {
+                blockerText.textContent = '';
+                blocker.hidden = true;
+            }
+        }
+
+        if (clearSalesBtn) {
+            const noSales = !summary || summary.isSalesEmpty;
+            clearSalesBtn.className = (hasDrafts || noSales) ? 'btn-danger-outline is-noop' : 'btn-danger-outline';
+            clearSalesBtn.disabled = inFlightCorrection;
+        }
+        if (clearWholeBtn) {
+            const noData = !summary || summary.isWholeDayEmpty;
+            clearWholeBtn.className = (hasDrafts || noData) ? 'btn-danger-outline is-noop' : 'btn-danger-outline';
+            clearWholeBtn.disabled = inFlightCorrection;
+        }
+        if (confirmBtn) confirmBtn.disabled = inFlightCorrection;
+        if (cancelBtn) cancelBtn.disabled = inFlightCorrection;
+
+        if (list) {
+            list.replaceChildren();
+            if (!corrections.length) {
+                list.append(el('p', 'No day corrections have been recorded yet.', 'recovery-empty'));
+            } else {
+                for (const corr of corrections) {
+                    const info = L.formatCorrectionSummary(corr);
+                    const row = el('div', undefined, 'recovery-row');
+                    const left = el('div', undefined, 'recovery-info');
+                    const titleRow = el('div', undefined, 'recovery-title');
+                    titleRow.append(
+                        el('span', `${info.day} · ${info.scopeLabel}`),
+                        el('span', info.isRestored ? 'Restored' : 'Undo available', info.isRestored ? 'recovery-badge restored' : 'recovery-badge')
+                    );
+                    const createdStr = formatTimestamp(corr.created_at);
+                    const restoredStr = corr.restored_at ? formatTimestamp(corr.restored_at) : '';
+                    const metaText = `${info.detailText}${createdStr ? ` · Cleared ${createdStr}` : ''}${restoredStr ? ` · Restored ${restoredStr}` : ''}`;
+                    left.append(titleRow, el('span', metaText, 'recovery-meta'));
+                    row.append(left);
+                    if (!info.isRestored) {
+                        const btn = el('button', 'Undo / Restore', 'btn-restore');
+                        btn.type = 'button';
+                        btn.disabled = inFlightCorrection;
+                        btn.setAttribute('aria-label', `Restore ${info.scopeLabel} snapshot for ${info.day}`);
+                        btn.onclick = () => handleRestoreCorrection(corr);
+                        row.append(btn);
+                    }
+                    list.append(row);
+                }
+            }
+        }
+    }
+    function openClearConfirmation(scope) {
+        try {
+            hideRestoreConflict();
+            const day = assertDay();
+            const dayDraftsCount = L.dayDraftCount(draftState, day);
+            if (dayDraftsCount > 0) {
+                hideClearConfirm();
+                renderCorrections();
+                throw new Error(`${day} has ${dayDraftsCount} unsaved local stock draft${dayDraftsCount === 1 ? '' : 's'}. Save each row or discard ${day} drafts before clearing.`);
+            }
+            const summary = L.summarizeDayForClear(day, entries, imports);
+            if (scope === 'sales_only' && summary.isSalesEmpty) {
+                hideClearConfirm();
+                message(`No imported sales found for ${day} — nothing to remove.`);
+                return;
+            }
+            if (scope === 'whole_day' && summary.isWholeDayEmpty) {
+                hideClearConfirm();
+                message(`${day} has no saved movements or imported sales — nothing to clear.`);
+                return;
+            }
+            pendingClearScope = scope;
+            pendingClearRequestId = makeRequestId();
+
+            const panel = $('clear-confirm-panel');
+            const titleEl = $('clear-confirm-title');
+            const detailsEl = $('clear-confirm-details');
+            const confirmBtn = $('confirm-clear-btn');
+            if (!panel || !titleEl || !detailsEl || !confirmBtn) return;
+
+            titleEl.textContent = scope === 'sales_only'
+                ? `Confirm removing imported sales for ${day}`
+                : `Confirm clearing whole day (${day})`;
+            confirmBtn.textContent = scope === 'sales_only'
+                ? `Confirm remove imported sales (${day})`
+                : `Confirm clear whole day (${day})`;
+
+            detailsEl.replaceChildren();
+            const ul = el('ul');
+            if (scope === 'sales_only') {
+                ul.append(
+                    el('li', `Will remove: imported POS sales on ${day} (${summary.salesItemCount} item${summary.salesItemCount === 1 ? '' : 's'}, ${fmt(summary.totalSalesPieces)} pieces total).`),
+                    el('li', `Will keep untouched: ${summary.entryCount} purchase/damage row${summary.entryCount === 1 ? '' : 's'} on ${day}, all initial openings, stock items, saved dish mappings, and all other dates.`)
+                );
+            } else {
+                const salesDesc = summary.hasImport
+                    ? `1 POS sales import (${summary.salesItemCount} item${summary.salesItemCount === 1 ? '' : 's'}, ${fmt(summary.totalSalesPieces)} pieces total)`
+                    : 'no imported sales';
+                ul.append(
+                    el('li', `Will clear: ${summary.entryCount} stock movement row${summary.entryCount === 1 ? '' : 's'} on ${day} (Purchase ${fmt(summary.totalPurchase)}, Damage ${fmt(summary.totalDamage)}) and ${salesDesc}.`),
+                    el('li', 'Will keep untouched: initial opening balances, stock items, saved dish mappings, and all other dates.')
+                );
+            }
+            const laterDesc = summary.laterDatesCount > 0
+                ? `Opening and closing balances will automatically recalculate for ${day} and ${summary.laterDatesCount} later recorded date${summary.laterDatesCount === 1 ? '' : 's'} (${summary.laterDates[0]} to ${summary.laterDates[summary.laterDatesCount - 1]}), plus any future dates you view.`
+                : `Closing balances for ${day} and opening balances for any later dates you view will automatically recalculate.`;
+            ul.append(
+                el('li', laterDesc),
+                el('li', 'Recovery: a permanent snapshot will be saved before deleting so you can undo anytime (even after refreshing).')
+            );
+            detailsEl.append(ul);
+            panel.hidden = false;
+            if (typeof confirmBtn.focus === 'function') confirmBtn.focus();
+        } catch (e) { fail(e); }
+    }
+    async function executeClearConfirm() {
+        if (inFlightCorrection || !pendingClearScope) return;
+        const scope = pendingClearScope;
+        const requestId = pendingClearRequestId || makeRequestId();
+        pendingClearRequestId = requestId;
+        try {
+            const day = assertDay();
+            const dayDraftsCount = L.dayDraftCount(draftState, day);
+            if (dayDraftsCount > 0) {
+                hideClearConfirm();
+                renderCorrections();
+                throw new Error(`${day} has ${dayDraftsCount} unsaved local stock draft${dayDraftsCount === 1 ? '' : 's'}. Save each row or discard ${day} drafts before clearing.`);
+            }
+            const summary = L.summarizeDayForClear(day, entries, imports);
+            if ((scope === 'sales_only' && summary.isSalesEmpty) || (scope === 'whole_day' && summary.isWholeDayEmpty)) {
+                hideClearConfirm();
+                renderCorrections();
+                message(`Nothing to clear on ${day}.`);
+                return;
+            }
+            inFlightCorrection = true;
+            renderCorrections();
+            const { data, error } = await _supabase.rpc('inventory_clear_day', {
+                p_day: day,
+                p_scope: scope,
+                p_expected_fingerprint: summary.importFingerprint,
+                p_expected_entries: scope === 'whole_day' ? summary.expectedEntries : [],
+                p_request_id: requestId,
+            });
+            if (error) throw error;
+            if (data && data.status === 'conflict') {
+                hideClearConfirm();
+                await refresh();
+                fail(new Error(data.reason || 'Server data changed before clearing. Review the refreshed sheet and try again.'));
+                return;
+            }
+            if (data && data.status === 'empty') {
+                hideClearConfirm();
+                await refresh();
+                message(data.reason || `Nothing to clear on ${day}.`);
+                return;
+            }
+            hideClearConfirm();
+            invalidate();
+            await refresh();
+            if (report) renderMappings();
+            message(scope === 'sales_only'
+                ? `Removed imported sales for ${day}. Snapshot saved — use Undo / Restore below if needed.`
+                : `Cleared saved movements and imported sales for ${day}. Snapshot saved — use Undo / Restore below if needed.`);
+        } catch (e) {
+            fail(e);
+        } finally {
+            inFlightCorrection = false;
+            renderCorrections();
+        }
+    }
+    async function handleRestoreCorrection(corr) {
+        if (inFlightCorrection || !corr) return;
+        hideRestoreConflict();
+        try {
+            const affectedDrafts = L.dayDraftCount(draftState, corr.day);
+            if (affectedDrafts > 0) {
+                showRestoreConflict([
+                    `${corr.day} has ${affectedDrafts} unsaved local stock draft${affectedDrafts === 1 ? '' : 's'}. Save or discard drafts for ${corr.day} before restoring this snapshot.`,
+                ], corr.day);
+                return;
+            }
+            inFlightCorrection = true;
+            renderCorrections();
+            [items, entries, imports] = await Promise.all(['inventory_items', 'inventory_entries', 'inventory_imports'].map(all));
+            const preCheck = L.checkRestoreConflicts(corr, items, entries, imports);
+            if (!preCheck.ok) {
+                renderStock();
+                renderItems();
+                showRestoreConflict(preCheck.reasons);
+                return;
+            }
+            const { data, error } = await _supabase.rpc('inventory_restore_correction', {
+                p_correction_id: corr.id,
+            });
+            if (error) throw error;
+            if (data && data.status === 'conflict') {
+                await refresh();
+                showRestoreConflict([data.reason || `Cannot restore ${corr.day}: one or more target slots are already occupied.`]);
+                return;
+            }
+            if (data && data.status === 'already_restored') {
+                await refresh();
+                message(`Snapshot for ${corr.day} was already restored.`);
+                return;
+            }
+            hideClearConfirm();
+            hideRestoreConflict();
+            invalidate();
+            await refresh();
+            if (report) renderMappings();
+            const info = L.formatCorrectionSummary(corr);
+            message(`Restored ${info.scopeLabel.toLowerCase()} for ${corr.day}. Later balances are recalculated.`);
+        } catch (e) {
+            fail(e);
+        } finally {
+            inFlightCorrection = false;
+            renderCorrections();
+        }
+    }
+    if ($('clear-sales-btn')) $('clear-sales-btn').onclick = () => openClearConfirmation('sales_only');
+    if ($('clear-whole-day-btn')) $('clear-whole-day-btn').onclick = () => openClearConfirmation('whole_day');
+    if ($('confirm-clear-btn')) $('confirm-clear-btn').onclick = () => executeClearConfirm();
+    if ($('cancel-clear-btn')) $('cancel-clear-btn').onclick = () => { hideClearConfirm(); message('Day correction cancelled.'); };
+
     async function loadRestaurantProfile() {
         try {
             const { data: profile } = await _supabase.from('profiles').select('restaurant_name').eq('id', user.id).maybeSingle();
