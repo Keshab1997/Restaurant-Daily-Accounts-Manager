@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Daily inventory - RestroManager</title>
+  <link rel="stylesheet" href="css/base.css"><link rel="stylesheet" href="css/inventory.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- SheetJS Community Edition; parsing is entirely in the browser. -->
+  <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script defer src="js/config.js"></script><script defer src="js/inventory-logic.js"></script><script defer src="js/inventory.js"></script>
+</head>
+<body>
+<main class="main-content">
+  <header class="page-heading"><div><a href="dashboard.html">← Dashboard</a><h1>Daily inventory</h1><p>Track stock in pieces, one day at a time.</p></div><label>Stock date <input id="day" type="date"></label></header>
+  <div id="message" role="status" aria-live="polite"></div>
+  <section class="glass-card"><h2>Stock sheet</h2><p>Opening carries forward all previous movements. Changes to an earlier day automatically affect later days.</p><div class="table-wrap"><table><thead><tr><th>Item</th><th>Opening</th><th>Purchase</th><th>Sale</th><th>Damage</th><th>Closing</th><th></th></tr></thead><tbody id="stock"></tbody></table></div><p class="hint">Save purchase and damage for each item. Negative closing highlights a stock shortage.</p></section>
+  <section class="glass-card"><h2>Stock items</h2><p>Set an initial opening and start date when adding an item. Edit the opening if the original count needs correction.</p><form id="item-form" class="form-grid"><label>Item name<input id="item-name" maxlength="200" required></label><label>Start date<input id="item-start" type="date" required></label><label>Initial opening (pieces)<input id="item-opening" type="number" min="0" max="1000000000" step="any" required></label><button class="btn-primary" type="submit" id="item-submit">Add item</button><button type="button" id="cancel-edit" hidden>Cancel edit</button></form><div id="item-list"></div></section>
+  <section class="glass-card"><h2>Import POS sales</h2><p>Choose a local .xls or .xlsx item report. The first sheet is read in your browser; the file is not uploaded. Match each dish to a stock item or explicitly ignore it, then preview and confirm. Existing sales for the day are replaced, never added twice.</p><label>Report file <input id="file" type="file" accept=".xls,.xlsx"></label><div id="import-area" hidden><p id="report-info"></p><div id="mapping-list"></div><button id="preview" type="button">Preview totals</button><div id="preview-area" hidden><h3>Sales preview (pieces)</h3><div id="totals"></div><p id="replacement"></p><button class="btn-primary" id="confirm-import" type="button">Confirm sales import</button></div></div></section>
+</main>
+</body></html>
