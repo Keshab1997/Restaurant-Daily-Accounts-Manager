@@ -4,6 +4,13 @@
 h1 { margin:0; } h2 { font-size:1.2rem; margin-bottom:6px; } h3 { margin:16px 0 8px; }
 p { color:var(--text-light); line-height:1.5; margin-bottom:14px; }
 .restro-badge { display:inline-block; padding:4px 10px; border-radius:999px; background:#eff6ff; color:var(--primary); border:1px solid #bfdbfe; font-size:.82rem; font-weight:700; }
+.icon { width:16px; height:16px; flex:0 0 auto; display:inline-block; vertical-align:middle; }
+.icon-sm { width:14px; height:14px; }
+.icon-lg { width:24px; height:24px; color:var(--primary); }
+.heading-with-icon, .label-with-icon, .th-with-icon, .banner-lead { display:inline-flex; align-items:center; gap:7px; }
+.label-with-icon, .th-with-icon { white-space:nowrap; }
+.banner-lead { display:flex; align-items:center; gap:8px; flex:1 1 240px; }
+.btn-with-icon, .btn-save-row, .item-row button, .export-link { display:inline-flex; align-items:center; justify-content:center; gap:6px; }
 .date-controls { display:flex; align-items:end; gap:8px; flex-wrap:wrap; }
 .section-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
 .section-head p { margin-bottom:0; }

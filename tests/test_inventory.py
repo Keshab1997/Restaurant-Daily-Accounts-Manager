@@ -404,6 +404,43 @@ def test_sheet_export_rows_and_a4_pagination_no_clipping():
       const flattened=pages.flat();
       assert.equal(flattened.length,55);
       assert.deepEqual(flattened.map(r=>r.itemName), rows.map(r=>r.itemName));
+
+      // Variable wrapped 200-char names measured in real pixels never overflow maxBodyHeight
+      const longItems=[];
+      for (let i=1;i<=12;i++) {
+        longItems.push({
+          id:`long-${i}`,
+          name:(`WIDE_DISH_${i}_` + 'W'.repeat(188)).slice(0,200),
+          start_date:'2026-11-01',
+          initial_opening:10,
+        });
+      }
+      const longDrafts={ 'long-1':{purchase:'3',damage:'0',basePurchase:0,baseDamage:0} };
+      const longRows=L.buildSheetExportRows(longItems,'2026-11-19',[], [], longDrafts);
+      const wideMeasure=s=>String(s).length*16;
+      const maxBodyHeight=1420;
+      const measuredPages=L.layoutSheetPages(longRows,{nameMaxWidth:336, maxBodyHeight, measureName:wideMeasure});
+      assert.ok(measuredPages.length >= 3);
+      for (const page of measuredPages) {
+        assert.ok(page.usedHeight <= maxBodyHeight, `Page height ${page.usedHeight} exceeded ${maxBodyHeight}`);
+        const sum=page.rows.reduce((acc,r)=>acc+r.rowHeight,0);
+        assert.equal(sum,page.usedHeight);
+      }
+      const flatNames=measuredPages.flatMap(p=>p.rows.map(r=>r.itemName));
+      assert.deepEqual(flatNames,longRows.map(r=>r.itemName));
+
+      // Exceptionally tall row (> maxBodyHeight) splits cleanly across continuation slices without losing characters
+      const giantName='X'.repeat(200) + ' ' + 'Y'.repeat(199);
+      const giantRows=L.buildSheetExportRows([{id:'g1',name:giantName,start_date:'2026-11-01',initial_opening:5}],'2026-11-19',[], [], {'g1':{purchase:'1',damage:'0',basePurchase:0,baseDamage:0}});
+      const compactPages=L.layoutSheetPages(giantRows,{nameMaxWidth:180, maxBodyHeight:220, measureName:wideMeasure});
+      assert.ok(compactPages.length >= 2);
+      for (const page of compactPages) assert.ok(page.usedHeight <= 220);
+      assert.equal(compactPages[0].rows[0].isContinuation,false);
+      assert.equal(compactPages[0].rows[0].hasContinuation,true);
+      assert.equal(compactPages[compactPages.length-1].rows[0].isContinuation,true);
+      assert.equal(compactPages[compactPages.length-1].rows[0].hasContinuation,false);
+      const rejoined=compactPages.flatMap(p=>p.rows.flatMap(r=>r.nameLines)).join(' ');
+      assert.equal(rejoined.replace(/\s+/g,''), giantName.replace(/\s+/g,''));
     """)
 
 
@@ -450,8 +487,8 @@ def test_ui_draft_restore_save_failure_date_switch_and_print_export():
       const db={
         profiles:[{id:'user-A',restaurant_name:'Ichamotee Kitchen'}],
         inventory_items:[
-          {id:'i1',name:'Fish',start_date:'2026-11-01',initial_opening:20},
-          {id:'i2',name:'Chicken',start_date:'2026-11-01',initial_opening:15},
+          {user_id:'user-A',id:'i1',name:'Fish',start_date:'2026-11-01',initial_opening:20},
+          {user_id:'user-A',id:'i2',name:'Chicken',start_date:'2026-11-01',initial_opening:15},
         ],
         inventory_entries:[
           {user_id:'user-A',item_id:'i1',day:'2026-11-19',purchase:2,damage:0},
@@ -462,32 +499,54 @@ def test_ui_draft_restore_save_failure_date_switch_and_print_export():
         inventory_mappings:[],
       };
 
-      let failUpsert=false, printCalls=0, sharedPayload=null, blobCount=0, allowShare=true;
+      let failUpsert=false, failPreRead=false, printCalls=0, sharedPayload=null, blobCount=0, allowShare=true;
+      let onBeforeEntryWrite=null, onBeforeItemWrite=null;
       const confirmQueue=[];
 
       function bootApp(userId='user-A') {
         const ids={}, focusLog=[];
-        for (const id of ['day','prev-day','next-day','restaurant-name','message','storage-warning','draft-status','draft-status-text','discard-drafts','stock','print-sheet-btn','export-png-btn','export-fallback','item-form','item-name','item-start','item-opening','item-submit','cancel-edit','discard-item-draft','item-draft-note','item-list','file','import-area','report-info','mapping-list','preview','preview-area','totals','replacement','confirm-import','print-sheet']) {
+        for (const id of ['day','prev-day','next-day','restaurant-name','message','storage-warning','storage-warning-text','draft-status','draft-status-text','discard-drafts','stock','print-sheet-btn','export-png-btn','export-fallback','item-form','item-name','item-start','item-opening','item-submit','item-submit-label','cancel-edit','discard-item-draft','item-draft-note','item-list','file','import-area','report-info','mapping-list','preview','preview-area','totals','replacement','confirm-import','print-sheet']) {
           ids[id]=makeEl(id==='stock'?'tbody':id==='print-sheet'?'section':'div', focusLog);
         }
         const _supabase={
           from(table){
             const q={
               _filters:{},
+              _op:null,
+              _payload:null,
               select(){ return this; },
               eq(col,val){ this._filters[col]=val; return this; },
               order(){ return this; },
               range: async()=>({data:(db[table]||[]).slice(), error:null}),
               maybeSingle: async()=>{
+                if (failPreRead) return {data:null, error:new Error('Server check timed out')};
                 const list=db[table]||[];
                 const found=list.find(r=>Object.entries(q._filters).every(([k,v])=>r[k]===v))||null;
-                return {data:found, error:null};
+                return {data:found ? {...found} : null, error:null};
               },
               upsert: async(payload)=>{
+                if (table==='inventory_entries' && onBeforeEntryWrite) await onBeforeEntryWrite(payload);
                 if (failUpsert) return {error:new Error('Network offline')};
                 const idx=db.inventory_entries.findIndex(e=>e.user_id===payload.user_id&&e.item_id===payload.item_id&&e.day===payload.day);
-                if (idx>=0) db.inventory_entries[idx]=payload; else db.inventory_entries.push(payload);
+                if (idx>=0) db.inventory_entries[idx]={...payload}; else db.inventory_entries.push({...payload});
                 return {error:null};
+              },
+              update(patch){ this._op='update'; this._payload=patch; return this; },
+              insert(payload){ this._op='insert'; this._payload=payload; return this; },
+              then(resolve, reject){
+                (async()=>{
+                  if (table==='inventory_items' && q._op==='update') {
+                    if (onBeforeItemWrite) await onBeforeItemWrite(q._payload);
+                    const target=db.inventory_items.find(i=>i.id===q._filters.id);
+                    if (target) Object.assign(target, q._payload);
+                    return {error:null};
+                  }
+                  if (table==='inventory_items' && q._op==='insert') {
+                    db.inventory_items.push({id:`i${db.inventory_items.length+1}`, ...q._payload});
+                    return {error:null};
+                  }
+                  return {error:null};
+                })().then(resolve, reject);
               },
             };
             return q;
@@ -508,6 +567,7 @@ def test_ui_draft_restore_save_failure_date_switch_and_print_export():
             }
             return makeEl(tag, focusLog);
           },
+          createElementNS:(_ns, tag)=>makeEl(tag, focusLog),
           createTextNode:t=>({textContent:String(t),children:[]}),
           querySelectorAll:()=>[],
         };
@@ -550,9 +610,7 @@ def test_ui_draft_restore_save_failure_date_switch_and_print_export():
         const pInput=row0.children[2].children[0];
         const dInput=row0.children[4].children[0];
         pInput.value='6'; pInput.oninput();
-        // Live closing updates without committing to Supabase
         assert.equal(row0.children[5].textContent,'21');
-        // Keyboard navigation: Enter Purchase->Damage->Save, ArrowDown Row 0->Row 1
         pInput.onkeydown({key:'Enter',preventDefault(){}});
         dInput.onkeydown({key:'Enter',preventDefault(){}});
         pInput.onkeydown({key:'ArrowDown',preventDefault(){}});
@@ -580,7 +638,7 @@ def test_ui_draft_restore_save_failure_date_switch_and_print_export():
         assert.equal(appB.ids['draft-status'].hidden,true);
         assert.equal(appB.ids['item-name'].value,'');
 
-        // 4) Print and Export PNG with draft confirmation (user cancels first -> no print/share; then confirms -> print/share works & labels DRAFT)
+        // 4) Print and Export PNG with draft confirmation + multi-page long item name export
         confirmQueue.push(false);
         app.ids['print-sheet-btn'].onclick();
         assert.equal(printCalls,0);
@@ -598,19 +656,50 @@ def test_ui_draft_restore_save_failure_date_switch_and_print_export():
         assert.equal(sharedPayload.files.length,1);
         assert.match(sharedPayload.files[0].name,/-DRAFT\.png$/);
 
-        // When native share is unavailable, accessible download fallback links render
         allowShare=false;
         confirmQueue.push(true);
         await app.ids['export-png-btn'].onclick();
         assert.equal(app.ids['export-fallback'].hidden,false);
         assert.match(app.ids['export-fallback'].children[0].textContent,/not supported/i);
 
-        // 5) Failed save preserves draft; successful save clears ONLY that row draft!
-        failUpsert=true;
-        const saveBtn0=app.ids['stock'].children[0].children[6].children[0].children[0];
+        // 5) Fresh server conflict after load: server updated behind cached entries!
+        db.inventory_entries[0].purchase=4; // updated on server by another device after page load
+        failPreRead=true;
+        let saveBtn0=app.ids['stock'].children[0].children[6].children[0].children[0];
         await saveBtn0.onclick();
         assert.equal(app.ids['message'].className,'error');
-        assert.ok(L.loadDraftState(localStorage,'user-A').state.entries['2026-11-19'].i1);
+        assert.equal(db.inventory_entries[0].purchase,4); // failed pre-read never saves
+        assert.equal(L.loadDraftState(localStorage,'user-A').state.entries['2026-11-19'].i1.purchase,'6');
+
+        failPreRead=false;
+        confirmQueue.push(false); // user declines overwriting server=4 with draft=6
+        await saveBtn0.onclick();
+        assert.equal(db.inventory_entries[0].purchase,4);
+        assert.equal(L.loadDraftState(localStorage,'user-A').state.entries['2026-11-19'].i1.purchase,'6');
+        assert.match(app.ids['stock'].children[0].className,/row-stale/);
+
+        // 6) Edit made WHILE earlier save is in flight is NOT lost when earlier save completes!
+        confirmQueue.push(true); // confirm overwrite (write 6)
+        onBeforeEntryWrite=async()=>{
+          const liveP=app.ids['stock'].children[0].children[2].children[0];
+          liveP.value='9';
+          liveP.oninput();
+        };
+        saveBtn0=app.ids['stock'].children[0].children[6].children[0].children[0];
+        await saveBtn0.onclick();
+        onBeforeEntryWrite=null;
+        assert.equal(db.inventory_entries[0].purchase,6);
+        const postInFlight=L.loadDraftState(localStorage,'user-A').state;
+        assert.equal(postInFlight.entries['2026-11-19'].i1.purchase,'9');
+        assert.equal(postInFlight.entries['2026-11-19'].i1.basePurchase,6);
+        assert.equal(app.ids['stock'].children[0].children[2].children[0].value,'9');
+
+        // 7) Failed write preserves draft; clean save clears ONLY that row draft
+        failUpsert=true;
+        saveBtn0=app.ids['stock'].children[0].children[6].children[0].children[0];
+        await saveBtn0.onclick();
+        assert.equal(app.ids['message'].className,'error');
+        assert.equal(L.loadDraftState(localStorage,'user-A').state.entries['2026-11-19'].i1.purchase,'9');
 
         failUpsert=false;
         await saveBtn0.onclick();
@@ -618,6 +707,154 @@ def test_ui_draft_restore_save_failure_date_switch_and_print_export():
         const afterSave=L.loadDraftState(localStorage,'user-A').state;
         assert.equal(afterSave.entries['2026-11-19'], undefined);
         assert.equal(afterSave.itemForm.name,'Mutton');
+
+        // 8) Fresh server conflict on item edit + in-flight item form edit protection
+        app.ids['discard-item-draft'].onclick();
+        const editBtn0=app.ids['item-list'].children[0].children[1];
+        editBtn0.onclick();
+        app.ids['item-opening'].value='22';
+        app.ids['item-opening'].oninput();
+        db.inventory_items[0].initial_opening=25; // another device edited item after page load
+        confirmQueue.push(false);
+        await app.ids['item-form'].onsubmit({preventDefault(){}});
+        assert.equal(db.inventory_items[0].initial_opening,25);
+        assert.equal(L.loadDraftState(localStorage,'user-A').state.itemForm.opening,'22');
+
+        confirmQueue.push(true);
+        onBeforeItemWrite=async()=>{
+          app.ids['item-name'].value='King Fish';
+          app.ids['item-name'].oninput();
+        };
+        await app.ids['item-form'].onsubmit({preventDefault(){}});
+        onBeforeItemWrite=null;
+        assert.equal(db.inventory_items[0].initial_opening,22);
+        assert.equal(app.ids['item-name'].value,'King Fish');
+        assert.equal(L.loadDraftState(localStorage,'user-A').state.itemForm.name,'King Fish');
+
+        // Deleted item on server fails pre-read without clearing in-flight draft
+        db.inventory_items=db.inventory_items.filter(i=>i.id!=='i1');
+        await app.ids['item-form'].onsubmit({preventDefault(){}});
+        assert.equal(app.ids['message'].className,'error');
+        assert.match(app.ids['message'].textContent,/no longer available/i);
+        assert.equal(L.loadDraftState(localStorage,'user-A').state.itemForm.name,'King Fish');
+      }
+      run().catch(e=>{ console.error(e); process.exit(1); });
+    """)
+
+
+def test_ui_png_export_wraps_long_names_without_overflow():
+    run_js(r"""
+      const fs=require('node:fs'), vm=require('node:vm'), crypto=require('node:crypto');
+      function makeEl(tag) {
+        const node={
+          tagName:String(tag).toUpperCase(), children:[], className:'', textContent:'', hidden:false, disabled:false,
+          dataset:{}, attrs:{}, type:'', colSpan:1, href:'', download:'',
+          append(...kids){ for (const k of kids) this.children.push(typeof k==='string'?{textContent:k,children:[]}:k); },
+          replaceChildren(...kids){ this.children=[]; this.append(...kids); },
+          setAttribute(k,v){ this.attrs[k]=v; }, focus(){}, select(){}, reset(){ this._val=''; }, click(){},
+          querySelectorAll:()=>[],
+        };
+        Object.defineProperty(node,'value',{
+          get(){ return this._val!==undefined ? this._val : ''; },
+          set(v){ this._val=String(v); },
+        });
+        return node;
+      }
+
+      const longItems=[];
+      for (let i=1;i<=16;i++) {
+        longItems.push({
+          id:`item-${i}`,
+          name:(`ITEM_${i}_` + 'W'.repeat(190)).slice(0,200),
+          start_date:'2026-11-01',
+          initial_opening:50,
+        });
+      }
+      const store=new Map();
+      const ids={};
+      for (const id of ['day','prev-day','next-day','restaurant-name','message','storage-warning','storage-warning-text','draft-status','draft-status-text','discard-drafts','stock','print-sheet-btn','export-png-btn','export-fallback','item-form','item-name','item-start','item-opening','item-submit','item-submit-label','cancel-edit','discard-item-draft','item-draft-note','item-list','file','import-area','report-info','mapping-list','preview','preview-area','totals','replacement','confirm-import','print-sheet']) {
+        ids[id]=makeEl('div');
+      }
+      const renderedPages=[];
+      const localStorage={
+        getItem:k=>store.has(k)?store.get(k):null,
+        setItem:(k,v)=>store.set(k,String(v)),
+        removeItem:k=>store.delete(k),
+      };
+      let sharedFiles=null;
+      const sandbox={
+        InventoryLogic:L,
+        _supabase:{
+          from(table){
+            return {
+              select(){ return this; }, eq(){ return this; }, order(){ return this; },
+              range:async()=>({data: table==='inventory_items' ? longItems : [], error:null}),
+              maybeSingle:async()=>({data:{restaurant_name:'Very Long Signature Restaurant Name For Wrapping Verification'}, error:null}),
+            };
+          },
+        },
+        checkAuth:async()=>({user:{id:'u-png'}}),
+        document:{
+          title:'',
+          getElementById:id=>ids[id],
+          createElement:tag=>{
+            if (tag==='canvas') {
+              const drawn=[];
+              const ctx={
+                fillStyle:'',strokeStyle:'',lineWidth:1,font:'',textAlign:'left',
+                fillRect(){},strokeRect(){},beginPath(){},moveTo(){},lineTo(){},stroke(){},
+                fillText(str,x,y){ drawn.push({str:String(str),x,y}); },
+                measureText:t=>({width:String(t).length*(ctx.font.includes('34px')?22:16)}),
+              };
+              const canvas={width:0,height:0,getContext:()=>ctx,toBlob:cb=>{ renderedPages.push({w:canvas.width,h:canvas.height,drawn}); cb({size:123,type:'image/png'}); }};
+              return canvas;
+            }
+            return makeEl(tag);
+          },
+          createElementNS:(_ns,tag)=>makeEl(tag),
+          createTextNode:t=>({textContent:String(t),children:[]}),
+          querySelectorAll:()=>[],
+        },
+        window:{ localStorage },
+        localStorage,
+        navigator:{
+          canShare:({files})=>Boolean(files && files.length),
+          share:async({files})=>{ sharedFiles=files; },
+        },
+        File:function(parts,name,opts){ this.parts=parts; this.name=name; this.type=opts?.type||''; },
+        URL:{ createObjectURL:()=>'blob:test', revokeObjectURL:()=>{} },
+        confirm:()=>true,
+        crypto:crypto.webcrypto,
+        TextEncoder, Uint8Array, JSON, Number, String, Array, Object, Set, Map, Date, Error, Promise,
+      };
+      vm.runInNewContext(fs.readFileSync('./js/inventory.js','utf8'), sandbox);
+
+      async function run() {
+        await new Promise(r=>setTimeout(r,20));
+        // Edit row 0 to include a draft badge on page 1 too
+        const p0=ids['stock'].children[0].children[2].children[0];
+        p0.value='7'; p0.oninput();
+        await ids['export-png-btn'].onclick();
+
+        assert.ok(renderedPages.length >= 4, `Expected >=4 A4 pages for wide 200-char names, got ${renderedPages.length}`);
+        assert.equal(sharedFiles.length, renderedPages.length);
+        const allText=renderedPages.flatMap(p=>p.drawn.map(d=>d.str)).join('\n');
+        for (const p of renderedPages) {
+          assert.equal(p.w,1240);
+          assert.equal(p.h,1754);
+          // Every body line (excluding the footer at y=1712) stays cleanly above footer at y<=1680!
+          for (const d of p.drawn) {
+            if (!d.str.startsWith('* Draft') && !d.str.startsWith('Page ')) {
+              assert.ok(d.y <= 1680, `Text "${d.str}" overflowed y=${d.y}`);
+            }
+          }
+        }
+        // Every 200-char item name line chunks join cleanly to match all 12 items without truncation!
+        const collapsed=allText.replace(/\n/g,'');
+        for (const it of longItems) {
+          assert.ok(collapsed.includes(it.name), `Missing or truncated item name ${it.name.slice(0,20)}`);
+        }
+        assert.ok(allText.includes('DRAFT (unsaved)'));
       }
       run().catch(e=>{ console.error(e); process.exit(1); });
     """)

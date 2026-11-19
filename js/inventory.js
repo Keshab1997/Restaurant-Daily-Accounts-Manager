@@ -2,12 +2,33 @@
 (() => {
     'use strict';
     const L = InventoryLogic, $ = id => document.getElementById(id);
-    let user, restaurantName = 'RestroManager', items = [], entries = [], imports = [], mappings = [], report = null, previewData = null, editing = null, revision = 0, fileRevision = 0;
+    let user, restaurantName = 'RestroManager', items = [], entries = [], imports = [], mappings = [], report = null, previewData = null, editing = null, editingBase = null, revision = 0, fileRevision = 0;
     let draftState = L.emptyDraftState(), restoredNotice = false, exportUrls = [];
+    const inFlightEntrySaves = new Set();
+    let inFlightFormSave = false;
+    const SVG_NS = 'http://www.w3.org/2000/svg';
     const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
     function message(msg, error = false) { $('message').textContent = msg; $('message').className = error ? 'error' : ''; }
     function fail(err) { message(err.message || String(err), true); }
     function el(tag, text, cls) { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (cls) node.className = cls; return node; }
+    function svgIcon(name, cls = 'icon') {
+        const create = typeof document.createElementNS === 'function'
+            ? tag => document.createElementNS(SVG_NS, tag)
+            : tag => document.createElement(tag);
+        const svg = create('svg');
+        svg.setAttribute('class', cls);
+        svg.setAttribute('aria-hidden', 'true');
+        svg.setAttribute('focusable', 'false');
+        const use = create('use');
+        use.setAttribute('href', `assets/inventory-icons.svg#${name}`);
+        svg.append(use);
+        return svg;
+    }
+    function setItemSubmitText(label) {
+        const span = $('item-submit-label');
+        if (span) span.textContent = label;
+        else if ($('item-submit')) $('item-submit').textContent = label;
+    }
     function fmt(n) { return Number(n.toFixed(4)).toLocaleString('en-IN', {maximumFractionDigits:4}); }
     function assertDay() { if (!$('day').value) throw new Error('Choose a stock date'); return $('day').value; }
     function getStorage() {
@@ -15,10 +36,10 @@
         catch (e) { reportStorageError(e && e.message ? e.message : 'Browser storage access denied'); return null; }
     }
     function reportStorageError(msg) {
-        const box = $('storage-warning');
+        const box = $('storage-warning'), textEl = $('storage-warning-text') || box;
         if (!box) return;
-        if (msg) { box.textContent = `Draft storage warning: ${msg}. Unsaved edits may not survive page reload.`; box.hidden = false; }
-        else { box.textContent = ''; box.hidden = true; }
+        if (msg) { textEl.textContent = `Draft storage warning: ${msg}. Unsaved edits may not survive page reload.`; box.hidden = false; }
+        else { textEl.textContent = ''; box.hidden = true; }
     }
     function persistDrafts() {
         if (!user) return false;
@@ -124,7 +145,8 @@
             d.setAttribute('aria-label', `Damage for ${item.name}`);
 
             const closingTd = el('td', rowState.invalidDraft ? 'Invalid' : fmt(rowState.closing), rowState.closing !== null && rowState.closing < 0 ? 'shortage' : '');
-            const save = el('button', 'Save', 'btn-save-row'); save.type = 'button';
+            const save = el('button', undefined, 'btn-save-row'); save.type = 'button';
+            save.append(svgIcon('save', 'icon icon-sm'), el('span', 'Save'));
             save.setAttribute('aria-label', `Save stock row for ${item.name}`);
             const discardRow = el('button', 'Discard', 'btn-discard-row'); discardRow.type = 'button';
             discardRow.setAttribute('aria-label', `Discard draft for ${item.name}`);
@@ -143,16 +165,18 @@
                 let parsedP = null, parsedD = null, valid = true;
                 try { parsedP = L.number(pv, 'Purchase'); } catch (_) { valid = false; }
                 try { parsedD = L.number(dv, 'Damage'); } catch (_) { valid = false; }
+                const saveKey = `${day}:${item.id}`;
                 const matchesServer = valid && pv.trim() !== '' && dv.trim() !== ''
                     && parsedP === rowState.base.purchase && parsedD === rowState.base.damage;
-                if (matchesServer) {
+                if (matchesServer && !inFlightEntrySaves.has(saveKey)) {
                     draftState = L.clearEntryDraft(draftState, day, item.id);
                 } else {
+                    const existingDraft = (draftState.entries[day] || {})[item.id];
                     draftState = L.setEntryDraft(draftState, day, item.id, {
                         purchase: pv,
                         damage: dv,
-                        basePurchase: rowState.base.purchase,
-                        baseDamage: rowState.base.damage,
+                        basePurchase: existingDraft ? existingDraft.basePurchase : rowState.base.purchase,
+                        baseDamage: existingDraft ? existingDraft.baseDamage : rowState.base.damage,
                         updatedAt: new Date().toISOString(),
                     });
                 }
@@ -184,22 +208,82 @@
             };
 
             save.onclick = async () => {
+                const saveKey = `${day}:${item.id}`;
                 save.disabled = true;
+                inFlightEntrySaves.add(saveKey);
                 try {
                     const purchase = L.number(p.value, 'Purchase'), damage = L.number(d.value, 'Damage');
-                    const latest = L.resolveRowState(item, day, entries, imports, draftState.entries[day] || {});
-                    if (latest.stale && typeof confirm === 'function') {
-                        const ok = confirm(`Saved server values for ${item.name} on ${day} changed since this draft was created (Saved: Purchase ${fmt(latest.base.purchase)}, Damage ${fmt(latest.base.damage)}; Draft: Purchase ${p.value}, Damage ${d.value}). Replace server data with your draft?`);
-                        if (!ok) { save.disabled = false; return; }
+                    const currentRow = L.resolveRowState(item, day, entries, imports, draftState.entries[day] || {});
+                    let pendingDraft = (draftState.entries[day] || {})[item.id] || null;
+                    let savedRevision = pendingDraft ? pendingDraft.revision : 0;
+                    const basePurchase = pendingDraft ? pendingDraft.basePurchase : currentRow.base.purchase;
+                    const baseDamage = pendingDraft ? pendingDraft.baseDamage : currentRow.base.damage;
+
+                    // Fresh pre-write server read (client pre-check; brief TOCTOU window remains before upsert).
+                    const { data: serverRow, error: readErr } = await _supabase
+                        .from('inventory_entries')
+                        .select('purchase, damage')
+                        .eq('user_id', user.id)
+                        .eq('item_id', item.id)
+                        .eq('day', day)
+                        .maybeSingle();
+                    if (readErr) throw readErr;
+
+                    const serverPurchase = serverRow ? Number(serverRow.purchase) : 0;
+                    const serverDamage = serverRow ? Number(serverRow.damage) : 0;
+                    if (L.hasEntryServerConflict(basePurchase, baseDamage, serverPurchase, serverDamage)) {
+                        const idx = entries.findIndex(e => e.item_id === item.id && e.day === day);
+                        if (serverRow) {
+                            const updatedEntry = { user_id: user.id, item_id: item.id, day, purchase: serverPurchase, damage: serverDamage };
+                            if (idx >= 0) entries[idx] = updatedEntry; else entries.push(updatedEntry);
+                        } else if (idx >= 0) {
+                            entries.splice(idx, 1);
+                        }
+                        if (!pendingDraft) {
+                            draftState = L.setEntryDraft(draftState, day, item.id, {
+                                purchase: p.value,
+                                damage: d.value,
+                                basePurchase,
+                                baseDamage,
+                                updatedAt: new Date().toISOString(),
+                            });
+                            persistDrafts();
+                            pendingDraft = draftState.entries[day][item.id];
+                            savedRevision = pendingDraft.revision;
+                        }
+                        if (typeof confirm === 'function') {
+                            const ok = confirm(`Saved server values for ${item.name} on ${day} changed on the server since you started editing (Server now: Purchase ${fmt(serverPurchase)}, Damage ${fmt(serverDamage)}; Your edit: Purchase ${fmt(purchase)}, Damage ${fmt(damage)}). Replace server data with your values?`);
+                            if (!ok) {
+                                inFlightEntrySaves.delete(saveKey);
+                                renderStock();
+                                updateDraftStatus();
+                                return;
+                            }
+                        }
                     }
+
                     const payload = { user_id: user.id, item_id: item.id, day, purchase, damage };
                     const { error } = await _supabase.from('inventory_entries').upsert(payload, { onConflict: 'user_id,item_id,day' });
                     if (error) throw error;
-                    draftState = L.clearEntryDraft(draftState, day, item.id);
-                    persistDrafts();
+
+                    const latestDraft = (draftState.entries[day] || {})[item.id];
+                    if (latestDraft) {
+                        if (savedRevision > 0 && latestDraft.revision === savedRevision) {
+                            draftState = L.clearEntryDraftIfRevision(draftState, day, item.id, savedRevision);
+                        } else {
+                            draftState = L.rebaseEntryDraft(draftState, day, item.id, purchase, damage);
+                        }
+                        persistDrafts();
+                    }
+                    inFlightEntrySaves.delete(saveKey);
                     await refresh();
                     message('Stock movements saved. Later balances are recalculated.');
-                } catch (e) { fail(e); } finally { save.disabled = false; }
+                } catch (e) {
+                    fail(e);
+                } finally {
+                    inFlightEntrySaves.delete(saveKey);
+                    save.disabled = false;
+                }
             };
 
             discardRow.onclick = () => {
@@ -219,11 +303,17 @@
     }
     function renderItems() {
         const list = $('item-list'); list.replaceChildren();
-        for (const item of items) { const row = el('div', undefined, 'item-row'), button = el('button','Edit'); button.type='button';
+        for (const item of items) {
+            const row = el('div', undefined, 'item-row'), button = el('button');
+            button.type = 'button';
+            button.append(svgIcon('edit', 'icon icon-sm'), el('span', 'Edit'));
+            button.setAttribute('aria-label', `Edit item ${item.name}`);
             row.append(el('span', `${item.name} · starts ${item.start_date} · opening ${fmt(Number(item.initial_opening))}`), button); list.append(row);
             button.onclick = () => {
-                editing = item.id; $('item-name').value=item.name; $('item-start').value=item.start_date; $('item-start').disabled=true;
-                $('item-opening').value=item.initial_opening; $('item-submit').textContent='Save item'; $('cancel-edit').hidden=false;
+                editing = item.id;
+                editingBase = { id: item.id, name: item.name, opening: Number(item.initial_opening) };
+                $('item-name').value = item.name; $('item-start').value = item.start_date; $('item-start').disabled = true;
+                $('item-opening').value = item.initial_opening; setItemSubmitText('Save item'); $('cancel-edit').hidden = false;
                 syncItemFormDraft(item);
                 $('item-name').focus();
             };
@@ -232,7 +322,7 @@
     function syncItemFormDraft(editSource = null) {
         const name = $('item-name').value, startDate = $('item-start').value, opening = $('item-opening').value;
         const currentItem = editSource || (editing ? items.find(i => i.id === editing) : null);
-        if (!editing && !name && !opening && startDate === $('day').value) {
+        if (!editing && !name && !opening && startDate === $('day').value && !inFlightFormSave) {
             draftState = L.clearItemFormDraft(draftState);
         } else {
             const prior = draftState.itemForm;
@@ -241,8 +331,8 @@
                 name,
                 startDate,
                 opening,
-                baseName: currentItem ? currentItem.name : (prior && prior.editingId === editing ? prior.baseName : null),
-                baseOpening: currentItem ? Number(currentItem.initial_opening) : (prior && prior.editingId === editing ? prior.baseOpening : null),
+                baseName: currentItem ? currentItem.name : (prior && prior.editingId === editing ? prior.baseName : (editingBase && editingBase.id === editing ? editingBase.name : null)),
+                baseOpening: currentItem ? Number(currentItem.initial_opening) : (prior && prior.editingId === editing ? prior.baseOpening : (editingBase && editingBase.id === editing ? editingBase.opening : null)),
             });
         }
         persistDrafts();
@@ -250,8 +340,8 @@
         updateDraftStatus();
     }
     function resetForm(clearDraft = true) {
-        editing=null; $('item-form').reset(); $('item-start').disabled=false; $('item-start').value=$('day').value;
-        $('item-submit').textContent='Add item'; $('cancel-edit').hidden=true;
+        editing = null; editingBase = null; $('item-form').reset(); $('item-start').disabled = false; $('item-start').value = $('day').value;
+        setItemSubmitText('Add item'); $('cancel-edit').hidden = true;
         if (clearDraft) {
             draftState = L.clearItemFormDraft(draftState);
             persistDrafts();
@@ -259,31 +349,112 @@
             updateDraftStatus();
         }
     }
-    $('cancel-edit').onclick=() => resetForm(true);
-    if ($('discard-item-draft')) $('discard-item-draft').onclick=() => { resetForm(true); message('Pending item form draft discarded.'); };
+    $('cancel-edit').onclick = () => resetForm(true);
+    if ($('discard-item-draft')) $('discard-item-draft').onclick = () => { resetForm(true); message('Pending item form draft discarded.'); };
     for (const fieldId of ['item-name', 'item-start', 'item-opening']) {
         $(fieldId).oninput = () => syncItemFormDraft();
         $(fieldId).onchange = () => syncItemFormDraft();
     }
     $('item-form').onkeydown = e => { if (e.key === 'Escape' && editing) { e.preventDefault(); resetForm(true); } };
-    $('item-form').onsubmit=async event => { event.preventDefault(); const button=$('item-submit'); button.disabled=true; try {
-        const name=$('item-name').value.trim(), start=$('item-start').value, opening=L.number($('item-opening').value,'Initial opening');
-        if (!name || !start) throw new Error('Enter an item name and start date');
-        if (editing) {
-            const staleInfo = L.isItemFormDraftStale(draftState.itemForm, items);
-            if (staleInfo.missing) throw new Error('The item you were editing is no longer available on the server. Discard draft or add as a new item.');
-            if (staleInfo.stale && typeof confirm === 'function') {
-                const ok = confirm(`Server values for "${staleInfo.serverItem.name}" changed since this edit draft started (Saved: ${staleInfo.serverItem.name}, opening ${fmt(Number(staleInfo.serverItem.initial_opening))}). Save your draft changes anyway?`);
-                if (!ok) { button.disabled = false; return; }
+    $('item-form').onsubmit = async event => {
+        event.preventDefault();
+        const button = $('item-submit');
+        button.disabled = true;
+        inFlightFormSave = true;
+        try {
+            const name = $('item-name').value.trim(), start = $('item-start').value, rawOpening = $('item-opening').value, opening = L.number(rawOpening, 'Initial opening');
+            if (!name || !start) throw new Error('Enter an item name and start date');
+            const submitEditingId = editing, submitBase = editingBase;
+            let submitDraft = draftState.itemForm;
+            let savedFormRev = submitDraft ? submitDraft.revision : 0;
+
+            if (submitEditingId) {
+                // Fresh pre-write read of the item record (brief TOCTOU window remains before update).
+                const { data: serverItem, error: readErr } = await _supabase
+                    .from('inventory_items')
+                    .select('id, name, start_date, initial_opening')
+                    .eq('user_id', user.id)
+                    .eq('id', submitEditingId)
+                    .maybeSingle();
+                if (readErr) throw readErr;
+
+                const baseName = submitDraft && submitDraft.baseName !== null
+                    ? submitDraft.baseName
+                    : (submitBase && submitBase.id === submitEditingId ? submitBase.name : null);
+                const baseOpening = submitDraft && submitDraft.baseOpening !== null
+                    ? submitDraft.baseOpening
+                    : (submitBase && submitBase.id === submitEditingId ? submitBase.opening : null);
+                const staleInfo = L.isItemFormDraftStale(
+                    { editingId: submitEditingId, baseName, baseOpening },
+                    serverItem ? [serverItem] : []
+                );
+                if (staleInfo.missing) {
+                    throw new Error('The item you were editing is no longer available on the server. Discard draft or add as a new item.');
+                }
+                if (staleInfo.stale) {
+                    const idx = items.findIndex(i => i.id === submitEditingId);
+                    if (idx >= 0) items[idx] = serverItem;
+                    if (!submitDraft) {
+                        draftState = L.setItemFormDraft(draftState, {
+                            editingId: submitEditingId,
+                            name,
+                            startDate: start,
+                            opening: rawOpening,
+                            baseName,
+                            baseOpening,
+                        });
+                        persistDrafts();
+                        submitDraft = draftState.itemForm;
+                        savedFormRev = submitDraft.revision;
+                    }
+                    if (typeof confirm === 'function') {
+                        const ok = confirm(`Server values for "${staleInfo.serverItem.name}" changed on the server since this edit started (Server now: ${staleInfo.serverItem.name}, opening ${fmt(Number(staleInfo.serverItem.initial_opening))}). Save your draft changes anyway?`);
+                        if (!ok) {
+                            updateItemDraftNote();
+                            updateDraftStatus();
+                            return;
+                        }
+                    }
+                }
             }
+
+            const query = submitEditingId
+                ? _supabase.from('inventory_items').update({ name, initial_opening: opening }).eq('user_id', user.id).eq('id', submitEditingId)
+                : _supabase.from('inventory_items').insert({ user_id: user.id, name, start_date: start, initial_opening: opening });
+            const currentChoices = report ? Object.fromEntries([...document.querySelectorAll('#mapping-list select')].map(s => [s.dataset.key, s.value]).filter(([, v]) => v)) : null;
+            const { error } = await query;
+            if (error) throw error;
+
+            const latestForm = draftState.itemForm;
+            const hasNewerFormEdit = Boolean(latestForm && (savedFormRev === 0 || latestForm.revision !== savedFormRev));
+            inFlightFormSave = false;
+            if (!hasNewerFormEdit) {
+                draftState = L.clearItemFormDraftIfRevision(draftState, savedFormRev);
+                persistDrafts();
+                await refresh();
+                resetForm(false);
+            } else {
+                if (submitEditingId && latestForm.editingId === submitEditingId) {
+                    draftState = L.rebaseItemFormDraft(draftState, name, opening);
+                } else if (!submitEditingId) {
+                    editing = null;
+                    editingBase = null;
+                }
+                persistDrafts();
+                await refresh();
+            }
+            updateItemDraftNote();
+            updateDraftStatus();
+            invalidate();
+            if (report) renderMappings(currentChoices);
+            message('Item saved. Later balances are recalculated.');
+        } catch (e) {
+            fail(e);
+        } finally {
+            inFlightFormSave = false;
+            button.disabled = false;
         }
-        const query=editing ? _supabase.from('inventory_items').update({name,initial_opening:opening}).eq('user_id',user.id).eq('id',editing) : _supabase.from('inventory_items').insert({user_id:user.id,name,start_date:start,initial_opening:opening});
-        const currentChoices=report ? Object.fromEntries([...document.querySelectorAll('#mapping-list select')].map(s=>[s.dataset.key,s.value]).filter(([,v])=>v)) : null;
-        const {error}=await query; if(error) throw error;
-        draftState = L.clearItemFormDraft(draftState);
-        persistDrafts();
-        await refresh(); resetForm(false); updateItemDraftNote(); updateDraftStatus(); invalidate(); if(report) renderMappings(currentChoices); message('Item saved. Later balances are recalculated.');
-    } catch(e) { fail(e); } finally { button.disabled=false; } };
+    };
     function applyDateChange(newDay) {
         if (!newDay) return;
         $('day').value = newDay;
@@ -391,28 +562,14 @@
         container.append(el('div', `Generated locally in browser on ${new Date().toLocaleString()} · Read-only A4 print view (no saved data modified).`, 'print-footer'));
     }
 
-    function wrapCanvasText(ctx, value, maxWidth) {
-        const words = String(value || '').split(/\s+/).filter(Boolean);
-        if (!words.length) return [''];
-        const lines = [];
-        let line = '';
-        for (const w of words) {
-            const test = line ? `${line} ${w}` : w;
-            if (ctx.measureText(test).width <= maxWidth) { line = test; continue; }
-            if (line) lines.push(line);
-            if (ctx.measureText(w).width <= maxWidth) { line = w; continue; }
-            let chunk = '';
-            for (const ch of w) {
-                if (ctx.measureText(chunk + ch).width > maxWidth && chunk) { lines.push(chunk); chunk = ch; }
-                else chunk += ch;
-            }
-            line = chunk;
-        }
-        if (line) lines.push(line);
-        return lines;
+    function measureRestaurantHeader(ctx, innerW) {
+        ctx.font = 'bold 34px sans-serif';
+        const restLines = L.wrapLinesByMeasure(restaurantName, innerW - 340, s => ctx.measureText(s).width);
+        const headerLineY = 136 + Math.max(0, restLines.length - 1) * 38;
+        return { restLines, headerLineY };
     }
 
-    function drawA4StockPage(snap, pageRows, pageNum, totalPages) {
+    function drawA4StockPage(snap, pageSliceRows, pageNum, totalPages, headerLayout) {
         const W = 1240, H = 1754;
         const canvas = document.createElement('canvas');
         canvas.width = W; canvas.height = H;
@@ -423,14 +580,17 @@
         ctx.fillRect(0, 0, W, H);
 
         const M = 60, innerW = W - M * 2;
+        const hdr = headerLayout || measureRestaurantHeader(ctx, innerW);
         ctx.fillStyle = '#0f172a';
         ctx.font = 'bold 34px sans-serif';
         ctx.textAlign = 'left';
-        ctx.fillText(restaurantName, M, 84, innerW - 340);
+        hdr.restLines.forEach((line, idx) => {
+            ctx.fillText(line, M, 84 + idx * 38);
+        });
 
         ctx.fillStyle = '#475569';
         ctx.font = '600 20px sans-serif';
-        ctx.fillText('Daily Stock Sheet (pieces)', M, 118);
+        ctx.fillText('Daily Stock Sheet (pieces)', M, hdr.headerLineY - 18);
 
         ctx.textAlign = 'right';
         ctx.fillStyle = '#0f172a';
@@ -443,11 +603,11 @@
         ctx.strokeStyle = '#1e293b';
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.moveTo(M, 136);
-        ctx.lineTo(W - M, 136);
+        ctx.moveTo(M, hdr.headerLineY);
+        ctx.lineTo(W - M, hdr.headerLineY);
         ctx.stroke();
 
-        let y = 154;
+        let y = hdr.headerLineY + 18;
         if (snap.hasDrafts) {
             ctx.fillStyle = '#fffbeb';
             ctx.fillRect(M, y, innerW, 44);
@@ -457,7 +617,7 @@
             ctx.fillStyle = '#92400e';
             ctx.font = 'bold 18px sans-serif';
             ctx.textAlign = 'left';
-            ctx.fillText(`CONTAINS UNSAVED DRAFTS (${snap.draftCount} row${snap.draftCount === 1 ? '' : 's'} labeled DRAFT — not yet saved)`, M + 14, y + 28, innerW - 28);
+            ctx.fillText(`CONTAINS UNSAVED DRAFTS (${snap.draftCount} row${snap.draftCount === 1 ? '' : 's'} labeled DRAFT — not yet saved)`, M + 14, y + 28);
             y += 60;
         }
 
@@ -484,10 +644,13 @@
         }
         y += headH;
 
-        for (const row of pageRows) {
+        for (const row of pageSliceRows) {
             ctx.font = '600 18px sans-serif';
-            const itemLines = wrapCanvasText(ctx, row.itemName, cols[0].w - 24);
-            const rowH = Math.max(46, itemLines.length * 24 + (row.isDraft ? 24 : 18));
+            const itemLines = Array.isArray(row.nameLines) && row.nameLines.length
+                ? row.nameLines
+                : L.wrapLinesByMeasure(row.itemName, cols[0].w - 24, s => ctx.measureText(s).width);
+            const fallbackH = Math.max(46, itemLines.length * 24 + 22 + (row.isDraft && !row.isContinuation ? 24 : 0) + (row.isContinuation ? 22 : 0) + (row.hasContinuation ? 20 : 0));
+            const rowH = row.rowHeight || fallbackH;
             if (row.isDraft) {
                 ctx.fillStyle = '#fffbeb';
                 ctx.fillRect(M, y, innerW, rowH);
@@ -496,19 +659,41 @@
             ctx.lineWidth = 1;
             ctx.strokeRect(M, y, innerW, rowH);
 
+            let textY = y + 26;
             ctx.textAlign = 'left';
+            if (row.isContinuation) {
+                ctx.fillStyle = '#475569';
+                ctx.font = 'bold 14px sans-serif';
+                ctx.fillText('(continued)', cols[0].x + 12, textY);
+                textY += 22;
+            }
             ctx.fillStyle = '#0f172a';
             ctx.font = '600 18px sans-serif';
-            itemLines.forEach((line, idx) => {
-                ctx.fillText(line, cols[0].x + 12, y + 26 + idx * 22);
-            });
-            if (row.isDraft) {
+            for (const line of itemLines) {
+                ctx.fillText(line, cols[0].x + 12, textY);
+                textY += 24;
+            }
+            if (row.isDraft && !row.isContinuation) {
                 ctx.fillStyle = '#92400e';
                 ctx.font = 'bold 14px sans-serif';
-                ctx.fillText('DRAFT (unsaved)', cols[0].x + 12, y + 26 + itemLines.length * 22);
+                ctx.fillText('DRAFT (unsaved)', cols[0].x + 12, textY);
+                textY += 24;
+            }
+            if (row.hasContinuation) {
+                ctx.fillStyle = '#475569';
+                ctx.font = 'bold 13px sans-serif';
+                ctx.fillText('(continued on next page...)', cols[0].x + 12, textY);
             }
 
-            if (!row.available) {
+            if (row.isContinuation) {
+                ctx.textAlign = 'right';
+                ctx.fillStyle = '#64748b';
+                ctx.font = '15px sans-serif';
+                for (let ci = 1; ci < cols.length; ci++) {
+                    ctx.fillText('cont.', cols[ci].x + cols[ci].w - 12, y + 28);
+                }
+            } else if (!row.available) {
+                ctx.textAlign = 'left';
                 ctx.fillStyle = '#64748b';
                 ctx.font = '17px sans-serif';
                 ctx.fillText(`Starts ${row.startDate}`, cols[1].x + 12, y + 28);
@@ -520,17 +705,19 @@
                     [cols[4], row.isDraft ? `${fmt(row.closing)}*` : fmt(row.closing), row.isShortage ? '#b91c1c' : (row.isDraft ? '#92400e' : '#0f172a')],
                     [cols[5], row.isDraft ? `${fmt(row.damage)}*` : fmt(row.damage), row.isDraft ? '#92400e' : '#0f172a'],
                 ];
-                ctx.font = '600 18px sans-serif';
                 for (const [col, val, color] of nums) {
                     ctx.textAlign = 'right';
                     ctx.fillStyle = color;
-                    ctx.fillText(val, col.x + col.w - 12, y + 28, col.w - 20);
+                    ctx.font = '600 18px sans-serif';
+                    if (ctx.measureText(val).width > col.w - 20) ctx.font = '600 15px sans-serif';
+                    if (ctx.measureText(val).width > col.w - 20) ctx.font = '600 13px sans-serif';
+                    ctx.fillText(val, col.x + col.w - 12, y + 28);
                 }
             }
             y += rowH;
         }
 
-        if (!pageRows.length) {
+        if (!pageSliceRows.length) {
             ctx.strokeStyle = '#e2e8f0';
             ctx.strokeRect(M, y, innerW, 54);
             ctx.fillStyle = '#64748b';
@@ -565,7 +752,8 @@
         box.append(el('p', noteText));
         const links = el('div', undefined, 'export-links');
         for (const item of entriesList) {
-            const a = el('a', `Download ${item.label}`, 'export-link');
+            const a = el('a', undefined, 'export-link');
+            a.append(svgIcon('download', 'icon icon-sm'), el('span', `Download ${item.label}`));
             a.href = item.url;
             a.download = item.fileName;
             links.append(a);
@@ -614,11 +802,29 @@
         try {
             const snap = prepareSheetSnapshot();
             if (!snap) { btn.disabled = false; return; }
-            const pages = L.paginateSheetRows(snap.rows, 22);
+            const measureCanvas = document.createElement('canvas');
+            measureCanvas.width = 1240; measureCanvas.height = 1754;
+            const mCtx = measureCanvas.getContext('2d');
+            if (!mCtx) throw new Error('Canvas 2D context is unavailable in this browser');
+            const headerLayout = measureRestaurantHeader(mCtx, 1240 - 120);
+            const tableBodyStartY = headerLayout.headerLineY + 18 + (snap.hasDrafts ? 60 : 0) + 46;
+            const maxBodyHeight = (1754 - 74) - tableBodyStartY;
+            mCtx.font = '600 18px sans-serif';
+            const pages = L.layoutSheetPages(snap.rows, {
+                nameMaxWidth: 360 - 24,
+                maxBodyHeight,
+                measureName: s => mCtx.measureText(s).width,
+                lineHeight: 24,
+                padY: 22,
+                minRowHeight: 46,
+                draftBadgeHeight: 24,
+                contHeaderHeight: 22,
+                contFooterHeight: 20,
+            });
             const files = [], downloadEntries = [];
             clearExportUrls();
             for (let i = 0; i < pages.length; i++) {
-                const canvas = drawA4StockPage(snap, pages[i], i + 1, pages.length);
+                const canvas = drawA4StockPage(snap, pages[i].rows, i + 1, pages.length, headerLayout);
                 const blob = await canvasToPngBlob(canvas);
                 const suffix = pages.length > 1 ? `-page-${i + 1}-of-${pages.length}` : '';
                 const draftTag = snap.hasDrafts ? '-DRAFT' : '';
@@ -778,17 +984,20 @@
             const serverItem = items.find(i => i.id === f.editingId);
             if (serverItem) {
                 editing = serverItem.id;
+                editingBase = { id: serverItem.id, name: serverItem.name, opening: Number(serverItem.initial_opening) };
                 $('item-start').value = serverItem.start_date;
                 $('item-start').disabled = true;
-                $('item-submit').textContent = 'Save item';
+                setItemSubmitText('Save item');
                 $('cancel-edit').hidden = false;
             } else {
                 editing = null;
+                editingBase = null;
                 $('item-start').disabled = false;
                 $('item-start').value = f.startDate || $('day').value;
             }
         } else {
             editing = null;
+            editingBase = null;
             $('item-start').disabled = false;
             $('item-start').value = f.startDate || $('day').value;
         }

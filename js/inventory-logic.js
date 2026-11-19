@@ -259,6 +259,7 @@
                 opening: f.opening != null ? String(f.opening) : '',
                 baseName: f.baseName != null ? String(f.baseName) : null,
                 baseOpening: f.baseOpening != null && Number.isFinite(Number(f.baseOpening)) ? Number(f.baseOpening) : null,
+                revision: Number.isInteger(Number(f.revision)) && Number(f.revision) > 0 ? Number(f.revision) : 1,
                 dirty: true,
             };
         }
@@ -273,6 +274,7 @@
                         damage: d.damage != null ? String(d.damage) : '',
                         basePurchase: Number.isFinite(Number(d.basePurchase)) ? Number(d.basePurchase) : 0,
                         baseDamage: Number.isFinite(Number(d.baseDamage)) ? Number(d.baseDamage) : 0,
+                        revision: Number.isInteger(Number(d.revision)) && Number(d.revision) > 0 ? Number(d.revision) : 1,
                         updatedAt: typeof d.updatedAt === 'string' ? d.updatedAt : '',
                     };
                 }
@@ -320,12 +322,16 @@
     function setEntryDraft(state, day, itemId, draft) {
         const clean = sanitizeDraftState(state);
         if (!DATE_RE.test(String(day || '')) || !itemId) return clean;
+        const id = String(itemId);
         const nextDay = { ...(clean.entries[day] || {}) };
-        nextDay[String(itemId)] = {
+        const prevRev = nextDay[id] ? nextDay[id].revision : 0;
+        const requested = Number.isInteger(Number(draft.revision)) ? Number(draft.revision) : 0;
+        nextDay[id] = {
             purchase: draft.purchase != null ? String(draft.purchase) : '',
             damage: draft.damage != null ? String(draft.damage) : '',
             basePurchase: Number.isFinite(Number(draft.basePurchase)) ? Number(draft.basePurchase) : 0,
             baseDamage: Number.isFinite(Number(draft.baseDamage)) ? Number(draft.baseDamage) : 0,
+            revision: Math.max(prevRev + 1, requested, 1),
             updatedAt: typeof draft.updatedAt === 'string' ? draft.updatedAt : '',
         };
         clean.entries[day] = nextDay;
@@ -340,15 +346,63 @@
         else delete clean.entries[day];
         return clean;
     }
+    function clearEntryDraftIfRevision(state, day, itemId, expectedRevision) {
+        const clean = sanitizeDraftState(state);
+        const existing = clean.entries[day] && clean.entries[day][String(itemId)];
+        if (!existing || existing.revision !== expectedRevision) return clean;
+        return clearEntryDraft(clean, day, itemId);
+    }
+    function rebaseEntryDraft(state, day, itemId, newBasePurchase, newBaseDamage) {
+        const clean = sanitizeDraftState(state);
+        const id = String(itemId || '');
+        const existing = clean.entries[day] && clean.entries[day][id];
+        if (!existing) return clean;
+        clean.entries[day] = {
+            ...clean.entries[day],
+            [id]: {
+                ...existing,
+                basePurchase: Number.isFinite(Number(newBasePurchase)) ? Number(newBasePurchase) : existing.basePurchase,
+                baseDamage: Number.isFinite(Number(newBaseDamage)) ? Number(newBaseDamage) : existing.baseDamage,
+            },
+        };
+        return clean;
+    }
+    function hasEntryServerConflict(basePurchase, baseDamage, serverPurchase, serverDamage) {
+        return Number(basePurchase) !== Number(serverPurchase) || Number(baseDamage) !== Number(serverDamage);
+    }
     function setItemFormDraft(state, formDraft) {
         const clean = sanitizeDraftState(state);
         if (!formDraft) { clean.itemForm = null; return clean; }
-        clean.itemForm = sanitizeDraftState({ itemForm: { ...formDraft, dirty: true } }).itemForm;
+        const prevRev = clean.itemForm ? clean.itemForm.revision : 0;
+        const requested = Number.isInteger(Number(formDraft.revision)) ? Number(formDraft.revision) : 0;
+        clean.itemForm = sanitizeDraftState({
+            itemForm: {
+                ...formDraft,
+                revision: Math.max(prevRev + 1, requested, 1),
+                dirty: true,
+            },
+        }).itemForm;
         return clean;
     }
     function clearItemFormDraft(state) {
         const clean = sanitizeDraftState(state);
         clean.itemForm = null;
+        return clean;
+    }
+    function clearItemFormDraftIfRevision(state, expectedRevision) {
+        const clean = sanitizeDraftState(state);
+        if (!clean.itemForm || clean.itemForm.revision !== expectedRevision) return clean;
+        clean.itemForm = null;
+        return clean;
+    }
+    function rebaseItemFormDraft(state, newBaseName, newBaseOpening) {
+        const clean = sanitizeDraftState(state);
+        if (!clean.itemForm) return clean;
+        clean.itemForm = {
+            ...clean.itemForm,
+            baseName: newBaseName != null ? String(newBaseName) : clean.itemForm.baseName,
+            baseOpening: Number.isFinite(Number(newBaseOpening)) ? Number(newBaseOpening) : clean.itemForm.baseOpening,
+        };
         return clean;
     }
     function resolveRowState(item, day, entries, imports, dayDrafts) {
@@ -466,12 +520,123 @@
         }
         return rows;
     }
+    function wrapLinesByMeasure(value, maxWidth, measureFn) {
+        const measure = typeof measureFn === 'function' ? measureFn : (s => String(s || '').length * 10);
+        const cap = Math.max(24, Number(maxWidth) || 336);
+        const words = text(value).split(' ').filter(Boolean);
+        if (!words.length) return [''];
+        const lines = [];
+        let line = '';
+        for (const w of words) {
+            const test = line ? `${line} ${w}` : w;
+            if (measure(test) <= cap) { line = test; continue; }
+            if (line) lines.push(line);
+            if (measure(w) <= cap) { line = w; continue; }
+            let chunk = '';
+            for (const ch of w) {
+                if (measure(chunk + ch) > cap && chunk) {
+                    lines.push(chunk);
+                    chunk = ch;
+                } else {
+                    chunk += ch;
+                }
+            }
+            line = chunk;
+        }
+        if (line) lines.push(line);
+        return lines;
+    }
+    function layoutSheetPages(rows, options = {}) {
+        const list = Array.isArray(rows) ? rows : [];
+        const nameMaxWidth = Number(options.nameMaxWidth) || 336;
+        const lineHeight = Number(options.lineHeight) || 24;
+        const padY = options.padY != null ? Number(options.padY) : 22;
+        const minRowHeight = Number(options.minRowHeight) || 46;
+        const draftBadgeHeight = Number(options.draftBadgeHeight) || 24;
+        const contHeaderHeight = Number(options.contHeaderHeight) || 22;
+        const contFooterHeight = Number(options.contFooterHeight) || 20;
+        const minPageHeight = minRowHeight + contHeaderHeight + contFooterHeight;
+        const maxBodyHeight = Math.max(minPageHeight, Number(options.maxBodyHeight) || 1420);
+        const measureName = typeof options.measureName === 'function'
+            ? options.measureName
+            : (s => String(s || '').length * 12);
+
+        if (!list.length) return [{ rows: [], usedHeight: 0 }];
+        const pages = [];
+        let page = { rows: [], usedHeight: 0 };
+
+        function pushPage() {
+            if (page.rows.length) {
+                pages.push(page);
+                page = { rows: [], usedHeight: 0 };
+            }
+        }
+
+        for (const row of list) {
+            const allLines = wrapLinesByMeasure(row && row.itemName, nameMaxWidth, measureName);
+            const draftExtra = row && row.isDraft ? draftBadgeHeight : 0;
+            const fullHeight = Math.max(minRowHeight, allLines.length * lineHeight + padY + draftExtra);
+
+            if (fullHeight <= maxBodyHeight) {
+                if (page.rows.length && page.usedHeight + fullHeight > maxBodyHeight) pushPage();
+                page.rows.push({
+                    ...row,
+                    nameLines: allLines,
+                    rowHeight: fullHeight,
+                    isContinuation: false,
+                    hasContinuation: false,
+                });
+                page.usedHeight += fullHeight;
+                continue;
+            }
+
+            // Exceptionally tall row (> maxBodyHeight): split wrapped lines safely across continuation slices.
+            let lineIdx = 0;
+            while (lineIdx < allLines.length) {
+                const isFirst = lineIdx === 0;
+                const overhead = padY + (isFirst ? draftExtra : contHeaderHeight);
+                let rem = maxBodyHeight - page.usedHeight;
+                if (rem < Math.max(minRowHeight, overhead + lineHeight + contFooterHeight) && page.rows.length) {
+                    pushPage();
+                    rem = maxBodyHeight;
+                }
+                const remainingCount = allLines.length - lineIdx;
+                let take = remainingCount;
+                let hasContinuation = false;
+                if (remainingCount * lineHeight + overhead > rem) {
+                    hasContinuation = true;
+                    const availForLines = Math.max(lineHeight, rem - overhead - contFooterHeight);
+                    take = Math.max(1, Math.min(remainingCount, Math.floor(availForLines / lineHeight)));
+                }
+                const sliceLines = allLines.slice(lineIdx, lineIdx + take);
+                const sliceHeight = Math.max(
+                    minRowHeight,
+                    sliceLines.length * lineHeight + overhead + (hasContinuation ? contFooterHeight : 0)
+                );
+                page.rows.push({
+                    ...row,
+                    nameLines: sliceLines,
+                    rowHeight: sliceHeight,
+                    isContinuation: !isFirst,
+                    hasContinuation,
+                });
+                page.usedHeight += sliceHeight;
+                lineIdx += take;
+                if (hasContinuation) pushPage();
+            }
+        }
+        pushPage();
+        return pages;
+    }
     function estimateExportRowUnits(row, maxNameChars = 22) {
         const nameLen = text(row && row.itemName).length;
         const nameLines = Math.max(1, Math.ceil(nameLen / Math.max(8, maxNameChars)));
         return nameLines + (row && row.isDraft ? 0.5 : 0);
     }
     function paginateSheetRows(rows, maxUnitsPerPage = 22) {
+        if (maxUnitsPerPage && typeof maxUnitsPerPage === 'object') {
+            return layoutSheetPages(rows, maxUnitsPerPage).map(p => p.rows);
+        }
         const list = Array.isArray(rows) ? rows : [];
         if (!list.length) return [[]];
         const cap = Math.max(1, Number(maxUnitsPerPage) || 24);
@@ -506,12 +671,19 @@
         saveDraftState,
         setEntryDraft,
         clearEntryDraft,
+        clearEntryDraftIfRevision,
+        rebaseEntryDraft,
+        hasEntryServerConflict,
         setItemFormDraft,
         clearItemFormDraft,
+        clearItemFormDraftIfRevision,
+        rebaseItemFormDraft,
         resolveRowState,
         isItemFormDraftStale,
         draftSummary,
         buildSheetExportRows,
+        wrapLinesByMeasure,
+        layoutSheetPages,
         estimateExportRowUnits,
         paginateSheetRows,
         number,
