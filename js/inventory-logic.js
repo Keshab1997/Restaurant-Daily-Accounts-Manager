@@ -234,6 +234,263 @@
         if (existingHash && !replace) return 'replace-required';
         return 'save';
     }
+    const DRAFT_KEY_PREFIX = 'inventory_drafts_v1:';
+    const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+    function draftStorageKey(userId) {
+        const id = text(userId);
+        if (!id) throw new Error('Authenticated user ID is required for draft storage');
+        return `${DRAFT_KEY_PREFIX}${id}`;
+    }
+    function emptyDraftState() {
+        return { selectedDay: '', itemForm: null, entries: {} };
+    }
+    function sanitizeDraftState(raw) {
+        const clean = emptyDraftState();
+        if (!raw || typeof raw !== 'object') return clean;
+        if (typeof raw.selectedDay === 'string' && DATE_RE.test(raw.selectedDay)) {
+            clean.selectedDay = raw.selectedDay;
+        }
+        if (raw.itemForm && typeof raw.itemForm === 'object' && raw.itemForm.dirty) {
+            const f = raw.itemForm;
+            clean.itemForm = {
+                editingId: f.editingId != null && f.editingId !== '' ? String(f.editingId) : null,
+                name: f.name != null ? String(f.name) : '',
+                startDate: typeof f.startDate === 'string' && DATE_RE.test(f.startDate) ? f.startDate : '',
+                opening: f.opening != null ? String(f.opening) : '',
+                baseName: f.baseName != null ? String(f.baseName) : null,
+                baseOpening: f.baseOpening != null && Number.isFinite(Number(f.baseOpening)) ? Number(f.baseOpening) : null,
+                dirty: true,
+            };
+        }
+        if (raw.entries && typeof raw.entries === 'object' && !Array.isArray(raw.entries)) {
+            for (const [day, byItem] of Object.entries(raw.entries)) {
+                if (!DATE_RE.test(day) || !byItem || typeof byItem !== 'object' || Array.isArray(byItem)) continue;
+                const cleanDay = {};
+                for (const [itemId, d] of Object.entries(byItem)) {
+                    if (!itemId || !d || typeof d !== 'object') continue;
+                    cleanDay[String(itemId)] = {
+                        purchase: d.purchase != null ? String(d.purchase) : '',
+                        damage: d.damage != null ? String(d.damage) : '',
+                        basePurchase: Number.isFinite(Number(d.basePurchase)) ? Number(d.basePurchase) : 0,
+                        baseDamage: Number.isFinite(Number(d.baseDamage)) ? Number(d.baseDamage) : 0,
+                        updatedAt: typeof d.updatedAt === 'string' ? d.updatedAt : '',
+                    };
+                }
+                if (Object.keys(cleanDay).length) clean.entries[day] = cleanDay;
+            }
+        }
+        return clean;
+    }
+    function loadDraftState(storage, userId) {
+        try {
+            const key = draftStorageKey(userId);
+            if (!storage || typeof storage.getItem !== 'function') {
+                return { state: emptyDraftState(), restored: false, error: 'Browser draft storage is unavailable' };
+            }
+            const raw = storage.getItem(key);
+            if (!raw) return { state: emptyDraftState(), restored: false, error: null };
+            let parsed;
+            try {
+                parsed = JSON.parse(raw);
+            } catch (_) {
+                return { state: emptyDraftState(), restored: false, error: 'Saved browser draft data was corrupted and could not be restored' };
+            }
+            const state = sanitizeDraftState(parsed);
+            const restored = Boolean(state.selectedDay || state.itemForm || Object.keys(state.entries).length);
+            return { state, restored, error: null };
+        } catch (err) {
+            return { state: emptyDraftState(), restored: false, error: err && err.message ? err.message : 'Could not read browser draft storage' };
+        }
+    }
+    function saveDraftState(storage, userId, state) {
+        const clean = sanitizeDraftState(state);
+        try {
+            const key = draftStorageKey(userId);
+            if (!storage || typeof storage.setItem !== 'function' || typeof storage.removeItem !== 'function') {
+                return { ok: false, state: clean, error: 'Browser draft storage is unavailable' };
+            }
+            const hasData = Boolean(clean.selectedDay || clean.itemForm || Object.keys(clean.entries).length);
+            if (!hasData) storage.removeItem(key);
+            else storage.setItem(key, JSON.stringify(clean));
+            return { ok: true, state: clean, error: null };
+        } catch (err) {
+            return { ok: false, state: clean, error: err && err.message ? err.message : 'Could not save draft to browser storage' };
+        }
+    }
+    function setEntryDraft(state, day, itemId, draft) {
+        const clean = sanitizeDraftState(state);
+        if (!DATE_RE.test(String(day || '')) || !itemId) return clean;
+        const nextDay = { ...(clean.entries[day] || {}) };
+        nextDay[String(itemId)] = {
+            purchase: draft.purchase != null ? String(draft.purchase) : '',
+            damage: draft.damage != null ? String(draft.damage) : '',
+            basePurchase: Number.isFinite(Number(draft.basePurchase)) ? Number(draft.basePurchase) : 0,
+            baseDamage: Number.isFinite(Number(draft.baseDamage)) ? Number(draft.baseDamage) : 0,
+            updatedAt: typeof draft.updatedAt === 'string' ? draft.updatedAt : '',
+        };
+        clean.entries[day] = nextDay;
+        return clean;
+    }
+    function clearEntryDraft(state, day, itemId) {
+        const clean = sanitizeDraftState(state);
+        if (!clean.entries[day]) return clean;
+        const nextDay = { ...clean.entries[day] };
+        delete nextDay[String(itemId)];
+        if (Object.keys(nextDay).length) clean.entries[day] = nextDay;
+        else delete clean.entries[day];
+        return clean;
+    }
+    function setItemFormDraft(state, formDraft) {
+        const clean = sanitizeDraftState(state);
+        if (!formDraft) { clean.itemForm = null; return clean; }
+        clean.itemForm = sanitizeDraftState({ itemForm: { ...formDraft, dirty: true } }).itemForm;
+        return clean;
+    }
+    function clearItemFormDraft(state) {
+        const clean = sanitizeDraftState(state);
+        clean.itemForm = null;
+        return clean;
+    }
+    function resolveRowState(item, day, entries, imports, dayDrafts) {
+        const base = stock(item, day, entries, imports);
+        if (!base) {
+            return { available: false, item, startDate: item.start_date, dirty: false, stale: false, invalidDraft: false };
+        }
+        const draft = dayDrafts && dayDrafts[item.id];
+        if (!draft) {
+            return {
+                available: true,
+                item,
+                base,
+                opening: base.opening,
+                purchase: base.purchase,
+                sale: base.sale,
+                damage: base.damage,
+                closing: base.closing,
+                purchaseInput: String(base.purchase),
+                damageInput: String(base.damage),
+                dirty: false,
+                stale: false,
+                invalidDraft: false,
+            };
+        }
+        const stale = Number(draft.basePurchase) !== base.purchase || Number(draft.baseDamage) !== base.damage;
+        let p = null, d = null, invalidDraft = false;
+        try { p = number(draft.purchase, 'Purchase'); } catch (_) { invalidDraft = true; }
+        try { d = number(draft.damage, 'Damage'); } catch (_) { invalidDraft = true; }
+        const closing = !invalidDraft ? base.opening + p - base.sale - d : null;
+        return {
+            available: true,
+            item,
+            base,
+            opening: base.opening,
+            purchase: invalidDraft ? null : p,
+            sale: base.sale,
+            damage: invalidDraft ? null : d,
+            closing,
+            purchaseInput: String(draft.purchase),
+            damageInput: String(draft.damage),
+            dirty: true,
+            stale,
+            invalidDraft,
+        };
+    }
+    function isItemFormDraftStale(formDraft, items) {
+        if (!formDraft || !formDraft.editingId) return { stale: false, missing: false, serverItem: null };
+        const serverItem = (items || []).find(i => i.id === formDraft.editingId) || null;
+        if (!serverItem) return { stale: true, missing: true, serverItem: null };
+        const changed = serverItem.name !== formDraft.baseName || Number(serverItem.initial_opening) !== Number(formDraft.baseOpening);
+        return { stale: changed, missing: false, serverItem };
+    }
+    function draftSummary(state, currentDay) {
+        const clean = sanitizeDraftState(state);
+        let currentDayEntries = 0, otherDayEntries = 0;
+        const otherDates = [];
+        for (const [day, byItem] of Object.entries(clean.entries)) {
+            const count = Object.keys(byItem).length;
+            if (!count) continue;
+            if (day === currentDay) currentDayEntries += count;
+            else {
+                otherDayEntries += count;
+                otherDates.push(day);
+            }
+        }
+        const hasItemForm = Boolean(clean.itemForm);
+        return {
+            currentDayEntries,
+            otherDayEntries,
+            otherDates: otherDates.sort(),
+            hasItemForm,
+            totalCount: currentDayEntries + otherDayEntries + (hasItemForm ? 1 : 0),
+        };
+    }
+    function buildSheetExportRows(items, day, entries, imports, dayDrafts) {
+        const rows = [];
+        for (const item of items || []) {
+            const state = resolveRowState(item, day, entries || [], imports || [], dayDrafts || {});
+            if (!state.available) {
+                rows.push({
+                    itemName: item.name,
+                    available: false,
+                    startDate: state.startDate,
+                    opening: null,
+                    purchase: null,
+                    sale: null,
+                    closing: null,
+                    damage: null,
+                    isDraft: false,
+                    isStale: false,
+                    isShortage: false,
+                    invalidDraft: false,
+                    serverPurchase: null,
+                    serverDamage: null,
+                });
+                continue;
+            }
+            rows.push({
+                itemName: item.name,
+                available: true,
+                startDate: item.start_date,
+                opening: state.opening,
+                purchase: state.purchase,
+                sale: state.sale,
+                closing: state.closing,
+                damage: state.damage,
+                isDraft: state.dirty,
+                isStale: state.stale,
+                isShortage: state.closing !== null && state.closing < 0,
+                invalidDraft: state.invalidDraft,
+                serverPurchase: state.base.purchase,
+                serverDamage: state.base.damage,
+            });
+        }
+        return rows;
+    }
+    function estimateExportRowUnits(row, maxNameChars = 22) {
+        const nameLen = text(row && row.itemName).length;
+        const nameLines = Math.max(1, Math.ceil(nameLen / Math.max(8, maxNameChars)));
+        return nameLines + (row && row.isDraft ? 0.5 : 0);
+    }
+    function paginateSheetRows(rows, maxUnitsPerPage = 22) {
+        const list = Array.isArray(rows) ? rows : [];
+        if (!list.length) return [[]];
+        const cap = Math.max(1, Number(maxUnitsPerPage) || 24);
+        const pages = [];
+        let page = [], used = 0;
+        for (const row of list) {
+            const units = estimateExportRowUnits(row);
+            if (page.length && used + units > cap) {
+                pages.push(page);
+                page = [row];
+                used = units;
+            } else {
+                page.push(row);
+                used += units;
+            }
+        }
+        if (page.length) pages.push(page);
+        return pages;
+    }
     return {
         normalizeName,
         tokenizeName,
@@ -242,6 +499,21 @@
         savedChoiceMap,
         matchDish,
         suggestMappings,
+        draftStorageKey,
+        emptyDraftState,
+        sanitizeDraftState,
+        loadDraftState,
+        saveDraftState,
+        setEntryDraft,
+        clearEntryDraft,
+        setItemFormDraft,
+        clearItemFormDraft,
+        resolveRowState,
+        isItemFormDraftStale,
+        draftSummary,
+        buildSheetExportRows,
+        estimateExportRowUnits,
+        paginateSheetRows,
         number,
         pieces,
         parseReport,

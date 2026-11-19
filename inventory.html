@@ -10,11 +10,66 @@
   <script defer src="js/config.js"></script><script defer src="js/inventory-logic.js"></script><script defer src="js/inventory.js"></script>
 </head>
 <body>
-<main class="main-content">
-  <header class="page-heading"><div><a href="dashboard.html">← Dashboard</a><h1>Daily inventory</h1><p>Track stock in pieces, one day at a time.</p></div><label>Stock date <input id="day" type="date"></label></header>
+<main class="main-content no-print">
+  <header class="page-heading">
+    <div>
+      <a href="dashboard.html">← Dashboard</a>
+      <div class="title-row"><h1>Daily inventory</h1><span id="restaurant-name" class="restro-badge">RestroManager</span></div>
+      <p>Track stock in pieces, one day at a time.</p>
+    </div>
+    <div class="date-controls">
+      <button type="button" id="prev-day" class="btn-secondary" aria-label="Previous day">← Prev</button>
+      <label>Stock date <input id="day" type="date"></label>
+      <button type="button" id="next-day" class="btn-secondary" aria-label="Next day">Next →</button>
+    </div>
+  </header>
   <div id="message" role="status" aria-live="polite"></div>
-  <section class="glass-card"><h2>Stock sheet</h2><p>Opening carries forward all previous movements. Changes to an earlier day automatically affect later days.</p><div class="table-wrap"><table><thead><tr><th>Item</th><th>Opening</th><th>Purchase</th><th>Sale</th><th>Damage</th><th>Closing</th><th></th></tr></thead><tbody id="stock"></tbody></table></div><p class="hint">Save purchase and damage for each item. Negative closing highlights a stock shortage.</p></section>
-  <section class="glass-card"><h2>Stock items</h2><p>Set an initial opening and start date when adding an item. Edit the opening if the original count needs correction.</p><form id="item-form" class="form-grid"><label>Item name<input id="item-name" maxlength="200" required></label><label>Start date<input id="item-start" type="date" required></label><label>Initial opening (pieces)<input id="item-opening" type="number" min="0" max="1000000000" step="any" required></label><button class="btn-primary" type="submit" id="item-submit">Add item</button><button type="button" id="cancel-edit" hidden>Cancel edit</button></form><div id="item-list"></div></section>
-  <section class="glass-card"><h2>Import POS sales</h2><p>Choose a local .xls or .xlsx item report. The first sheet is read in your browser; the file is not uploaded. Review saved mappings and suggested matches, choose an item or ignore for each dish, then preview and confirm. Existing sales for the day are replaced, never added twice.</p><label>Report file <input id="file" type="file" accept=".xls,.xlsx"></label><div id="import-area" hidden><p id="report-info"></p><div id="mapping-list"></div><button id="preview" type="button">Preview totals</button><div id="preview-area" hidden><h3>Sales preview (pieces)</h3><div id="totals"></div><p id="replacement"></p><button class="btn-primary" id="confirm-import" type="button">Confirm sales import</button></div></div></section>
+  <div id="storage-warning" class="status-banner status-error" role="alert" hidden></div>
+  <div id="draft-status" class="status-banner status-draft" role="status" aria-live="polite" hidden>
+    <div id="draft-status-text"></div>
+    <button type="button" id="discard-drafts" class="btn-danger-outline">Discard all drafts</button>
+  </div>
+  <section class="glass-card">
+    <div class="section-head">
+      <div>
+        <h2>Stock sheet</h2>
+        <p>Opening carries forward all previous movements. Changes to an earlier day automatically affect later days.</p>
+      </div>
+      <div class="sheet-actions">
+        <button type="button" id="print-sheet-btn" class="btn-secondary">Print A4</button>
+        <button type="button" id="export-png-btn" class="btn-primary">Share / Export A4 PNG</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Item</th><th>Opening</th><th>Purchase</th><th>Sale</th><th>Damage</th><th>Closing</th><th>Action</th></tr></thead>
+        <tbody id="stock"></tbody>
+      </table>
+    </div>
+    <p class="hint">Save purchase and damage per row. Negative closing highlights a stock shortage. Keyboard: <strong>Enter</strong> moves Purchase → Damage → Save; <strong>↑ / ↓</strong> moves between rows.</p>
+    <div id="export-fallback" class="export-fallback" hidden></div>
+  </section>
+  <section class="glass-card">
+    <h2>Stock items</h2>
+    <p>Set an initial opening and start date when adding an item. Edit the opening if the original count needs correction.</p>
+    <p id="item-draft-note" class="draft-note" hidden></p>
+    <form id="item-form" class="form-grid">
+      <label>Item name<input id="item-name" maxlength="200" required></label>
+      <label>Start date<input id="item-start" type="date" required></label>
+      <label>Initial opening (pieces)<input id="item-opening" type="number" min="0" max="1000000000" step="any" required></label>
+      <button class="btn-primary" type="submit" id="item-submit">Add item</button>
+      <button type="button" id="cancel-edit" hidden>Cancel edit</button>
+      <button type="button" id="discard-item-draft" class="btn-secondary" hidden>Discard form draft</button>
+    </form>
+    <div id="item-list"></div>
+  </section>
+  <section class="glass-card">
+    <h2>Import POS sales</h2>
+    <p>Choose a local .xls or .xlsx item report. The first sheet is read in your browser; the file is not uploaded. Review saved mappings and suggested matches, choose an item or ignore for each dish, then preview and confirm. Existing sales for the day are replaced, never added twice.</p>
+    <p class="hint import-ephemeral-note">Local Excel files and unconfirmed import previews stay in memory only and are not saved across page reload; reselect the file and review matches again after refreshing.</p>
+    <label>Report file <input id="file" type="file" accept=".xls,.xlsx"></label>
+    <div id="import-area" hidden><p id="report-info"></p><div id="mapping-list"></div><button id="preview" type="button">Preview totals</button><div id="preview-area" hidden><h3>Sales preview (pieces)</h3><div id="totals"></div><p id="replacement"></p><button class="btn-primary" id="confirm-import" type="button">Confirm sales import</button></div></div>
+  </section>
 </main>
+<section id="print-sheet" class="print-only" aria-hidden="true"></section>
 </body></html>

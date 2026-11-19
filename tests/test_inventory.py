@@ -275,3 +275,349 @@ def test_vendored_sheetjs_reader_pinned_and_compatible():
         assert.equal(report.dishes[0].pieces,6);
       }
     """)
+
+
+def test_draft_separation_by_user_date_and_sanitization():
+    run_js(r"""
+      function memStorage() {
+        const map=new Map();
+        return {
+          getItem: k => map.has(k) ? map.get(k) : null,
+          setItem: (k,v) => map.set(k, String(v)),
+          removeItem: k => map.delete(k),
+          dump: () => Object.fromEntries(map.entries()),
+        };
+      }
+      const storage=memStorage();
+      assert.notEqual(L.draftStorageKey('user-1'), L.draftStorageKey('user-2'));
+      assert.throws(() => L.draftStorageKey(''));
+
+      let s1=L.emptyDraftState();
+      s1.selectedDay='2026-11-18';
+      s1=L.setEntryDraft(s1,'2026-11-18','item-a',{purchase:'5',damage:'1',basePurchase:0,baseDamage:0});
+      s1=L.setEntryDraft(s1,'2026-11-19','item-a',{purchase:'8',damage:'2',basePurchase:3,baseDamage:0});
+      s1=L.setItemFormDraft(s1,{editingId:null,name:'Paneer',startDate:'2026-11-18',opening:'15'});
+      // Attempt to sneak credentials or private workbook keys in; sanitizer strips them.
+      const dirtyObj={...s1, token:'secret-jwt', workbook:[['Dish']], credentials:{key:'abc'}};
+      const saved=L.saveDraftState(storage,'user-1',dirtyObj);
+      assert.equal(saved.ok,true);
+      const rawJson=storage.dump()[L.draftStorageKey('user-1')];
+      assert.ok(!rawJson.includes('secret-jwt') && !rawJson.includes('workbook') && !rawJson.includes('credentials'));
+
+      // User 2 sees completely isolated empty state.
+      const u2=L.loadDraftState(storage,'user-2');
+      assert.equal(u2.restored,false);
+      assert.deepEqual(u2.state,L.emptyDraftState());
+
+      // User 1 restores selectedDay, both dates, and itemForm accurately.
+      const u1=L.loadDraftState(storage,'user-1');
+      assert.equal(u1.restored,true);
+      assert.equal(u1.error,null);
+      assert.equal(u1.state.selectedDay,'2026-11-18');
+      assert.equal(u1.state.entries['2026-11-18']['item-a'].purchase,'5');
+      assert.equal(u1.state.entries['2026-11-19']['item-a'].purchase,'8');
+      assert.equal(u1.state.itemForm.name,'Paneer');
+
+      const summary=L.draftSummary(u1.state,'2026-11-18');
+      assert.equal(summary.currentDayEntries,1);
+      assert.equal(summary.otherDayEntries,1);
+      assert.deepEqual(summary.otherDates,['2026-11-19']);
+      assert.equal(summary.hasItemForm,true);
+      assert.equal(summary.totalCount,3);
+    """)
+
+
+def test_draft_refresh_stale_conflict_clear_and_storage_errors():
+    run_js(r"""
+      const item={id:'a',name:'Fish',start_date:'2026-11-01',initial_opening:10};
+      const entries=[{item_id:'a',day:'2026-11-19',purchase:4,damage:1}];
+      const imports=[{day:'2026-11-19',sales:{a:3}}];
+      // Clean draft matching base -> non-stale
+      let st=L.emptyDraftState();
+      st=L.setEntryDraft(st,'2026-11-19','a',{purchase:'7',damage:'1',basePurchase:4,baseDamage:1});
+      st=L.setEntryDraft(st,'2026-11-19','b',{purchase:'2',damage:'0',basePurchase:0,baseDamage:0});
+      let resolved=L.resolveRowState(item,'2026-11-19',entries,imports,st.entries['2026-11-19']);
+      assert.equal(resolved.dirty,true);
+      assert.equal(resolved.stale,false);
+      assert.equal(resolved.closing,13);
+
+      // Server changes under the draft -> flagged stale without mutating server data
+      entries[0].purchase=6;
+      resolved=L.resolveRowState(item,'2026-11-19',entries,imports,st.entries['2026-11-19']);
+      assert.equal(resolved.stale,true);
+      assert.equal(resolved.base.purchase,6);
+      assert.equal(resolved.purchaseInput,'7');
+
+      // Item form stale check
+      const fDraft=L.setItemFormDraft(st,{editingId:'a',name:'Sea Fish',startDate:'2026-11-01',opening:'10',baseName:'Fish',baseOpening:10}).itemForm;
+      assert.equal(L.isItemFormDraftStale(fDraft,[item]).stale,false);
+      assert.equal(L.isItemFormDraftStale(fDraft,[{...item,initial_opening:12}]).stale,true);
+      assert.equal(L.isItemFormDraftStale(fDraft,[]).missing,true);
+
+      // Clearing one saved row leaves other rows & dates untouched
+      const afterClear=L.clearEntryDraft(st,'2026-11-19','a');
+      assert.equal(afterClear.entries['2026-11-19'].a, undefined);
+      assert.equal(afterClear.entries['2026-11-19'].b.purchase,'2');
+
+      // Storage failures & corrupted payloads report errors instead of crashing
+      const badStorage={
+        getItem: () => '{broken json',
+        setItem: () => { throw new Error('QuotaExceededError'); },
+        removeItem: () => {},
+      };
+      const badLoad=L.loadDraftState(badStorage,'u1');
+      assert.match(badLoad.error,/corrupted/i);
+      const badSave=L.saveDraftState(badStorage,'u1',st);
+      assert.equal(badSave.ok,false);
+      assert.match(badSave.error,/QuotaExceededError/);
+    """)
+
+
+def test_sheet_export_rows_and_a4_pagination_no_clipping():
+    run_js(r"""
+      const items=[];
+      for (let i=1;i<=55;i++) {
+        items.push({
+          id:`item-${i}`,
+          name: i===2 ? 'Extra Long Specialty Restaurant Dish Name With Wrapping Test Case' : `Stock Item ${i}`,
+          start_date: i===55 ? '2026-12-01' : '2026-11-01',
+          initial_opening: 20 + i,
+        });
+      }
+      const entries=[{item_id:'item-1',day:'2026-11-19',purchase:5,damage:2}];
+      const imports=[{day:'2026-11-19',sales:{'item-1':10}}];
+      const drafts={'item-1':{purchase:'8',damage:'1',basePurchase:5,baseDamage:2}};
+      const rows=L.buildSheetExportRows(items,'2026-11-19',entries,imports,drafts);
+      // Saved data is never mutated by building export rows.
+      assert.equal(entries[0].purchase,5);
+      assert.equal(rows.length,55);
+      assert.equal(rows[0].isDraft,true);
+      assert.equal(rows[0].opening,21);
+      assert.equal(rows[0].purchase,8);
+      assert.equal(rows[0].sale,10);
+      assert.equal(rows[0].damage,1);
+      assert.equal(rows[0].closing,18);
+      assert.equal(rows[54].available,false);
+
+      const pages=L.paginateSheetRows(rows,22);
+      assert.ok(pages.length >= 3);
+      const flattened=pages.flat();
+      assert.equal(flattened.length,55);
+      assert.deepEqual(flattened.map(r=>r.itemName), rows.map(r=>r.itemName));
+    """)
+
+
+def test_ui_draft_restore_save_failure_date_switch_and_print_export():
+    run_js(r"""
+      const fs=require('node:fs'), vm=require('node:vm'), crypto=require('node:crypto');
+      function makeEl(tag, focusLog) {
+        const node={
+          tagName:String(tag).toUpperCase(),
+          children:[], className:'', textContent:'', hidden:false, disabled:false,
+          dataset:{}, attrs:{}, type:'', colSpan:1, href:'', download:'',
+          append(...kids){ for (const k of kids) this.children.push(typeof k==='string'?{textContent:k,children:[]}:k); },
+          replaceChildren(...kids){ this.children=[]; this.append(...kids); },
+          setAttribute(k,v){ this.attrs[k]=v; },
+          focus(){ if (focusLog) focusLog.push(this.attrs['aria-label'] || this.textContent || this.tagName); },
+          select(){}, reset(){ this._val=''; }, click(){ if (this.onclick) this.onclick(); },
+          querySelectorAll(sel){
+            const out=[];
+            (function walk(n){
+              if (!n) return;
+              if (sel==='tr' && n.tagName==='TR') out.push(n);
+              if (sel==='th,td' && (n.tagName==='TH' || n.tagName==='TD')) out.push(n);
+              if (sel==='input,select,button' && ['INPUT','SELECT','BUTTON'].includes(n.tagName)) out.push(n);
+              if (sel==='#mapping-list select' && n.tagName==='SELECT') out.push(n);
+              for (const c of n.children||[]) walk(c);
+            })(this);
+            return out;
+          },
+        };
+        Object.defineProperty(node,'value',{
+          get(){ return this._val!==undefined ? this._val : ''; },
+          set(v){ this._val=String(v); },
+        });
+        return node;
+      }
+
+      const store=new Map();
+      const localStorage={
+        getItem:k=>store.has(k)?store.get(k):null,
+        setItem:(k,v)=>store.set(k,String(v)),
+        removeItem:k=>store.delete(k),
+      };
+
+      const db={
+        profiles:[{id:'user-A',restaurant_name:'Ichamotee Kitchen'}],
+        inventory_items:[
+          {id:'i1',name:'Fish',start_date:'2026-11-01',initial_opening:20},
+          {id:'i2',name:'Chicken',start_date:'2026-11-01',initial_opening:15},
+        ],
+        inventory_entries:[
+          {user_id:'user-A',item_id:'i1',day:'2026-11-19',purchase:2,damage:0},
+        ],
+        inventory_imports:[
+          {user_id:'user-A',day:'2026-11-19',sales:{i1:5}},
+        ],
+        inventory_mappings:[],
+      };
+
+      let failUpsert=false, printCalls=0, sharedPayload=null, blobCount=0, allowShare=true;
+      const confirmQueue=[];
+
+      function bootApp(userId='user-A') {
+        const ids={}, focusLog=[];
+        for (const id of ['day','prev-day','next-day','restaurant-name','message','storage-warning','draft-status','draft-status-text','discard-drafts','stock','print-sheet-btn','export-png-btn','export-fallback','item-form','item-name','item-start','item-opening','item-submit','cancel-edit','discard-item-draft','item-draft-note','item-list','file','import-area','report-info','mapping-list','preview','preview-area','totals','replacement','confirm-import','print-sheet']) {
+          ids[id]=makeEl(id==='stock'?'tbody':id==='print-sheet'?'section':'div', focusLog);
+        }
+        const _supabase={
+          from(table){
+            const q={
+              _filters:{},
+              select(){ return this; },
+              eq(col,val){ this._filters[col]=val; return this; },
+              order(){ return this; },
+              range: async()=>({data:(db[table]||[]).slice(), error:null}),
+              maybeSingle: async()=>{
+                const list=db[table]||[];
+                const found=list.find(r=>Object.entries(q._filters).every(([k,v])=>r[k]===v))||null;
+                return {data:found, error:null};
+              },
+              upsert: async(payload)=>{
+                if (failUpsert) return {error:new Error('Network offline')};
+                const idx=db.inventory_entries.findIndex(e=>e.user_id===payload.user_id&&e.item_id===payload.item_id&&e.day===payload.day);
+                if (idx>=0) db.inventory_entries[idx]=payload; else db.inventory_entries.push(payload);
+                return {error:null};
+              },
+            };
+            return q;
+          },
+          rpc: async()=>({data:'saved',error:null}),
+        };
+        const document={
+          title:'',
+          getElementById:id=>ids[id],
+          createElement:tag=>{
+            if (tag==='canvas') {
+              const ctx={
+                fillStyle:'',strokeStyle:'',lineWidth:1,font:'',textAlign:'left',
+                fillRect(){},strokeRect(){},beginPath(){},moveTo(){},lineTo(){},stroke(){},
+                fillText(){},measureText:t=>({width:String(t).length*10}),
+              };
+              return { width:0, height:0, getContext:()=>ctx, toBlob:cb=>cb({size:100,type:'image/png'}) };
+            }
+            return makeEl(tag, focusLog);
+          },
+          createTextNode:t=>({textContent:String(t),children:[]}),
+          querySelectorAll:()=>[],
+        };
+        const windowObj={
+          localStorage,
+          print:()=>{ printCalls++; },
+        };
+        const navigatorObj={
+          canShare:({files})=>Boolean(allowShare && files && files.length),
+          share:async(payload)=>{ sharedPayload=payload; },
+        };
+        function FakeFile(parts,name,opts){ this.parts=parts; this.name=name; this.type=opts?.type||''; }
+        const sandbox={
+          InventoryLogic:L,
+          _supabase,
+          checkAuth:async()=>({user:{id:userId}}),
+          document,
+          window:windowObj,
+          localStorage,
+          navigator:navigatorObj,
+          File:FakeFile,
+          URL:{ createObjectURL:()=>`blob:page-${++blobCount}`, revokeObjectURL:()=>{} },
+          confirm:()=> confirmQueue.length ? confirmQueue.shift() : true,
+          crypto:crypto.webcrypto,
+          TextEncoder, Uint8Array, JSON, Number, String, Array, Object, Set, Map, Date, Error, Promise,
+        };
+        vm.runInNewContext(fs.readFileSync('./js/inventory.js','utf8'), sandbox);
+        return { ids, focusLog };
+      }
+
+      async function run() {
+        // 1) Start session, select 2026-11-19, edit row 1 (purchase=6) and item form
+        let app=bootApp('user-A');
+        await new Promise(r=>setTimeout(r,20));
+        assert.equal(app.ids['restaurant-name'].textContent,'Ichamotee Kitchen');
+        app.ids['day'].value='2026-11-19';
+        app.ids['day'].onchange();
+
+        const row0=app.ids['stock'].children[0];
+        const pInput=row0.children[2].children[0];
+        const dInput=row0.children[4].children[0];
+        pInput.value='6'; pInput.oninput();
+        // Live closing updates without committing to Supabase
+        assert.equal(row0.children[5].textContent,'21');
+        // Keyboard navigation: Enter Purchase->Damage->Save, ArrowDown Row 0->Row 1
+        pInput.onkeydown({key:'Enter',preventDefault(){}});
+        dInput.onkeydown({key:'Enter',preventDefault(){}});
+        pInput.onkeydown({key:'ArrowDown',preventDefault(){}});
+        assert.deepEqual(app.focusLog,['Damage for Fish','Save stock row for Fish','Purchase for Chicken']);
+        app.ids['item-name'].value='Mutton'; app.ids['item-name'].oninput();
+
+        // Switch date -> dirty draft on 2026-11-19 stays persisted
+        app.ids['prev-day'].onclick();
+        assert.equal(app.ids['day'].value,'2026-11-18');
+        assert.match(app.ids['draft-status-text'].textContent,/2026-11-19/);
+        app.ids['next-day'].onclick();
+        assert.equal(app.ids['day'].value,'2026-11-19');
+
+        // 2) Simulate page refresh -> restores date, draft purchase=6, pending item form
+        app=bootApp('user-A');
+        await new Promise(r=>setTimeout(r,20));
+        assert.equal(app.ids['day'].value,'2026-11-19');
+        assert.equal(app.ids['item-name'].value,'Mutton');
+        assert.equal(app.ids['stock'].children[0].children[2].children[0].value,'6');
+        assert.match(app.ids['draft-status-text'].textContent,/Restored unsaved local drafts/);
+
+        // 3) User-B sees zero drafts from User-A
+        const appB=bootApp('user-B');
+        await new Promise(r=>setTimeout(r,20));
+        assert.equal(appB.ids['draft-status'].hidden,true);
+        assert.equal(appB.ids['item-name'].value,'');
+
+        // 4) Print and Export PNG with draft confirmation (user cancels first -> no print/share; then confirms -> print/share works & labels DRAFT)
+        confirmQueue.push(false);
+        app.ids['print-sheet-btn'].onclick();
+        assert.equal(printCalls,0);
+        confirmQueue.push(true);
+        app.ids['print-sheet-btn'].onclick();
+        assert.equal(printCalls,1);
+        const printRoot=app.ids['print-sheet'];
+        const headerTexts=printRoot.children[2].children[0].children[0].children.map(th=>th.textContent);
+        assert.deepEqual(headerTexts,['Item','Opening','Purchase','Sale','Closing','Damage']);
+        assert.equal(printRoot.querySelectorAll('input,select,button').length,0);
+        assert.match(printRoot.children[1].textContent,/unsaved draft/i);
+
+        confirmQueue.push(true);
+        await app.ids['export-png-btn'].onclick();
+        assert.equal(sharedPayload.files.length,1);
+        assert.match(sharedPayload.files[0].name,/-DRAFT\.png$/);
+
+        // When native share is unavailable, accessible download fallback links render
+        allowShare=false;
+        confirmQueue.push(true);
+        await app.ids['export-png-btn'].onclick();
+        assert.equal(app.ids['export-fallback'].hidden,false);
+        assert.match(app.ids['export-fallback'].children[0].textContent,/not supported/i);
+
+        // 5) Failed save preserves draft; successful save clears ONLY that row draft!
+        failUpsert=true;
+        const saveBtn0=app.ids['stock'].children[0].children[6].children[0].children[0];
+        await saveBtn0.onclick();
+        assert.equal(app.ids['message'].className,'error');
+        assert.ok(L.loadDraftState(localStorage,'user-A').state.entries['2026-11-19'].i1);
+
+        failUpsert=false;
+        await saveBtn0.onclick();
+        await new Promise(r=>setTimeout(r,10));
+        const afterSave=L.loadDraftState(localStorage,'user-A').state;
+        assert.equal(afterSave.entries['2026-11-19'], undefined);
+        assert.equal(afterSave.itemForm.name,'Mutton');
+      }
+      run().catch(e=>{ console.error(e); process.exit(1); });
+    """)
