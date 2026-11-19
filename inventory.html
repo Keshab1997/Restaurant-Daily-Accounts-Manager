@@ -75,6 +75,43 @@
     <label><span class="label-with-icon"><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#upload"></use></svg><span>Report file</span></span><input id="file" type="file" accept=".xls,.xlsx"></label>
     <div id="import-area" hidden><p id="report-info"></p><div id="mapping-list"></div><button id="preview" type="button">Preview totals</button><div id="preview-area" hidden><h3>Sales preview (pieces)</h3><div id="totals"></div><p id="replacement"></p><button class="btn-primary btn-with-icon" id="confirm-import" type="button"><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#save"></use></svg><span>Confirm sales import</span></button></div></div>
   </section>
+  <section class="glass-card" id="day-corrections-section">
+    <h2 class="heading-with-icon"><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#warning"></use></svg><span>Day corrections &amp; recovery</span></h2>
+    <p>Safely remove mistakes for the selected stock date. Initial opening balances, stock items, saved dish mappings, and other dates stay intact, and a permanent recovery snapshot is saved first so you can undo even after refreshing.</p>
+    <p id="day-correction-summary" class="correction-summary"></p>
+    <div id="correction-draft-blocker" class="status-banner status-draft" role="status" aria-live="polite" hidden>
+      <div class="banner-lead"><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#warning"></use></svg><div id="correction-draft-blocker-text"></div></div>
+      <button type="button" id="discard-day-drafts" class="btn-danger-outline">Discard day drafts</button>
+    </div>
+    <div class="correction-actions">
+      <div class="correction-action-card">
+        <h3>Remove imported sales only</h3>
+        <p>Removes only the selected day's imported POS sales. Purchase entries, damage entries, initial openings, items, and saved mappings remain untouched.</p>
+        <button type="button" id="clear-sales-btn" class="btn-danger-outline">Remove selected day's imported sales</button>
+      </div>
+      <div class="correction-action-card">
+        <h3>Clear whole day movements &amp; sales</h3>
+        <p>Clears only the selected day's saved purchases, damage entries, and imported sales. Initial openings, items, saved mappings, and other dates remain untouched.</p>
+        <button type="button" id="clear-whole-day-btn" class="btn-danger-outline">Clear selected day's movements &amp; sales</button>
+      </div>
+    </div>
+    <div id="clear-confirm-panel" class="confirm-panel" role="region" aria-labelledby="clear-confirm-title" hidden>
+      <h3 id="clear-confirm-title"></h3>
+      <div id="clear-confirm-details" class="confirm-details"></div>
+      <div class="confirm-buttons">
+        <button type="button" id="confirm-clear-btn" class="btn-danger"></button>
+        <button type="button" id="cancel-clear-btn" class="btn-secondary">Cancel</button>
+      </div>
+    </div>
+    <div id="restore-conflict-box" class="status-banner status-error" role="alert" hidden>
+      <div class="banner-lead"><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#warning"></use></svg><div id="restore-conflict-text"></div></div>
+    </div>
+    <div class="recovery-head">
+      <h3>Recovery snapshots</h3>
+      <p class="hint">Snapshots never expire automatically. Restore puts deleted records back only when those target slots are empty.</p>
+    </div>
+    <div id="recovery-list"></div>
+  </section>
 </main>
 <section id="print-sheet" class="print-only" aria-hidden="true"></section>
 </body></html>
