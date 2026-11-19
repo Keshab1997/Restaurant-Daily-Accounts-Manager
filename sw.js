@@ -1,8 +1,13 @@
-const CACHE_NAME = 'restro-manager-v73';
+const CACHE_NAME = 'restro-manager-v74';
 const ASSETS = [
   '/',
   '/index.html',
   '/dashboard.html',
+  '/inventory.html',
+  '/css/inventory.css',
+  '/js/inventory.js',
+  '/js/inventory-logic.js',
+  '/js/vendor/xlsx.full.min.js',
   '/expense-entry.html',
   '/expense-history.html',
   '/tally.html',
