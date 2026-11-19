@@ -1,0 +1,9 @@
+{
+ "repo":"Keshab1997/Restaurant-Daily-Accounts-Manager",
+ "worker":"A",
+ "task":"safe-clear",
+ "allowed":["inventory.html","css/inventory.css","js/inventory.js","js/inventory-logic.js","inventory-setup.md","inventory-safe-clear.sql","tests/test_inventory.py","tests/test_inventory_safe_clear.py"],
+ "commit":"feat(inventory): add recoverable day corrections",
+ "check":{"kind":"pytest","target":"tests"},
+ "arena":{"branch":"arena/ca1a74bf-restaurant-daily-accounts-mana","base_sha":"0f7e938af1d37b422cff824aaa75e5bee94fbbe2"}
+}

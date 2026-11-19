@@ -1,0 +1,18 @@
+# safe-clear — Worker A
+
+**Repository:** `Keshab1997/Restaurant-Daily-Accounts-Manager` — attach the repo in Arena Agent Mode; reuse your real `arena/*` branch at the exact task.json base. Note Captain independently integrated your previous work and added a safety check to the browser-direct print path in main; do not remove or change that check when implementing this isolated delta.
+
+**Goal:** Add safe correction and recovery for saved stock data. This is financial/inventory data: do not execute migrations, alter live data, or allow destructive whole-history reset.
+
+**Acceptance:**
+- Provide a clearly labeled action to remove the selected day's imported sales only, leaving purchase, damage, opening, items and saved mappings untouched.
+- Provide a separate action to clear only the selected day's purchase, damage and imported sales, not opening, stock items, mappings, or other dates. Display counts/date and exact consequences before confirmation; warn that later openings and closings recalculate. Make empty-day actions no-ops with clear feedback.
+- Before clearing, transactionally record a recoverable, per-user snapshot of exactly what is removed, then delete it atomically. A recovery UI lists snapshots and their date/type/time and restores only into empty affected slots; if current data conflicts, stop without overwriting, explain conflict and keep snapshot. Undo is available for both actions, even after refresh, and uses transaction with all-or-nothing conflict handling. Never automatically expire or permanently purge snapshots. Avoid leaving a half-cleared day or duplicate restore if requests retry or race. Treat pending local drafts explicitly: require user to save/discard affected date's drafts first; never silently delete or reapply drafts after a clear/restore.
+- Provide an additive migration `inventory-safe-clear.sql` with owner-scoped RLS and tightly permissioned SECURITY DEFINER RPCs using auth.uid(), safe search_path, explicit revoke anon/PUBLIC, verified authorization and atomic transactions. Existing imported-sales direct delete is intentionally restricted: use controlled RPCs. Enforce consistent DB locking/version checks across new clear/restore and relevant import/movement writers, or explicitly block and report if robust concurrency cannot be implemented without changing existing contracts. Do not pretend client-side prechecks are atomic. Do not overwrite/delete concurrent changes silently. No hard reset of history, no item deletion, no changes to accounting tables.
+- A stock item archive/hide is desired but out of this checkpoint; do not delete items or cascade history. Document that item deletion isn't implemented.
+- Add focused synthetic tests for single-sale removal, whole-day clear, per-user isolation, transactional conflict/restore, repeated action, unaffected days and drafts. Test SQL RPC/RLS in an isolated database if available; otherwise clearly report SQL not integration-tested, no live DB execution. Update setup instructions with migration sequence and limitations.
+
+**Scope / exclusions:** Only task.json files. Keep existing date, stock, mapping/import, A4 print/share, local drafts and visual design behavior. No touching secrets, settings, CI, other pages, deployment or live data. Do not include actual customer data. Ensure no code path performs automatic permanent deletion.
+
+**Gate:** See [task.json](task.json) unchanged. Run targeted pytest; report verified PUSHED with base, tip, files, gate and commit link. If blocked, explain precisely. Use current agent-bootstrap `captain/FASTLANE.md`; no re-pair, PR, branch switch or CI.
+**Report:** worker chat (GitHub mention pending).
