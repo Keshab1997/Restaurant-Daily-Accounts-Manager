@@ -1,0 +1,9 @@
+{
+ "repo":"Keshab1997/Restaurant-Daily-Accounts-Manager",
+ "worker":"A",
+ "task":"sheet-ux",
+ "allowed":["inventory.html","css/inventory.css","js/inventory.js","js/inventory-logic.js","inventory-setup.md","tests/test_inventory.py"],
+ "commit":"feat(inventory): improve stock sheet workflow",
+ "check":{"kind":"pytest","target":"tests/test_inventory.py"},
+ "arena":{"branch":"arena/ca1a74bf-restaurant-daily-accounts-mana","base_sha":"07081012e00b47f04bd43e49c8272a3af1840a63"}
+}

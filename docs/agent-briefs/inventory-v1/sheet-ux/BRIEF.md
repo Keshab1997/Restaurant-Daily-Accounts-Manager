@@ -1,0 +1,15 @@
+# sheet-ux — Worker A
+
+**Repository:** `Keshab1997/Restaurant-Daily-Accounts-Manager` — attach the repo in Arena Agent Mode, reuse your real `arena/*` branch at the exact task.json base.
+
+**Goal and acceptance:** Improve `inventory.html` to a polished, intuitive, responsive daily-stock interface matching the existing app, without altering data or accounting rules. Keep readable, compact stock sheet with inline editable purchase and damage fields and per-row save; show calculated closing and allow convenient keyboard use. Support editable initial opening via item editing; sale remains sourced from imports. Do not silently commit edits or change the meaning of saved data.
+
+Protect work across reload: persist *unsaved* purchase/damage drafts by authenticated user, date and item in browser storage and restore on refresh, including date and pending item form fields; preserve dirty entries on re-render or when changing dates. Show unsaved/restored status and provide a clear discard control; clear drafts only after a successful corresponding save or explicit discard. Report storage errors visibly. Never save credentials or private workbook data to browser storage. Saved data remains in Supabase; avoid replacing server data from stale drafts without user confirmation. A selected local Excel file and unconfirmed import preview cannot safely persist across refresh: explain they must be reselected/reviewed rather than suggesting otherwise.
+
+Provide A4 stock sheet Print and image export/share: include restaurant name, selected date, all visible stock rows and the columns Item, Opening, Purchase, Sale, Closing, Damage (no form controls), legible and paginated for print; support A4 layout. Export an A4-proportioned PNG using same current sheet values, handle long lists without silent clipping (multiple pages/files acceptable). Use native share with image file where supported, with accessible download fallback when unsupported or denied. Do not upload data to a third party. Clearly warn/require confirmation if unsaved draft values are included, and label them as drafts. Print and export must not mutate saved data. Explain browser share/printing limitations.
+
+**Interface / exclusions:** Exact allowed files only. Preserve `InventoryLogic`, existing Supabase tables and ownership contracts, import and mapping behavior, image parser and date logic. No database migrations, CI, navigation, dependency changes, auth changes, secrets, deployments or live-data mutation. Include focused synthetic automated tests covering draft separation by user/date, refresh restoration, clear-on-success vs failure, and print/export page splitting, plus existing tests. Report browser/device manual checks and gaps honestly.
+
+**Scope and gate:** See [task.json](task.json) at this same commit; do not edit it. Gate uses targeted pytest and Node as in existing tests.
+
+**Report:** worker chat (GitHub mention pending). Use current agent-bootstrap `captain/FASTLANE.md`; keep linked branch and history. After verified PUSHED report exact base, tip, files, tests, pinned brief and commit link. If blocked, report why; no re-pair, CI, PR, merge or branch switch.
