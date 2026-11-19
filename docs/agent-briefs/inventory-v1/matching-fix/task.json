@@ -1,0 +1,9 @@
+{
+  "repo": "Keshab1997/Restaurant-Daily-Accounts-Manager",
+  "worker": "A",
+  "task": "matching-fix",
+  "allowed": ["inventory.html", "css/inventory.css", "js/inventory.js", "js/inventory-logic.js", "inventory-setup.md", "tests/test_inventory.py", "js/vendor/xlsx.full.min.js"],
+  "commit": "fix(inventory): suggest safe dish matches",
+  "check": {"kind": "pytest", "target": "tests/test_inventory.py"},
+  "arena": {"branch": "arena/ca1a74bf-restaurant-daily-accounts-mana", "base_sha": "70f56dff5a972e49cdf5998b35c64da2f9f42e5d"}
+}
