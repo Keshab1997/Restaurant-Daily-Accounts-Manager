@@ -5,7 +5,156 @@
     else root.InventoryLogic = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
     'use strict';
+    const PIECE_SUFFIX_RE = /[\[(]\s*\d+\s*pieces?\s*[\])]/gi;
     const text = value => String(value == null ? '' : value).trim().replace(/\s+/g, ' ');
+    function normalizeName(value) {
+        return text(value)
+            .normalize('NFKD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .replace(/[^\p{L}\p{N}]+/gu, ' ')
+            .trim();
+    }
+    function tokenizeName(value) {
+        const normalized = normalizeName(value);
+        return normalized ? normalized.split(' ') : [];
+    }
+    function dishNameForMatching(value) {
+        const raw = text(value);
+        const stripped = text(raw.replace(PIECE_SUFFIX_RE, ' '));
+        return stripped || raw;
+    }
+    function containsWordSequence(haystack, needle) {
+        if (!needle.length || needle.length > haystack.length) return false;
+        for (let i = 0; i <= haystack.length - needle.length; i++) {
+            let match = true;
+            for (let j = 0; j < needle.length; j++) {
+                if (haystack[i + j] !== needle[j]) { match = false; break; }
+            }
+            if (match) return true;
+        }
+        return false;
+    }
+    function savedChoiceMap(savedMappings) {
+        if (!savedMappings) return {};
+        if (Array.isArray(savedMappings)) {
+            return Object.fromEntries(savedMappings.map(m => [m.dish_key, m.ignored ? 'ignore' : m.item_id]));
+        }
+        return savedMappings;
+    }
+    function matchDish(dish, items, savedMappings) {
+        const list = Array.isArray(items) ? items : [];
+        const savedMap = savedChoiceMap(savedMappings);
+        const key = dish && dish.key;
+        const saved = key ? savedMap[key] : undefined;
+        const byId = new Map(list.map(item => [item.id, item]));
+        if (saved === 'ignore') {
+            return {
+                status: 'ignored',
+                selected: 'ignore',
+                suggestion: null,
+                candidates: [],
+                reason: 'Saved mapping: Ignore this dish',
+            };
+        }
+        if (saved && byId.has(saved)) {
+            const item = byId.get(saved);
+            return {
+                status: 'saved',
+                selected: saved,
+                suggestion: null,
+                candidates: [],
+                reason: `Saved mapping: ${item.name}`,
+            };
+        }
+        const rawName = dish && typeof dish === 'object' ? dish.item : dish;
+        const rawDishNorm = normalizeName(rawName);
+        const cleanDishText = dishNameForMatching(rawName);
+        const cleanDishNorm = normalizeName(cleanDishText);
+        const dishTokens = tokenizeName(cleanDishText);
+
+        const rawExact = [], cleanExact = [], wholeWord = [];
+        for (const item of list) {
+            const itemNorm = normalizeName(item.name);
+            const itemTokens = tokenizeName(item.name);
+            if (!itemNorm || !itemTokens.length) continue;
+            if (itemNorm === rawDishNorm) rawExact.push(item);
+            else if (itemNorm === cleanDishNorm) cleanExact.push(item);
+            else if (containsWordSequence(dishTokens, itemTokens)) wholeWord.push(item);
+        }
+        if (rawExact.length === 1) {
+            const item = rawExact[0];
+            return {
+                status: 'suggested',
+                selected: '',
+                suggestion: item,
+                candidates: [item],
+                reason: `Exact name match for "${item.name}"`,
+            };
+        }
+        if (rawExact.length > 1) {
+            return {
+                status: 'ambiguous',
+                selected: '',
+                suggestion: null,
+                candidates: rawExact,
+                reason: `Ambiguous exact match (${rawExact.map(i => i.name).join(', ')}); choose manually`,
+            };
+        }
+        if (cleanExact.length === 1) {
+            const item = cleanExact[0];
+            return {
+                status: 'suggested',
+                selected: '',
+                suggestion: item,
+                candidates: [item],
+                reason: `Exact name match for "${item.name}" (ignoring piece count)`,
+            };
+        }
+        if (cleanExact.length > 1) {
+            return {
+                status: 'ambiguous',
+                selected: '',
+                suggestion: null,
+                candidates: cleanExact,
+                reason: `Ambiguous exact match (${cleanExact.map(i => i.name).join(', ')}); choose manually`,
+            };
+        }
+        if (wholeWord.length === 1) {
+            const item = wholeWord[0];
+            return {
+                status: 'suggested',
+                selected: '',
+                suggestion: item,
+                candidates: [item],
+                reason: `Whole-word match for "${item.name}"`,
+            };
+        }
+        if (wholeWord.length > 1) {
+            return {
+                status: 'ambiguous',
+                selected: '',
+                suggestion: null,
+                candidates: wholeWord,
+                reason: `Ambiguous match (${wholeWord.map(i => i.name).join(', ')}); choose manually`,
+            };
+        }
+        return {
+            status: 'none',
+            selected: '',
+            suggestion: null,
+            candidates: [],
+            reason: 'No automatic name match; choose an item or Ignore',
+        };
+    }
+    function suggestMappings(report, items, savedMappings) {
+        const savedMap = savedChoiceMap(savedMappings);
+        const result = {};
+        for (const dish of (report && report.dishes) || []) {
+            result[dish.key] = matchDish(dish, items, savedMap);
+        }
+        return result;
+    }
     function number(value, label) {
         const s = text(value).replace(/,/g, '');
         if (!s || !/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(s)) throw new Error(`${label} must be a non-negative number`);
@@ -85,5 +234,19 @@
         if (existingHash && !replace) return 'replace-required';
         return 'save';
     }
-    return { number, pieces, parseReport, preview, stock, importDecision };
+    return {
+        normalizeName,
+        tokenizeName,
+        dishNameForMatching,
+        containsWordSequence,
+        savedChoiceMap,
+        matchDish,
+        suggestMappings,
+        number,
+        pieces,
+        parseReport,
+        preview,
+        stock,
+        importDecision,
+    };
 });

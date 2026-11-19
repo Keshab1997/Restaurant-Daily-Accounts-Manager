@@ -54,33 +54,86 @@
         const name=$('item-name').value.trim(), start=$('item-start').value, opening=L.number($('item-opening').value,'Initial opening');
         if (!name || !start) throw new Error('Enter an item name and start date');
         const query=editing ? _supabase.from('inventory_items').update({name,initial_opening:opening}).eq('user_id',user.id).eq('id',editing) : _supabase.from('inventory_items').insert({user_id:user.id,name,start_date:start,initial_opening:opening});
-        const {error}=await query; if(error) throw error; await refresh(); resetForm(); invalidate(); if(report) renderMappings(); message('Item saved. Later balances are recalculated.');
+        const currentChoices=report ? Object.fromEntries([...document.querySelectorAll('#mapping-list select')].map(s=>[s.dataset.key,s.value]).filter(([,v])=>v)) : null;
+        const {error}=await query; if(error) throw error; await refresh(); resetForm(); invalidate(); if(report) renderMappings(currentChoices); message('Item saved. Later balances are recalculated.');
     } catch(e) { fail(e); } finally { button.disabled=false; } };
     $('day').onchange=() => { renderStock(); invalidate(); if (!editing) $('item-start').value=$('day').value; if(report) reportInfo(); };
     function reportInfo() { const mismatch=report.date !== $('day').value; $('report-info').textContent=`Report date: ${report.date} · ${report.dishes.length} distinct dishes. ${mismatch ? 'Date mismatch: select the report date before saving.' : ''}`; $('report-info').className=mismatch ? 'warning' : ''; }
-    function renderMappings() {
+    function renderMappings(preservedChoices = null) {
         reportInfo(); const list=$('mapping-list'); list.replaceChildren();
-        const saved=Object.fromEntries(mappings.map(m => [m.dish_key, m.ignored ? 'ignore' : m.item_id]));
+        const saved=L.savedChoiceMap(mappings), validIds=new Set(items.map(i=>i.id));
+        const suggestions=L.suggestMappings(report,items,saved);
         for (const dish of report.dishes) {
-            const row=el('div',undefined,'mapping-row'), label=el('span',`${dish.category || 'No category'} · ${dish.item} · code ${dish.code || '—'} · ${fmt(dish.qty)} plates → ${fmt(dish.pieces)} pieces`), select=el('select');
+            const match=suggestions[dish.key];
+            const row=el('div',undefined,'mapping-row'), info=el('div',undefined,'mapping-info'), controls=el('div',undefined,'mapping-controls');
+            const label=el('span',`${dish.category || 'No category'} · ${dish.item} · code ${dish.code || '—'} · ${fmt(dish.qty)} plates → ${fmt(dish.pieces)} pieces`,'dish-label');
+            const note=el('span',undefined,'match-note');
+            const select=el('select');
             select.setAttribute('aria-label',`Mapping for ${dish.category} ${dish.item} ${dish.code}`); select.dataset.key=dish.key;
             const option=(value, name) => { const o=el('option',name); o.value=value; select.append(o); };
             option('', 'Choose item or ignore'); option('ignore','Ignore this dish'); for(const item of items) option(item.id,item.name);
-            select.value=saved[dish.key] || ''; select.onchange=invalidate; row.append(label,select); list.append(row);
+            let initial=match.selected;
+            if (preservedChoices && Object.prototype.hasOwnProperty.call(preservedChoices,dish.key)) {
+                const preserved=preservedChoices[dish.key];
+                if (preserved==='ignore' || validIds.has(preserved)) initial=preserved;
+            }
+            select.value=initial;
+            const acceptBtn=match.status==='suggested' ? el('button',`Use suggestion: ${match.suggestion.name}`,'btn-suggest') : null;
+            if (acceptBtn) {
+                acceptBtn.type='button';
+                acceptBtn.onclick=() => { select.value=match.suggestion.id; invalidate(); syncRow(); };
+                controls.append(acceptBtn);
+            }
+            function syncRow() {
+                const chosen=select.value;
+                const chosenName=chosen==='ignore' ? 'Ignore this dish' : (items.find(i=>i.id===chosen)?.name || '');
+                if (match.status==='suggested') {
+                    if (chosen===match.suggestion.id) {
+                        note.textContent=`Accepted suggestion: ${match.suggestion.name} (${match.reason})`;
+                        note.className='match-note match-accepted';
+                        if (acceptBtn) acceptBtn.hidden=true;
+                    } else if (!chosen) {
+                        note.textContent=`Suggested: ${match.suggestion.name} — ${match.reason} (review required)`;
+                        note.className='match-note match-suggested';
+                        if (acceptBtn) acceptBtn.hidden=false;
+                    } else {
+                        note.textContent=`Selected manually: ${chosenName} (suggestion was ${match.suggestion.name})`;
+                        note.className='match-note match-saved';
+                        if (acceptBtn) acceptBtn.hidden=false;
+                    }
+                    return;
+                }
+                if ((match.status==='saved' || match.status==='ignored') && chosen===match.selected) {
+                    note.textContent=match.reason;
+                    note.className=match.status==='ignored' ? 'match-note match-ignored' : 'match-note match-saved';
+                } else if (chosen) {
+                    note.textContent=`Selected: ${chosenName}`;
+                    note.className=chosen==='ignore' ? 'match-note match-ignored' : 'match-note match-saved';
+                } else if (match.status==='ambiguous') {
+                    note.textContent=match.reason;
+                    note.className='match-note match-ambiguous';
+                } else {
+                    note.textContent=match.reason;
+                    note.className='match-note match-none';
+                }
+            }
+            select.onchange=() => { invalidate(); syncRow(); };
+            syncRow();
+            info.append(label,note); controls.append(select); row.append(info,controls); list.append(row);
         }
     }
     $('file').onchange=async () => { const fileVersion=++fileRevision; report=null; invalidate(); $('import-area').hidden=true; try {
         const file=$('file').files[0]; if(!file) return; if(!/\.(xls|xlsx)$/i.test(file.name)) throw new Error('Choose an .xls or .xlsx file');
-        if(file.size > 10*1024*1024) throw new Error('Report exceeds 10 MB'); if(typeof XLSX === 'undefined') throw new Error('Spreadsheet reader could not load; check your connection');
+        if(file.size > 10*1024*1024) throw new Error('Report exceeds 10 MB'); if(typeof XLSX === 'undefined') throw new Error('Spreadsheet reader could not load; reload the page');
         const buffer=await file.arrayBuffer(); if(fileVersion!==fileRevision) return;
         const book=XLSX.read(buffer, {type:'array', cellDates:false});
         report=L.parseReport(XLSX.utils.sheet_to_json(book.Sheets[book.SheetNames[0]], {header:1, raw:false, defval:''}));
-        renderMappings(); $('import-area').hidden=false; message('Review every dish mapping before previewing.');
+        renderMappings(); $('import-area').hidden=false; message('Review saved mappings and suggested matches before previewing.');
     } catch(e) { fail(e); } };
     $('preview').onclick=async () => { invalidate(); const version=revision; try {
         const day=assertDay(); if (!report || report.date !== day) throw new Error('Report date does not match selected stock date');
         const choices={}; document.querySelectorAll('#mapping-list select').forEach(s => choices[s.dataset.key]=s.value);
-        const result=L.preview(report,choices); if(result.unresolved.length) throw new Error(`Choose a stock item or ignore for all ${result.unresolved.length} unmapped dishes`);
+        const result=L.preview(report,choices); if(result.unresolved.length) throw new Error(`Review or choose a stock item or ignore for all ${result.unresolved.length} unmapped dishes`);
         for(const id of Object.keys(result.totals)) { const item=items.find(i=>i.id===id); if(!item || item.start_date > day) throw new Error('A mapped item is missing or starts after the report date'); L.number(result.totals[id], 'Total sales'); }
         // Hash canonical report content and choices; filenames and spreadsheet formatting are irrelevant.
         const canonical=JSON.stringify({date:report.date, dishes:report.dishes.map(d=>[d.key,d.qty,choices[d.key]]).sort((a,b)=>a[0].localeCompare(b[0]))});
