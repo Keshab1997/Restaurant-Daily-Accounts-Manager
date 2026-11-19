@@ -1,0 +1,9 @@
+{
+ "repo":"Keshab1997/Restaurant-Daily-Accounts-Manager",
+ "worker":"B",
+ "task":"icon-polish",
+ "allowed":["assets/inventory-icons.svg","tests/test_inventory_icons.py"],
+ "commit":"feat(inventory): add stock interface icons",
+ "check":{"kind":"pytest","target":"tests/test_inventory_icons.py"},
+ "arena":{"branch":"auto","base_sha":"5948dd1e0adf1909887aeda688ca512889479f58"}
+}
