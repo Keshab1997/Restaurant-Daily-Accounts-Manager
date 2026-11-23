@@ -87,6 +87,7 @@ button { cursor:pointer; font-weight:700; color:var(--primary); } button:disable
 .link-inline { display:inline; padding:0; border:0; background:none; color:var(--primary); font-weight:700; font-size:inherit; text-decoration:underline; border-radius:0; }
 #import-error { margin-top:14px; }
 #import-status { margin-bottom:14px; }
+.btn-with-icon[hidden], .btn-secondary[hidden], .btn-primary[hidden] { display:none !important; }
 
 .print-only { display:none; }
 @page { size: A4 portrait; margin: 12mm; }

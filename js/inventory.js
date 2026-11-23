@@ -5,6 +5,7 @@
     let user, restaurantName = 'RestroManager', items = [], entries = [], imports = [], mappings = [], corrections = [], report = null, previewData = null, editing = null, editingBase = null, revision = 0, fileRevision = 0;
     let draftState = L.emptyDraftState(), restoredNotice = false, exportUrls = [];
     const inFlightEntrySaves = new Set();
+    let rowSavers = [];
     let inFlightFormSave = false, inFlightCorrection = false, pendingClearScope = null, pendingClearRequestId = null;
     const SVG_NS = 'http://www.w3.org/2000/svg';
     const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
@@ -183,8 +184,41 @@
         }
         exportUrls = [];
     }
+    function updateSaveAllButton(dirtyCount) {
+        const btn = $('save-all-rows');
+        if (!btn) return;
+        btn.hidden = !dirtyCount;
+        btn.disabled = dirtyCount === 0;
+        const label = $('save-all-rows-label');
+        if (label) label.textContent = dirtyCount === 1 ? 'Save 1 change' : `Save ${dirtyCount} changes`;
+    }
+    async function saveAllRows() {
+        const pending = rowSavers.filter(r => r.isDirty());
+        if (!pending.length) { message('No unsaved stock rows on this day.'); return; }
+        const btn = $('save-all-rows');
+        if (btn) btn.disabled = true;
+        let saved = 0; const failures = [];
+        for (const row of pending) {
+            try {
+                await row.saveRow({ silent: true });
+                saved++;
+            } catch (e) {
+                failures.push(`${row.name}: ${e && e.message ? e.message : e}`);
+            }
+            message(`Saving ${saved + failures.length} of ${pending.length} rows…`);
+        }
+        if (btn) btn.disabled = false;
+        if (failures.length) {
+            fail(new Error(`${saved} row${saved === 1 ? '' : 's'} saved, ${failures.length} failed — ${failures.slice(0, 3).join(' · ')}${failures.length > 3 ? ' …' : ''}`));
+            renderStock();
+            updateDraftStatus();
+        } else {
+            message(`${saved} stock row${saved === 1 ? '' : 's'} saved for ${$('day').value}. Later balances are recalculated.`);
+        }
+    }
     function renderStock() {
         const body = $('stock'); body.replaceChildren(); const day = $('day').value;
+        rowSavers = [];
         if (!day) return;
         const dayDrafts = draftState.entries[day] || {};
         const activeControls = [];
@@ -267,6 +301,7 @@
                 conflictNote.hidden = !updated.stale;
                 discardRow.hidden = !updated.dirty;
                 applyRowClasses(updated.dirty, updated.stale);
+                updateSaveAllButton(rowSavers.filter(r => r.isDirty()).length);
                 updateDraftStatus();
                 renderCorrections();
             }
@@ -286,7 +321,7 @@
                 else if (e.key === 'ArrowUp' && activeControls[rowIndex - 1]) { e.preventDefault(); activeControls[rowIndex - 1].d.focus(); if (typeof activeControls[rowIndex - 1].d.select === 'function') activeControls[rowIndex - 1].d.select(); }
             };
 
-            save.onclick = async () => {
+            const saveRow = async (opts = {}) => {
                 const saveKey = `${day}:${item.id}`;
                 save.disabled = true;
                 inFlightEntrySaves.add(saveKey);
@@ -377,14 +412,17 @@
                     }
                     inFlightEntrySaves.delete(saveKey);
                     await refresh();
-                    message('Stock movements saved. Later balances are recalculated.');
+                    if (!opts.silent) message('Stock movements saved. Later balances are recalculated.');
                 } catch (e) {
+                    if (opts.silent) throw e;
                     fail(e);
                 } finally {
                     inFlightEntrySaves.delete(saveKey);
                     save.disabled = false;
                 }
             };
+            save.onclick = () => saveRow();
+            rowSavers.push({ name: item.name, saveRow, isDirty: () => !discardRow.hidden });
 
             discardRow.onclick = () => {
                 draftState = L.clearEntryDraft(draftState, day, item.id);
@@ -401,6 +439,7 @@
             body.append(tr);
         }
         if (!items.length) { const tr = el('tr'), td = el('td','Add a stock item to get started.'); td.colSpan=7; tr.append(td); body.append(tr); }
+        updateSaveAllButton(rowSavers.filter(r => r.isDirty()).length);
     }
     function startEditingItem(item) {
         editing = item.id;
@@ -600,6 +639,7 @@
         d.setUTCDate(d.getUTCDate() + delta);
         applyDateChange(d.toISOString().slice(0, 10));
     }
+    if ($('save-all-rows')) $('save-all-rows').onclick = () => saveAllRows();
     if ($('item-start-month')) $('item-start-month').onclick = () => {
         const base = $('day').value || today();
         $('item-start').value = `${base.slice(0, 7)}-01`;

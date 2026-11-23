@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Daily inventory - RestroManager</title>
-  <link rel="stylesheet" href="css/base.css"><link rel="stylesheet" href="css/inventory.css?v=79">
+  <link rel="stylesheet" href="css/base.css"><link rel="stylesheet" href="css/inventory.css?v=80">
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Vendored SheetJS Community Edition 0.20.3 (official Apache-2.0 standalone bundle); parsing is entirely in the browser. -->
   <script defer src="js/vendor/xlsx.full.min.js"></script>
-  <script defer src="js/config.js?v=79"></script><script defer src="js/inventory-logic.js?v=79"></script><script defer src="js/inventory.js?v=79"></script>
+  <script defer src="js/config.js?v=80"></script><script defer src="js/inventory-logic.js?v=80"></script><script defer src="js/inventory.js?v=80"></script>
 </head>
 <body>
 <main class="main-content no-print">
@@ -56,6 +56,7 @@
         <p>Opening carries forward all previous movements. Changes to an earlier day automatically affect later days.</p>
       </div>
       <div class="sheet-actions">
+        <button type="button" id="save-all-rows" class="btn-primary btn-with-icon" hidden><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#save"></use></svg><span id="save-all-rows-label">Save all changes</span></button>
         <button type="button" id="print-sheet-btn" class="btn-secondary btn-with-icon"><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#print"></use></svg><span>Print A4</span></button>
         <button type="button" id="export-png-btn" class="btn-primary btn-with-icon"><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#share"></use></svg><span>Share / Export A4 PNG</span></button>
       </div>
@@ -66,7 +67,7 @@
         <tbody id="stock"></tbody>
       </table>
     </div>
-    <p class="hint">Save purchase and damage per row. Sale comes from the <button type="button" class="link-inline" data-goto-tab="import">Import sales</button> tab. Negative closing highlights a stock shortage. Keyboard: <strong>Enter</strong> moves Purchase → Damage → Save; <strong>↑ / ↓</strong> moves between rows.</p>
+    <p class="hint">Type purchase and damage, then use <strong>Save all changes</strong> to save every edited row at once (or Save per row inside the table). Sale comes from the <button type="button" class="link-inline" data-goto-tab="import">Import sales</button> tab. Negative closing highlights a stock shortage. Keyboard: <strong>Enter</strong> moves Purchase → Damage → Save; <strong>↑ / ↓</strong> moves between rows.</p>
     <div id="export-fallback" class="export-fallback" hidden></div>
   </section>
 
