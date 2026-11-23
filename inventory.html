@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Daily inventory - RestroManager</title>
-  <link rel="stylesheet" href="css/base.css"><link rel="stylesheet" href="css/inventory.css?v=77">
+  <link rel="stylesheet" href="css/base.css"><link rel="stylesheet" href="css/inventory.css?v=79">
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Vendored SheetJS Community Edition 0.20.3 (official Apache-2.0 standalone bundle); parsing is entirely in the browser. -->
   <script defer src="js/vendor/xlsx.full.min.js"></script>
-  <script defer src="js/config.js?v=77"></script><script defer src="js/inventory-logic.js?v=77"></script><script defer src="js/inventory.js?v=77"></script>
+  <script defer src="js/config.js?v=79"></script><script defer src="js/inventory-logic.js?v=79"></script><script defer src="js/inventory.js?v=79"></script>
 </head>
 <body>
 <main class="main-content no-print">
@@ -72,11 +72,12 @@
 
   <section class="glass-card tab-panel" id="panel-items" role="tabpanel" aria-labelledby="tab-items" tabindex="0" hidden>
     <h2 class="heading-with-icon"><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#inventory"></use></svg><span>Stock items</span></h2>
-    <p>Set an initial opening and start date when adding an item. Edit the opening if the original count needs correction.</p>
+    <p>Set an initial opening and start date when adding an item. The opening is the count on the start date and carries forward, so edit the start date to move a balance to an earlier day (for example the 1st of the month).</p>
     <p id="item-draft-note" class="draft-note" hidden></p>
     <form id="item-form" class="form-grid">
       <label>Item name<input id="item-name" maxlength="200" required></label>
       <label>Start date<input id="item-start" type="date" required></label>
+      <button type="button" id="item-start-month" class="btn-secondary">Start of month</button>
       <label>Initial opening (pieces)<input id="item-opening" type="number" min="0" max="1000000000" step="any" required></label>
       <button class="btn-primary btn-with-icon" type="submit" id="item-submit"><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#save"></use></svg><span id="item-submit-label">Add item</span></button>
       <button type="button" id="cancel-edit" hidden>Cancel edit</button>

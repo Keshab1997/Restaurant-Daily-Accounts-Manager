@@ -879,3 +879,23 @@ def test_ui_png_export_wraps_long_names_without_overflow():
       }
       run().catch(e=>{ console.error(e); process.exit(1); });
     """)
+
+
+def test_start_date_can_be_moved_to_the_month_start():
+    run_js(r"""
+      // An item first entered mid-month can be re-anchored to the 1st: the opening is the count on
+      // the start date, later movements still pile onto it, and earlier days stay unavailable.
+      const item={id:'i1',name:'Paneer',start_date:'2025-08-01',initial_opening:10};
+      const entries=[{item_id:'i1',day:'2025-08-05',purchase:4,damage:1}];
+      const imports=[{day:'2025-08-06',sales:{i1:2}}];
+      const moved=L.stock(item,'2025-08-06',entries,imports);
+      assert.equal(moved.opening,13);
+      assert.equal(moved.sale,2);
+      assert.equal(moved.closing,11);
+      assert.equal(L.stock({...item,start_date:'2025-08-18'},'2025-08-10',entries,imports),null);
+      // A start date change is detected as a stale item edit draft.
+      const draft={editingId:'i1',baseName:'Paneer',baseOpening:10,baseStartDate:'2025-08-18'};
+      assert.equal(L.isItemFormDraftStale(draft,[item]).stale,true);
+      assert.equal(L.isItemFormDraftStale(draft,[{...item,start_date:'2025-08-18'}]).stale,false);
+      assert.equal(L.isItemFormDraftStale({editingId:'i1',baseName:'Paneer',baseOpening:10},[item]).stale,false);
+    """)

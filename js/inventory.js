@@ -194,7 +194,14 @@
             nameTd.append(el('span', item.name, 'item-cell-name'));
             if (!rowState.available) {
                 tr.append(nameTd);
-                const td = el('td', `Starts ${rowState.startDate}`); td.colSpan = 6; tr.append(td); body.append(tr); continue;
+                const td = el('td'); td.colSpan = 6;
+                td.append(el('span', `Starts ${rowState.startDate} — `));
+                const fixStart = el('button', 'change the start date', 'link-inline');
+                fixStart.type = 'button';
+                fixStart.setAttribute('aria-label', `Change start date for ${item.name}`);
+                fixStart.onclick = () => { setTab('items'); startEditingItem(item); };
+                td.append(fixStart);
+                tr.append(td); body.append(tr); continue;
             }
             const draftPill = el('span', 'Draft', 'row-badge draft-pill');
             const stalePill = el('span', 'Server changed', 'row-badge stale-pill');
@@ -395,6 +402,19 @@
         }
         if (!items.length) { const tr = el('tr'), td = el('td','Add a stock item to get started.'); td.colSpan=7; tr.append(td); body.append(tr); }
     }
+    function startEditingItem(item) {
+        editing = item.id;
+        editingBase = { id: item.id, name: item.name, opening: Number(item.initial_opening), startDate: item.start_date };
+        $('item-name').value = item.name;
+        // The start date stays editable: an item first entered mid-month must be movable to the month start.
+        $('item-start').disabled = false;
+        $('item-start').value = item.start_date;
+        $('item-opening').value = item.initial_opening;
+        setItemSubmitText('Save item');
+        $('cancel-edit').hidden = false;
+        syncItemFormDraft(item);
+        $('item-name').focus();
+    }
     function renderItems() {
         const list = $('item-list'); list.replaceChildren();
         for (const item of items) {
@@ -403,14 +423,7 @@
             button.append(svgIcon('edit', 'icon icon-sm'), el('span', 'Edit'));
             button.setAttribute('aria-label', `Edit item ${item.name}`);
             row.append(el('span', `${item.name} · starts ${item.start_date} · opening ${fmt(Number(item.initial_opening))}`), button); list.append(row);
-            button.onclick = () => {
-                editing = item.id;
-                editingBase = { id: item.id, name: item.name, opening: Number(item.initial_opening) };
-                $('item-name').value = item.name; $('item-start').value = item.start_date; $('item-start').disabled = true;
-                $('item-opening').value = item.initial_opening; setItemSubmitText('Save item'); $('cancel-edit').hidden = false;
-                syncItemFormDraft(item);
-                $('item-name').focus();
-            };
+            button.onclick = () => startEditingItem(item);
         }
     }
     function syncItemFormDraft(editSource = null) {
@@ -427,6 +440,7 @@
                 opening,
                 baseName: currentItem ? currentItem.name : (prior && prior.editingId === editing ? prior.baseName : (editingBase && editingBase.id === editing ? editingBase.name : null)),
                 baseOpening: currentItem ? Number(currentItem.initial_opening) : (prior && prior.editingId === editing ? prior.baseOpening : (editingBase && editingBase.id === editing ? editingBase.opening : null)),
+                baseStartDate: currentItem ? currentItem.start_date : (prior && prior.editingId === editing ? prior.baseStartDate : (editingBase && editingBase.id === editing ? editingBase.startDate : null)),
             });
         }
         persistDrafts();
@@ -512,8 +526,21 @@
                 }
             }
 
+            if (submitEditingId) {
+                // Moving the start date later would hide saved work, so block it and say which days are in the way.
+                const previousStart = items.find(i => i.id === submitEditingId)?.start_date || (submitBase && submitBase.startDate) || null;
+                if (previousStart && start > previousStart) {
+                    const blocked = new Set();
+                    for (const row of entries) if (row.item_id === submitEditingId && row.day < start) blocked.add(row.day);
+                    for (const im of imports) if (im.day < start && Number((im.sales || {})[submitEditingId] || 0) > 0) blocked.add(im.day);
+                    if (blocked.size) {
+                        const days = [...blocked].sort();
+                        throw new Error(`Cannot move the start date to ${start}: ${name} already has saved data on ${days.slice(0, 5).join(', ')}${days.length > 5 ? ' and more' : ''}. Pick an earlier start date, or clear those days in the Corrections tab first.`);
+                    }
+                }
+            }
             const query = submitEditingId
-                ? _supabase.from('inventory_items').update({ name, initial_opening: opening }).eq('user_id', user.id).eq('id', submitEditingId)
+                ? _supabase.from('inventory_items').update({ name, start_date: start, initial_opening: opening }).eq('user_id', user.id).eq('id', submitEditingId)
                 : _supabase.from('inventory_items').insert({ user_id: user.id, name, start_date: start, initial_opening: opening });
             const currentChoices = report ? Object.fromEntries([...document.querySelectorAll('#mapping-list select')].map(s => [s.dataset.key, s.value]).filter(([, v]) => v)) : null;
             const { error } = await query;
@@ -541,7 +568,9 @@
             updateDraftStatus();
             invalidate();
             if (report) renderMappings(currentChoices);
-            message('Item saved. Later balances are recalculated.');
+            message(submitEditingId
+                ? `Item saved. Opening now applies from ${start}; later balances are recalculated.`
+                : `Item added with opening from ${start}.`);
         } catch (e) {
             fail(e);
         } finally {
@@ -557,6 +586,7 @@
         hideClearConfirm();
         hideRestoreConflict();
         renderStock();
+        renderImportStatus();
         invalidate();
         if (!editing && !draftState.itemForm) $('item-start').value = newDay;
         updateDraftStatus();
@@ -570,6 +600,12 @@
         d.setUTCDate(d.getUTCDate() + delta);
         applyDateChange(d.toISOString().slice(0, 10));
     }
+    if ($('item-start-month')) $('item-start-month').onclick = () => {
+        const base = $('day').value || today();
+        $('item-start').value = `${base.slice(0, 7)}-01`;
+        syncItemFormDraft();
+        message(`Start date set to the month start (${$('item-start').value}).`);
+    };
     $('day').onchange=() => applyDateChange($('day').value);
     if ($('prev-day')) $('prev-day').onclick = () => shiftDay(-1);
     if ($('next-day')) $('next-day').onclick = () => shiftDay(1);
@@ -1456,7 +1492,7 @@
                 editing = serverItem.id;
                 editingBase = { id: serverItem.id, name: serverItem.name, opening: Number(serverItem.initial_opening) };
                 $('item-start').value = serverItem.start_date;
-                $('item-start').disabled = true;
+                $('item-start').disabled = false;
                 setItemSubmitText('Save item');
                 $('cancel-edit').hidden = false;
             } else {

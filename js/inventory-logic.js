@@ -259,6 +259,7 @@
                 opening: f.opening != null ? String(f.opening) : '',
                 baseName: f.baseName != null ? String(f.baseName) : null,
                 baseOpening: f.baseOpening != null && Number.isFinite(Number(f.baseOpening)) ? Number(f.baseOpening) : null,
+                baseStartDate: typeof f.baseStartDate === 'string' && DATE_RE.test(f.baseStartDate) ? f.baseStartDate : null,
                 revision: Number.isInteger(Number(f.revision)) && Number(f.revision) > 0 ? Number(f.revision) : 1,
                 dirty: true,
             };
@@ -467,7 +468,9 @@
         if (!formDraft || !formDraft.editingId) return { stale: false, missing: false, serverItem: null };
         const serverItem = (items || []).find(i => i.id === formDraft.editingId) || null;
         if (!serverItem) return { stale: true, missing: true, serverItem: null };
-        const changed = serverItem.name !== formDraft.baseName || Number(serverItem.initial_opening) !== Number(formDraft.baseOpening);
+        const changed = serverItem.name !== formDraft.baseName
+            || Number(serverItem.initial_opening) !== Number(formDraft.baseOpening)
+            || (formDraft.baseStartDate != null && String(serverItem.start_date) !== String(formDraft.baseStartDate));
         return { stale: changed, missing: false, serverItem };
     }
     function draftSummary(state, currentDay) {
