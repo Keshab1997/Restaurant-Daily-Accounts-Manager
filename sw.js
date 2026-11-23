@@ -1,4 +1,4 @@
-const CACHE_NAME = 'restro-manager-v76';
+const CACHE_NAME = 'restro-manager-v77';
 const ASSETS = [
   '/',
   '/index.html',
@@ -58,6 +58,20 @@ self.addEventListener('fetch', (e) => {
   if (e.request.mode === 'navigate' || url.pathname.endsWith('.html')) {
     e.respondWith(
       fetch(e.request).catch(() => caches.match(e.request))
+    );
+    return;
+  }
+
+  // Own JS/CSS must never be served stale: an old inventory.js cannot save POS sales.
+  if (url.origin === self.location.origin && /\.(?:js|css)$/.test(url.pathname)) {
+    e.respondWith(
+      fetch(e.request).then((response) => {
+        if (response && response.status === 200 && response.type === 'basic') {
+          const responseClone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(e.request, responseClone));
+        }
+        return response;
+      }).catch(() => caches.match(e.request))
     );
     return;
   }
