@@ -150,6 +150,11 @@ td input { width:104px; padding:8px 9px; text-align:right; }
 .item-row button:hover { background:#eff6ff; border-color:#bfdbfe; }
 
 /* ---------- Import mapping ---------- */
+.mapping-toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:10px 12px; margin-bottom:10px; background:#f8fafc; border:1px solid var(--border); border-radius:12px; }
+.mapping-toolbar button { padding:8px 12px; font-size:.82rem; width:auto; }
+.mapping-count { flex:1 1 200px; font-size:.84rem; font-weight:700; color:#475569; }
+.mapping-count.needs-work { color:#b45309; }
+.mapping-row.needs-choice { border-left:4px solid #f59e0b; background:#fffdf6; }
 .mapping-row { display:flex; justify-content:space-between; gap:14px; align-items:center; padding:12px 14px; border:1px solid var(--border); border-radius:12px; margin-bottom:10px; background:#fff; }
 .mapping-info { display:flex; flex-direction:column; gap:4px; flex:1 1 260px; min-width:0; }
 .mapping-controls { display:flex; gap:8px; align-items:center; flex:0 1 auto; flex-wrap:wrap; justify-content:flex-end; }

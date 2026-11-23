@@ -671,6 +671,13 @@
         applyDateChange(d.toISOString().slice(0, 10));
     }
     if ($('save-all-rows')) $('save-all-rows').onclick = () => saveAllRows();
+    if ($('ignore-unmapped')) $('ignore-unmapped').onclick = () => {
+        const unmapped = mappingRows.filter(r => !r.select.value);
+        for (const r of unmapped) { r.select.value = 'ignore'; r.row.querySelector('select').dispatchEvent(new Event('change')); }
+        invalidate();
+        message(`${unmapped.length} dish${unmapped.length === 1 ? '' : 'es'} set to "Ignore this dish". Preview totals when ready.`);
+    };
+    if ($('show-unmapped')) $('show-unmapped').onclick = () => { onlyUnmapped = !onlyUnmapped; refreshMappingToolbar(); };
     if ($('item-start-month')) $('item-start-month').onclick = () => {
         const base = $('day').value || today();
         $('item-start').value = `${base.slice(0, 7)}-01`;
@@ -1098,8 +1105,46 @@
         } catch (e) { fail(e); } finally { btn.disabled = false; }
     };
     function reportInfo() { const mismatch=report.date !== $('day').value; $('report-info').textContent=`Report date: ${report.date} · ${report.dishes.length} distinct dishes. ${mismatch ? 'Date mismatch: select the report date before saving.' : ''}`; $('report-info').className=mismatch ? 'warning' : ''; }
+    let mappingRows = [], onlyUnmapped = false;
+    function refreshMappingToolbar() {
+        const unmapped = mappingRows.filter(r => !r.select.value);
+        if ($('mapping-count')) {
+            $('mapping-count').textContent = `${mappingRows.length} dish${mappingRows.length === 1 ? '' : 'es'} · `
+                + (unmapped.length ? `${unmapped.length} still need a choice` : 'all set');
+            $('mapping-count').className = unmapped.length ? 'mapping-count needs-work' : 'mapping-count';
+        }
+        if ($('ignore-unmapped')) {
+            $('ignore-unmapped').hidden = unmapped.length === 0;
+            $('ignore-unmapped').textContent = `Ignore all unmapped (${unmapped.length})`;
+        }
+        if ($('show-unmapped')) {
+            $('show-unmapped').hidden = mappingRows.length === 0;
+            $('show-unmapped').textContent = onlyUnmapped ? `Show all ${mappingRows.length}` : `Show only unmapped (${unmapped.length})`;
+            $('show-unmapped').setAttribute('aria-pressed', String(onlyUnmapped));
+            $('show-unmapped').disabled = !onlyUnmapped && unmapped.length === 0;
+        }
+        for (const r of mappingRows) {
+            r.row.classList.toggle('needs-choice', !r.select.value);
+            r.row.hidden = onlyUnmapped && Boolean(r.select.value);
+        }
+        const toolbar = $('mapping-toolbar');
+        if (toolbar) toolbar.hidden = mappingRows.length === 0;
+        const previewBtn = $('preview');
+        if (previewBtn) previewBtn.textContent = unmapped.length
+            ? `Preview totals — choose ${unmapped.length} more`
+            : 'Preview totals';
+        return unmapped;
+    }
+    function focusFirstUnmapped() {
+        const rows = mappingRows.filter(r => !r.select.value);
+        if (!rows.length) return;
+        onlyUnmapped = true;
+        refreshMappingToolbar();
+        rows[0].select.focus();
+        if (typeof rows[0].row.scrollIntoView === 'function') rows[0].row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
     function renderMappings(preservedChoices = null) {
-        reportInfo(); const list=$('mapping-list'); list.replaceChildren();
+        reportInfo(); const list=$('mapping-list'); list.replaceChildren(); mappingRows = []; onlyUnmapped = false;
         const saved=L.savedChoiceMap(mappings), validIds=new Set(items.map(i=>i.id));
         const suggestions=L.suggestMappings(report,items,saved);
         for (const dish of report.dishes) {
@@ -1156,10 +1201,12 @@
                     note.className='match-note match-none';
                 }
             }
-            select.onchange=() => { invalidate(); syncRow(); };
+            select.onchange=() => { invalidate(); syncRow(); refreshMappingToolbar(); };
             syncRow();
+            mappingRows.push({ row, select });
             info.append(label,note); controls.append(select); row.append(info,controls); list.append(row);
         }
+        refreshMappingToolbar();
     }
     $('file').onchange=async () => { const fileVersion=++fileRevision; report=null; invalidate(); clearImportError(); $('import-area').hidden=true; try {
         const file=$('file').files[0]; if(!file) return; if(!/\.(xls|xlsx)$/i.test(file.name)) throw new Error('Choose an .xls or .xlsx file');
@@ -1172,7 +1219,8 @@
     $('preview').onclick=async () => { invalidate(); clearImportError(); const version=revision; try {
         const day=assertDay(); if (!report || report.date !== day) throw new Error('Report date does not match selected stock date');
         const choices={}; document.querySelectorAll('#mapping-list select').forEach(s => choices[s.dataset.key]=s.value);
-        const result=L.preview(report,choices); if(result.unresolved.length) throw new Error(`Review or choose a stock item or ignore for all ${result.unresolved.length} unmapped dishes`);
+        const result=L.preview(report,choices);
+        if(result.unresolved.length) { focusFirstUnmapped(); throw new Error(`${result.unresolved.length} dish${result.unresolved.length===1?' still needs':'es still need'} a stock item or "Ignore this dish" — showing only those now.`); }
         for(const id of Object.keys(result.totals)) { const item=items.find(i=>i.id===id); if(!item || item.start_date > day) throw new Error('A mapped item is missing or starts after the report date'); L.number(result.totals[id], 'Total sales'); }
         // Hash canonical report content and choices; filenames and spreadsheet formatting are irrelevant.
         const canonical=JSON.stringify({date:report.date, dishes:report.dishes.map(d=>[d.key,d.qty,choices[d.key]]).sort((a,b)=>a[0].localeCompare(b[0]))});
