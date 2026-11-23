@@ -1105,11 +1105,69 @@
         } catch (e) { fail(e); } finally { btn.disabled = false; }
     };
     function reportInfo() { const mismatch=report.date !== $('day').value; $('report-info').textContent=`Report date: ${report.date} · ${report.dishes.length} distinct dishes. ${mismatch ? 'Date mismatch: select the report date before saving.' : ''}`; $('report-info').className=mismatch ? 'warning' : ''; }
+    // A dish mapped once must stay mapped: choices save to this browser immediately and to
+    // inventory_mappings in the background, so a blocked or abandoned import loses nothing.
+    const MAPPING_DRAFT_KEY = 'inventory_mapping_choices_v1';
+    let mappingSaveTimer = null, mappingSaveQueue = {}, mappingRemoteBroken = false;
+    function mappingDraftStorageKey() { return user ? `${MAPPING_DRAFT_KEY}:${user.id}` : ''; }
+    function loadMappingChoices() {
+        try {
+            const storage = getStorage(), key = mappingDraftStorageKey();
+            if (!storage || !key) return {};
+            const raw = JSON.parse(storage.getItem(key) || '{}');
+            return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+        } catch (_) { return {}; }
+    }
+    function saveLocalMappingChoice(dishKey, value) {
+        try {
+            const storage = getStorage(), key = mappingDraftStorageKey();
+            if (!storage || !key) return;
+            const choices = loadMappingChoices();
+            if (value) choices[dishKey] = value; else delete choices[dishKey];
+            storage.setItem(key, JSON.stringify(choices));
+        } catch (_) { /* drafts are best-effort */ }
+    }
+    function flushMappingChoices() {
+        const entries = Object.entries(mappingSaveQueue);
+        mappingSaveQueue = {};
+        if (!entries.length || !user) return;
+        const rows = entries.map(([dishKey, value]) => ({
+            user_id: user.id,
+            dish_key: dishKey,
+            item_id: value === 'ignore' ? null : value,
+            ignored: value === 'ignore',
+        }));
+        Promise.resolve(_supabase.from('inventory_mappings').upsert(rows, { onConflict: 'user_id,dish_key' }))
+            .then(res => {
+                if (res && res.error) throw res.error;
+                const byKey = Object.fromEntries(entries);
+                for (const row of rows) {
+                    const local = byKey[row.dish_key];
+                    const next = row.ignored ? { user_id: user.id, dish_key: row.dish_key, item_id: null, ignored: true } : { user_id: user.id, dish_key: row.dish_key, item_id: local, ignored: false };
+                    const idx = mappings.findIndex(m => m.dish_key === row.dish_key);
+                    if (idx >= 0) mappings[idx] = next; else mappings.push(next);
+                }
+            })
+            .catch(err => {
+                if (!mappingRemoteBroken) {
+                    mappingRemoteBroken = true;
+                    message(`Choices are saved in this browser, but not in the cloud (${err && err.message ? err.message : err}). They will still be reused next time on this device.`, true);
+                }
+            });
+    }
+    function rememberMappingChoice(dishKey, value) {
+        saveLocalMappingChoice(dishKey, value);
+        if (value) mappingSaveQueue[dishKey] = value;
+        if (mappingSaveTimer) clearTimeout(mappingSaveTimer);
+        mappingSaveTimer = setTimeout(flushMappingChoices, 700);
+    }
     let mappingRows = [], onlyUnmapped = false;
     function refreshMappingToolbar() {
         const unmapped = mappingRows.filter(r => !r.select.value);
         if ($('mapping-count')) {
+            const auto = mappingRows.filter(r => r.auto && r.select.value !== '').length;
             $('mapping-count').textContent = `${mappingRows.length} dish${mappingRows.length === 1 ? '' : 'es'} · `
+                + (auto ? `${auto} reused from earlier · ` : '')
                 + (unmapped.length ? `${unmapped.length} still need a choice` : 'all set');
             $('mapping-count').className = unmapped.length ? 'mapping-count needs-work' : 'mapping-count';
         }
@@ -1145,7 +1203,9 @@
     }
     function renderMappings(preservedChoices = null) {
         reportInfo(); const list=$('mapping-list'); list.replaceChildren(); mappingRows = []; onlyUnmapped = false;
-        const saved=L.savedChoiceMap(mappings), validIds=new Set(items.map(i=>i.id));
+        const remembered=loadMappingChoices();
+        const saved={...remembered, ...L.savedChoiceMap(mappings)};
+        const validIds=new Set(items.map(i=>i.id));
         const suggestions=L.suggestMappings(report,items,saved);
         for (const dish of report.dishes) {
             const match=suggestions[dish.key];
@@ -1201,9 +1261,9 @@
                     note.className='match-note match-none';
                 }
             }
-            select.onchange=() => { invalidate(); syncRow(); refreshMappingToolbar(); };
+            select.onchange=() => { invalidate(); syncRow(); refreshMappingToolbar(); rememberMappingChoice(dish.key, select.value); };
             syncRow();
-            mappingRows.push({ row, select });
+            mappingRows.push({ row, select, auto: Boolean(initial) });
             info.append(label,note); controls.append(select); row.append(info,controls); list.append(row);
         }
         refreshMappingToolbar();
@@ -1280,7 +1340,12 @@
         if(p.expected && !confirm('Replace the existing imported sales for this day?')) { button.disabled=false; return; }
         // Saving mapping preferences does not alter any previously imported sales snapshots.
         const rows=Object.entries(p.choices).map(([key,value])=>({user_id:user.id,dish_key:key,item_id:value==='ignore'?null:value,ignored:value==='ignore'}));
+        for (const [key, value] of Object.entries(p.choices)) saveLocalMappingChoice(key, value);
         const {error:mapError}=await _supabase.from('inventory_mappings').upsert(rows,{onConflict:'user_id,dish_key'}); if(mapError) throw mapError;
+        for (const row of rows) {
+            const idx = mappings.findIndex(m => m.dish_key === row.dish_key);
+            if (idx >= 0) mappings[idx] = row; else mappings.push(row);
+        }
         const {data,error}=await _supabase.rpc('inventory_save_import',{p_day:p.day,p_fingerprint:p.hash,p_sales:p.sales,p_expected:p.expected}); if(error) throw error;
         await refresh(); invalidate();
         // Read the row back: a save that cannot be read again shows as an empty Sale column, which used to fail silently.

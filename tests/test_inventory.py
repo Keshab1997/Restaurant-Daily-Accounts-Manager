@@ -899,3 +899,29 @@ def test_start_date_can_be_moved_to_the_month_start():
       assert.equal(L.isItemFormDraftStale(draft,[{...item,start_date:'2025-08-18'}]).stale,false);
       assert.equal(L.isItemFormDraftStale({editingId:'i1',baseName:'Paneer',baseOpening:10},[item]).stale,false);
     """)
+
+
+def test_saved_dish_choices_fill_in_the_next_days_report():
+    run_js(r"""
+      // The point of saving mappings: a dish chosen once must fill itself in on later reports.
+      const items=[
+        {id:'i-roti',name:'Tawa Roti',start_date:'2025-01-01'},
+        {id:'i-rice',name:'Steamed Rice',start_date:'2025-01-01'},
+      ];
+      const report=(date,rotis,rices)=>L.parseReport([
+        ['Item Report'],[`Date: ${date}`],
+        ['Category','Item','Code','Qty.','Total'],
+        ['Breakfast','Tawa Roti [1 Piece]','4',String(rotis),'40'],
+        ['Rice','Steamed Rice','31',String(rices),'150'],
+        ['','Grand Total','','','190'],
+      ]);
+      const day1=report('04/05/2025',2,5);
+      const choices=Object.fromEntries(day1.dishes.map((d,i)=>[d.key, i===0 ? 'i-roti' : 'i-rice']));
+      const day2=report('05/05/2025',6,3);
+      assert.deepEqual(day2.dishes.map(d=>d.key), day1.dishes.map(d=>d.key)); // same dish keys across days
+      const savedRows=Object.entries(choices).map(([k,v])=>({dish_key:k,item_id:v,ignored:false}));
+      const filled=Object.fromEntries(Object.entries(L.suggestMappings(day2,items,savedRows)).map(([k,m])=>[k,m.selected]));
+      const preview=L.preview(day2,filled);
+      assert.deepEqual(preview.unresolved,[]);
+      assert.deepEqual(preview.totals,{'i-roti':6,'i-rice':3});
+    """)
