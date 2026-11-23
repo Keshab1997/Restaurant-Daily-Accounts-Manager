@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Daily inventory - RestroManager</title>
-  <link rel="stylesheet" href="css/base.css"><link rel="stylesheet" href="css/inventory.css">
+  <link rel="stylesheet" href="css/base.css"><link rel="stylesheet" href="css/inventory.css?v=77">
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Vendored SheetJS Community Edition 0.20.3 (official Apache-2.0 standalone bundle); parsing is entirely in the browser. -->
   <script defer src="js/vendor/xlsx.full.min.js"></script>
-  <script defer src="js/config.js"></script><script defer src="js/inventory-logic.js"></script><script defer src="js/inventory.js"></script>
+  <script defer src="js/config.js?v=77"></script><script defer src="js/inventory-logic.js?v=77"></script><script defer src="js/inventory.js?v=77"></script>
 </head>
 <body>
 <main class="main-content no-print">
@@ -34,7 +34,22 @@
     <div class="banner-lead"><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#warning"></use></svg><div id="draft-status-text"></div></div>
     <button type="button" id="discard-drafts" class="btn-danger-outline">Discard all drafts</button>
   </div>
-  <section class="glass-card">
+  <nav class="tabbar" id="inventory-tabs" role="tablist" aria-label="Daily inventory sections">
+    <button type="button" class="tab-btn" role="tab" id="tab-sheet" data-tab="sheet" aria-controls="panel-sheet" aria-selected="true">
+      <svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#stock"></use></svg><span>Stock sheet</span>
+    </button>
+    <button type="button" class="tab-btn" role="tab" id="tab-items" data-tab="items" aria-controls="panel-items" aria-selected="false" tabindex="-1">
+      <svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#inventory"></use></svg><span>Items</span><span class="tab-count" id="tab-count-items" hidden>0</span>
+    </button>
+    <button type="button" class="tab-btn" role="tab" id="tab-import" data-tab="import" aria-controls="panel-import" aria-selected="false" tabindex="-1">
+      <svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#upload"></use></svg><span>Import sales</span>
+    </button>
+    <button type="button" class="tab-btn" role="tab" id="tab-fixes" data-tab="fixes" aria-controls="panel-fixes" aria-selected="false" tabindex="-1">
+      <svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#warning"></use></svg><span>Corrections</span>
+    </button>
+  </nav>
+
+  <section class="glass-card tab-panel" id="panel-sheet" role="tabpanel" aria-labelledby="tab-sheet" tabindex="0">
     <div class="section-head">
       <div>
         <h2 class="heading-with-icon"><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#stock"></use></svg><span>Stock sheet</span></h2>
@@ -51,11 +66,12 @@
         <tbody id="stock"></tbody>
       </table>
     </div>
-    <p class="hint">Save purchase and damage per row. Negative closing highlights a stock shortage. Keyboard: <strong>Enter</strong> moves Purchase → Damage → Save; <strong>↑ / ↓</strong> moves between rows.</p>
+    <p class="hint">Save purchase and damage per row. Sale comes from the <button type="button" class="link-inline" data-goto-tab="import">Import sales</button> tab. Negative closing highlights a stock shortage. Keyboard: <strong>Enter</strong> moves Purchase → Damage → Save; <strong>↑ / ↓</strong> moves between rows.</p>
     <div id="export-fallback" class="export-fallback" hidden></div>
   </section>
-  <section class="glass-card">
-    <h2 class="heading-with-icon"><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#stock"></use></svg><span>Stock items</span></h2>
+
+  <section class="glass-card tab-panel" id="panel-items" role="tabpanel" aria-labelledby="tab-items" tabindex="0" hidden>
+    <h2 class="heading-with-icon"><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#inventory"></use></svg><span>Stock items</span></h2>
     <p>Set an initial opening and start date when adding an item. Edit the opening if the original count needs correction.</p>
     <p id="item-draft-note" class="draft-note" hidden></p>
     <form id="item-form" class="form-grid">
@@ -68,49 +84,56 @@
     </form>
     <div id="item-list"></div>
   </section>
-  <section class="glass-card">
+
+  <section class="glass-card tab-panel" id="panel-import" role="tabpanel" aria-labelledby="tab-import" tabindex="0" hidden>
     <h2 class="heading-with-icon"><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#upload"></use></svg><span>Import POS sales</span></h2>
     <p>Choose a local .xls or .xlsx item report. The first sheet is read in your browser; the file is not uploaded. Review saved mappings and suggested matches, choose an item or ignore for each dish, then preview and confirm. Existing sales for the day are replaced, never added twice.</p>
     <p class="hint import-ephemeral-note">Local Excel files and unconfirmed import previews stay in memory only and are not saved across page reload; reselect the file and review matches again after refreshing.</p>
     <label><span class="label-with-icon"><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#upload"></use></svg><span>Report file</span></span><input id="file" type="file" accept=".xls,.xlsx"></label>
     <div id="import-area" hidden><p id="report-info"></p><div id="mapping-list"></div><button id="preview" type="button">Preview totals</button><div id="preview-area" hidden><h3>Sales preview (pieces)</h3><div id="totals"></div><p id="replacement"></p><button class="btn-primary btn-with-icon" id="confirm-import" type="button"><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#save"></use></svg><span>Confirm sales import</span></button></div></div>
+    <div id="import-error" class="status-banner status-error" role="alert" hidden>
+      <div class="banner-lead"><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#warning"></use></svg><div id="import-error-text"></div></div>
+    </div>
   </section>
-  <section class="glass-card" id="day-corrections-section">
-    <h2 class="heading-with-icon"><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#warning"></use></svg><span>Day corrections &amp; recovery</span></h2>
-    <p>Safely remove mistakes for the selected stock date. Initial opening balances, stock items, saved dish mappings, and other dates stay intact, and a permanent recovery snapshot is saved first so you can undo even after refreshing.</p>
-    <p id="day-correction-summary" class="correction-summary"></p>
-    <div id="correction-draft-blocker" class="status-banner status-draft" role="status" aria-live="polite" hidden>
-      <div class="banner-lead"><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#warning"></use></svg><div id="correction-draft-blocker-text"></div></div>
-      <button type="button" id="discard-day-drafts" class="btn-danger-outline">Discard day drafts</button>
-    </div>
-    <div class="correction-actions">
-      <div class="correction-action-card">
-        <h3>Remove imported sales only</h3>
-        <p>Removes only the selected day's imported POS sales. Purchase entries, damage entries, initial openings, items, and saved mappings remain untouched.</p>
-        <button type="button" id="clear-sales-btn" class="btn-danger-outline">Remove selected day's imported sales</button>
+
+  <section class="glass-card tab-panel" id="panel-fixes" role="tabpanel" aria-labelledby="tab-fixes" tabindex="0" hidden>
+    <div id="day-corrections-section">
+      <h2 class="heading-with-icon"><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#warning"></use></svg><span>Day corrections &amp; recovery</span></h2>
+      <p>Safely remove mistakes for the selected stock date. Initial opening balances, stock items, saved dish mappings, and other dates stay intact, and a permanent recovery snapshot is saved first so you can undo even after refreshing.</p>
+      <p id="day-correction-summary" class="correction-summary"></p>
+      <div id="correction-draft-blocker" class="status-banner status-draft" role="status" aria-live="polite" hidden>
+        <div class="banner-lead"><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#warning"></use></svg><div id="correction-draft-blocker-text"></div></div>
+        <button type="button" id="discard-day-drafts" class="btn-danger-outline">Discard day drafts</button>
       </div>
-      <div class="correction-action-card">
-        <h3>Clear whole day movements &amp; sales</h3>
-        <p>Clears only the selected day's saved purchases, damage entries, and imported sales. Initial openings, items, saved mappings, and other dates remain untouched.</p>
-        <button type="button" id="clear-whole-day-btn" class="btn-danger-outline">Clear selected day's movements &amp; sales</button>
+      <div class="correction-actions">
+        <div class="correction-action-card">
+          <h3>Remove imported sales only</h3>
+          <p>Removes only the selected day's imported POS sales. Purchase entries, damage entries, initial openings, items, and saved mappings remain untouched.</p>
+          <button type="button" id="clear-sales-btn" class="btn-danger-outline">Remove selected day's imported sales</button>
+        </div>
+        <div class="correction-action-card">
+          <h3>Clear whole day movements &amp; sales</h3>
+          <p>Clears only the selected day's saved purchases, damage entries, and imported sales. Initial openings, items, saved mappings, and other dates remain untouched.</p>
+          <button type="button" id="clear-whole-day-btn" class="btn-danger-outline">Clear selected day's movements &amp; sales</button>
+        </div>
       </div>
-    </div>
-    <div id="clear-confirm-panel" class="confirm-panel" role="region" aria-labelledby="clear-confirm-title" hidden>
-      <h3 id="clear-confirm-title"></h3>
-      <div id="clear-confirm-details" class="confirm-details"></div>
-      <div class="confirm-buttons">
-        <button type="button" id="confirm-clear-btn" class="btn-danger"></button>
-        <button type="button" id="cancel-clear-btn" class="btn-secondary">Cancel</button>
+      <div id="clear-confirm-panel" class="confirm-panel" role="region" aria-labelledby="clear-confirm-title" hidden>
+        <h3 id="clear-confirm-title"></h3>
+        <div id="clear-confirm-details" class="confirm-details"></div>
+        <div class="confirm-buttons">
+          <button type="button" id="confirm-clear-btn" class="btn-danger"></button>
+          <button type="button" id="cancel-clear-btn" class="btn-secondary">Cancel</button>
+        </div>
       </div>
+      <div id="restore-conflict-box" class="status-banner status-error" role="alert" hidden>
+        <div class="banner-lead"><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#warning"></use></svg><div id="restore-conflict-text"></div></div>
+      </div>
+      <div class="recovery-head">
+        <h3>Recovery snapshots</h3>
+        <p class="hint">Snapshots never expire automatically. Restore puts deleted records back only when those target slots are empty.</p>
+      </div>
+      <div id="recovery-list"></div>
     </div>
-    <div id="restore-conflict-box" class="status-banner status-error" role="alert" hidden>
-      <div class="banner-lead"><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#warning"></use></svg><div id="restore-conflict-text"></div></div>
-    </div>
-    <div class="recovery-head">
-      <h3>Recovery snapshots</h3>
-      <p class="hint">Snapshots never expire automatically. Restore puts deleted records back only when those target slots are empty.</p>
-    </div>
-    <div id="recovery-list"></div>
   </section>
 </main>
 <section id="print-sheet" class="print-only" aria-hidden="true"></section>

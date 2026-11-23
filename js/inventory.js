@@ -37,6 +37,62 @@
     }
     function fmt(n) { return Number(n.toFixed(4)).toLocaleString('en-IN', {maximumFractionDigits:4}); }
     function assertDay() { if (!$('day').value) throw new Error('Choose a stock date'); return $('day').value; }
+    // Tab navigation keeps each section on its own screen instead of one long scroll.
+    const TAB_NAMES = ['sheet', 'items', 'import', 'fixes'];
+    const TAB_KEY = 'inventory_active_tab_v1';
+    let activeTab = 'sheet';
+    function setTab(name, opts = {}) {
+        const target = TAB_NAMES.includes(name) ? name : 'sheet';
+        for (const t of TAB_NAMES) {
+            const btn = $(`tab-${t}`), panel = $(`panel-${t}`);
+            if (!btn || !panel) continue;
+            const on = t === target;
+            btn.setAttribute('aria-selected', on ? 'true' : 'false');
+            btn.className = on ? 'tab-btn active' : 'tab-btn';
+            btn.tabIndex = on ? 0 : -1;
+            panel.hidden = !on;
+        }
+        activeTab = target;
+        try { const storage = getStorage(); if (storage) storage.setItem(TAB_KEY, target); } catch (_) { /* storage is optional */ }
+        if (opts.focus) { const btn = $(`tab-${target}`); if (btn) btn.focus(); }
+        if (opts.updateHash !== false && typeof window !== 'undefined' && window.history && window.history.replaceState) {
+            try { window.history.replaceState(null, '', `#${target}`); } catch (_) { /* file:// or sandboxed history is fine to skip */ }
+        }
+        return target;
+    }
+    function rememberedTab() {
+        try { const storage = getStorage(); const saved = storage && storage.getItem(TAB_KEY); if (TAB_NAMES.includes(saved)) return saved; } catch (_) { /* ignore */ }
+        const hash = typeof window !== 'undefined' && window.location ? String(window.location.hash || '').replace(/^#/, '') : '';
+        return TAB_NAMES.includes(hash) ? hash : 'sheet';
+    }
+    function initTabs() {
+        const bar = $('inventory-tabs');
+        if (!bar) return;
+        for (const t of TAB_NAMES) {
+            const btn = $(`tab-${t}`);
+            if (!btn) continue;
+            btn.onclick = () => setTab(t);
+            btn.onkeydown = (e) => {
+                const i = TAB_NAMES.indexOf(t);
+                const next = e.key === 'ArrowRight' ? (i + 1) % TAB_NAMES.length
+                    : e.key === 'ArrowLeft' ? (i - 1 + TAB_NAMES.length) % TAB_NAMES.length
+                    : e.key === 'Home' ? 0 : e.key === 'End' ? TAB_NAMES.length - 1 : null;
+                if (next === null) return;
+                e.preventDefault();
+                setTab(TAB_NAMES[next], { focus: true });
+            };
+        }
+        for (const link of document.querySelectorAll('[data-goto-tab]')) {
+            link.onclick = () => setTab(link.dataset.gotoTab);
+        }
+        setTab(rememberedTab(), { updateHash: false });
+    }
+    function updateItemCountBadge() {
+        const badge = $('tab-count-items');
+        if (!badge) return;
+        badge.textContent = String(items.length);
+        badge.hidden = items.length === 0;
+    }
     function getStorage() {
         try { return typeof window !== 'undefined' ? window.localStorage : (typeof localStorage !== 'undefined' ? localStorage : null); }
         catch (e) { reportStorageError(e && e.message ? e.message : 'Browser storage access denied'); return null; }
@@ -118,7 +174,7 @@
     async function refresh() {
         [items, entries, imports, mappings, corrections] = await Promise.all(['inventory_items','inventory_entries','inventory_imports','inventory_mappings','inventory_corrections'].map(all));
         corrections.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
-        renderStock(); renderItems(); updateItemDraftNote(); updateDraftStatus(); renderCorrections();
+        renderStock(); renderItems(); updateItemCountBadge(); updateItemDraftNote(); updateDraftStatus(); renderCorrections();
     }
     function invalidate() { revision++; previewData = null; $('preview-area').hidden = true; }
     function clearExportUrls() {
@@ -998,7 +1054,7 @@
             info.append(label,note); controls.append(select); row.append(info,controls); list.append(row);
         }
     }
-    $('file').onchange=async () => { const fileVersion=++fileRevision; report=null; invalidate(); $('import-area').hidden=true; try {
+    $('file').onchange=async () => { const fileVersion=++fileRevision; report=null; invalidate(); clearImportError(); $('import-area').hidden=true; try {
         const file=$('file').files[0]; if(!file) return; if(!/\.(xls|xlsx)$/i.test(file.name)) throw new Error('Choose an .xls or .xlsx file');
         if(file.size > 10*1024*1024) throw new Error('Report exceeds 10 MB'); if(typeof XLSX === 'undefined') throw new Error('Spreadsheet reader could not load; reload the page');
         const buffer=await file.arrayBuffer(); if(fileVersion!==fileRevision) return;
@@ -1006,7 +1062,7 @@
         report=L.parseReport(XLSX.utils.sheet_to_json(book.Sheets[book.SheetNames[0]], {header:1, raw:false, defval:''}));
         renderMappings(); $('import-area').hidden=false; message('Review saved mappings and suggested matches before previewing.');
     } catch(e) { fail(e); } };
-    $('preview').onclick=async () => { invalidate(); const version=revision; try {
+    $('preview').onclick=async () => { invalidate(); clearImportError(); const version=revision; try {
         const day=assertDay(); if (!report || report.date !== day) throw new Error('Report date does not match selected stock date');
         const choices={}; document.querySelectorAll('#mapping-list select').forEach(s => choices[s.dataset.key]=s.value);
         const result=L.preview(report,choices); if(result.unresolved.length) throw new Error(`Review or choose a stock item or ignore for all ${result.unresolved.length} unmapped dishes`);
@@ -1022,15 +1078,42 @@
         $('replacement').className=old ? 'warning' : ''; $('confirm-import').disabled=decision==='duplicate';
         previewData={day, hash, sales:result.totals, expected:old?.fingerprint || null, choices}; $('preview-area').hidden=false;
     } catch(e) { fail(e); } };
-    $('confirm-import').onclick=async () => { const button=$('confirm-import'); button.disabled=true; try {
+    function showImportError(err) {
+        const box = $('import-error'), txt = $('import-error-text');
+        const raw = (err && (err.message || err.details || err.hint)) || String(err);
+        let detail = raw;
+        if (/could not find the function|pgrst202|schema cache/i.test(raw)) {
+            detail = `${raw} — the database is missing the sales-save function. Run inventory-schema.sql (inventory_save_import) in the Supabase SQL editor, then preview and confirm again.`;
+        } else if (/import changed since preview/i.test(raw)) {
+            detail = `${raw} — click "Preview totals" again, then confirm.`;
+        } else if (/unknown item or import before item start date/i.test(raw)) {
+            detail = `${raw} — check that every mapped item starts on or before the stock date.`;
+        } else if (/row-level security|permission denied/i.test(raw)) {
+            detail = `${raw} — this account is not allowed to save inventory imports; check the inventory RLS policies.`;
+        }
+        if (txt) txt.textContent = detail;
+        if (box) box.hidden = false;
+        fail(err);
+    }
+    function clearImportError() { const box = $('import-error'), txt = $('import-error-text'); if (box) box.hidden = true; if (txt) txt.textContent = ''; }
+    function daySalesTotal(day) {
+        const row = imports.find(im => im.day === day);
+        if (!row) return 0;
+        return Object.values(row.sales || {}).reduce((sum, v) => sum + Number(v || 0), 0);
+    }
+    $('confirm-import').onclick=async () => { const button=$('confirm-import'); button.disabled=true; clearImportError(); try {
         const p=previewData; if(!p || p.day!==assertDay() || p.day!==report.date) throw new Error('Preview again before saving');
         if(p.expected && !confirm('Replace the existing imported sales for this day?')) { button.disabled=false; return; }
         // Saving mapping preferences does not alter any previously imported sales snapshots.
         const rows=Object.entries(p.choices).map(([key,value])=>({user_id:user.id,dish_key:key,item_id:value==='ignore'?null:value,ignored:value==='ignore'}));
         const {error:mapError}=await _supabase.from('inventory_mappings').upsert(rows,{onConflict:'user_id,dish_key'}); if(mapError) throw mapError;
         const {data,error}=await _supabase.rpc('inventory_save_import',{p_day:p.day,p_fingerprint:p.hash,p_sales:p.sales,p_expected:p.expected}); if(error) throw error;
-        await refresh(); invalidate(); message(data==='duplicate' ? 'Already imported; no sales added.' : 'Sales saved. Later balances are recalculated.');
-    } catch(e) { fail(e); button.disabled=false; } };
+        await refresh(); invalidate();
+        const saved = daySalesTotal(p.day);
+        if (data === 'duplicate') message('Already imported; no sales added.');
+        else if (saved > 0) { message(`Sales saved for ${p.day} (${fmt(saved)} pieces). Later balances are recalculated.`); setTab('sheet'); }
+        else message(`Sales saved for ${p.day}, but every mapped dish came out as 0 pieces. Check the Qty column and piece counts in the report.`, true);
+    } catch(e) { showImportError(e); button.disabled=false; } };
     function hideClearConfirm() {
         pendingClearScope = null;
         pendingClearRequestId = null;
@@ -1368,6 +1451,7 @@
     }
     async function init() {
         try {
+            initTabs();
             const session = await checkAuth();
             if (!session) return;
             user = session.user;
@@ -1383,5 +1467,6 @@
             updateDraftStatus();
         } catch (e) { fail(e); }
     }
-    init();
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+    else init();
 })();
