@@ -174,7 +174,7 @@
     async function refresh() {
         [items, entries, imports, mappings, corrections] = await Promise.all(['inventory_items','inventory_entries','inventory_imports','inventory_mappings','inventory_corrections'].map(all));
         corrections.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
-        renderStock(); renderItems(); updateItemCountBadge(); updateItemDraftNote(); updateDraftStatus(); renderCorrections();
+        renderStock(); renderItems(); renderImportStatus(); updateItemCountBadge(); updateItemDraftNote(); updateDraftStatus(); renderCorrections();
     }
     function invalidate() { revision++; previewData = null; $('preview-area').hidden = true; }
     function clearExportUrls() {
@@ -1096,6 +1096,25 @@
         fail(err);
     }
     function clearImportError() { const box = $('import-error'), txt = $('import-error-text'); if (box) box.hidden = true; if (txt) txt.textContent = ''; }
+    function renderImportStatus() {
+        const box = $('import-status');
+        if (!box) return;
+        const day = $('day').value || '';
+        if (!day) { box.textContent = ''; box.hidden = true; return; }
+        const row = imports.find(im => im.day === day);
+        box.hidden = false;
+        if (!row) {
+            box.className = 'correction-summary';
+            box.textContent = `No saved sales for ${day} yet. Import a POS report to fill the Sale column.`;
+            return;
+        }
+        const count = Object.keys(row.sales || {}).length;
+        const total = daySalesTotal(day);
+        box.className = total > 0 ? 'correction-summary' : 'correction-summary warning';
+        box.textContent = total > 0
+            ? `Saved sales for ${day}: ${count} item${count === 1 ? '' : 's'}, ${fmt(total)} pieces. To change them, import the report again.`
+            : `A saved import for ${day} holds no readable sales (0 pieces). Re-import the report, or check that this account can read inventory_imports.`;
+    }
     function daySalesTotal(day) {
         const row = imports.find(im => im.day === day);
         if (!row) return 0;
@@ -1109,9 +1128,16 @@
         const {error:mapError}=await _supabase.from('inventory_mappings').upsert(rows,{onConflict:'user_id,dish_key'}); if(mapError) throw mapError;
         const {data,error}=await _supabase.rpc('inventory_save_import',{p_day:p.day,p_fingerprint:p.hash,p_sales:p.sales,p_expected:p.expected}); if(error) throw error;
         await refresh(); invalidate();
+        // Read the row back: a save that cannot be read again shows as an empty Sale column, which used to fail silently.
+        const { data: readBack, error: readErr } = await _supabase.from('inventory_imports')
+            .select('day,fingerprint,sales').eq('user_id', user.id).eq('day', p.day).maybeSingle();
+        const readable = !readErr && Boolean(readBack) && readBack.fingerprint === p.hash;
         const saved = daySalesTotal(p.day);
-        if (data === 'duplicate') message('Already imported; no sales added.');
-        else if (saved > 0) { message(`Sales saved for ${p.day} (${fmt(saved)} pieces). Later balances are recalculated.`); setTab('sheet'); }
+        if (data === 'duplicate' && readable) message('Already imported; no sales added.');
+        else if (!readable) {
+            const why = readErr ? (readErr.message || String(readErr)) : 'the saved row was not returned';
+            showImportError(new Error(`Sales for ${p.day} were written, but this page cannot read them back (${why}). The Sale column stays 0 until inventory_imports is readable — run inventory-read-fix.sql in the Supabase SQL editor, then reload.`));
+        } else if (saved > 0) { message(`Sales saved for ${p.day} (${fmt(saved)} pieces). Later balances are recalculated.`); setTab('sheet'); }
         else message(`Sales saved for ${p.day}, but every mapped dish came out as 0 pieces. Check the Qty column and piece counts in the report.`, true);
     } catch(e) { showImportError(e); button.disabled=false; } };
     function hideClearConfirm() {

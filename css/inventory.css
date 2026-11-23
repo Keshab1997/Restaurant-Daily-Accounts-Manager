@@ -86,6 +86,7 @@ button { cursor:pointer; font-weight:700; color:var(--primary); } button:disable
 .tab-panel:focus-visible { outline:2px solid #93c5fd; outline-offset:2px; }
 .link-inline { display:inline; padding:0; border:0; background:none; color:var(--primary); font-weight:700; font-size:inherit; text-decoration:underline; border-radius:0; }
 #import-error { margin-top:14px; }
+#import-status { margin-bottom:14px; }
 
 .print-only { display:none; }
 @page { size: A4 portrait; margin: 12mm; }
