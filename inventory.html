@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Daily inventory - RestroManager</title>
-  <link rel="stylesheet" href="css/base.css"><link rel="stylesheet" href="css/inventory.css?v=80">
+  <link rel="stylesheet" href="css/base.css"><link rel="stylesheet" href="css/inventory.css?v=81">
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Vendored SheetJS Community Edition 0.20.3 (official Apache-2.0 standalone bundle); parsing is entirely in the browser. -->
   <script defer src="js/vendor/xlsx.full.min.js"></script>
-  <script defer src="js/config.js?v=80"></script><script defer src="js/inventory-logic.js?v=80"></script><script defer src="js/inventory.js?v=80"></script>
+  <script defer src="js/config.js?v=81"></script><script defer src="js/inventory-logic.js?v=81"></script><script defer src="js/inventory.js?v=81"></script>
 </head>
 <body>
 <main class="main-content no-print">
@@ -61,6 +61,7 @@
         <button type="button" id="export-png-btn" class="btn-primary btn-with-icon"><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#share"></use></svg><span>Share / Export A4 PNG</span></button>
       </div>
     </div>
+    <div id="day-summary" class="summary-strip" hidden></div>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Item</th><th>Opening</th><th><span class="th-with-icon"><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#purchase"></use></svg><span>Purchase</span></span></th><th><span class="th-with-icon"><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#sale"></use></svg><span>Sale</span></span></th><th><span class="th-with-icon"><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="assets/inventory-icons.svg#damage"></use></svg><span>Damage</span></span></th><th>Closing</th><th>Action</th></tr></thead>

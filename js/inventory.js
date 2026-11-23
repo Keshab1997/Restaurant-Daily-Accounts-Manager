@@ -216,14 +216,44 @@
             message(`${saved} stock row${saved === 1 ? '' : 's'} saved for ${$('day').value}. Later balances are recalculated.`);
         }
     }
+    function renderDaySummary(sum) {
+        const strip = $('day-summary');
+        if (!strip) return;
+        if (!sum.items) { strip.hidden = true; strip.replaceChildren(); return; }
+        const chip = (label, value, extra) => {
+            const box = el('div', undefined, extra ? `summary-chip ${extra}` : 'summary-chip');
+            box.append(el('span', label, 'chip-label'), el('span', value, 'chip-value'));
+            return box;
+        };
+        strip.replaceChildren(
+            chip('Items', String(sum.items)),
+            chip('Purchase', fmt(sum.purchase)),
+            chip('Sale', fmt(sum.sale), 'is-sale'),
+            chip('Damage', fmt(sum.damage)),
+            chip('Closing', fmt(sum.closing), sum.closing < 0 ? 'is-alert' : ''),
+            chip('Shortages', String(sum.shortage), sum.shortage ? 'is-alert' : ''),
+        );
+        strip.hidden = false;
+    }
     function renderStock() {
         const body = $('stock'); body.replaceChildren(); const day = $('day').value;
         rowSavers = [];
+        const sum = { items: 0, purchase: 0, sale: 0, damage: 0, closing: 0, shortage: 0 };
         if (!day) return;
         const dayDrafts = draftState.entries[day] || {};
         const activeControls = [];
         for (const item of items) {
             const rowState = L.resolveRowState(item, day, entries, imports, dayDrafts), tr = el('tr');
+            if (rowState.available) {
+                sum.items += 1;
+                sum.purchase += Number(rowState.purchase || 0);
+                sum.sale += Number(rowState.sale || 0);
+                sum.damage += Number(rowState.damage || 0);
+                if (rowState.closing !== null && Number.isFinite(Number(rowState.closing))) {
+                    sum.closing += Number(rowState.closing);
+                    if (Number(rowState.closing) < 0) sum.shortage += 1;
+                }
+            }
             const nameTd = el('td');
             nameTd.append(el('span', item.name, 'item-cell-name'));
             if (!rowState.available) {
@@ -440,6 +470,7 @@
         }
         if (!items.length) { const tr = el('tr'), td = el('td','Add a stock item to get started.'); td.colSpan=7; tr.append(td); body.append(tr); }
         updateSaveAllButton(rowSavers.filter(r => r.isDirty()).length);
+        renderDaySummary(sum);
     }
     function startEditingItem(item) {
         editing = item.id;
